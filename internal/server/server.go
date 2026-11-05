@@ -201,6 +201,12 @@ func Run(a *core.App) error {
 			a.DB.Exec(`PRAGMA optimize`)
 		}
 	}()
+	// Requests hang off baseCtx so long-lived streams (live updates,
+	// notifications) can be ended on shutdown; otherwise Shutdown waits for
+	// them and open dashboards don't notice that Bunker went away.
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+	srv.BaseContext = func(net.Listener) context.Context { return baseCtx }
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errc := make(chan error, 1)
@@ -229,6 +235,9 @@ func Run(a *core.App) error {
 	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a.Emit(sctx, "shutdown", nil)
+	// Give normal requests a moment to finish, then end the streams.
+	t := time.AfterFunc(1500*time.Millisecond, cancelBase)
+	defer t.Stop()
 	err := srv.Shutdown(sctx)
 	a.DB.Exec(`PRAGMA optimize`)
 	a.DB.Close()

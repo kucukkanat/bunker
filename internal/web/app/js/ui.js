@@ -198,6 +198,8 @@ export function toast(msg, opt = {}) {
     document.body.append(toastsEl);
   }
   const type = opt.type || 'info';
+  // The same message again: drop the old copy instead of stacking.
+  for (const t of toastsEl.children) if (t.dataset.msg === String(msg)) t.remove();
   let timer;
   const close = () => {
     clearTimeout(timer);
@@ -209,6 +211,7 @@ export function toast(msg, opt = {}) {
     h('div.msg-t', msg),
     opt.action && h('button.btn.sm', { onclick: () => { close(); opt.action.run(); } }, opt.action.label),
     h('button.x', { 'aria-label': 'Dismiss', onclick: close }, icon('x', 16)));
+  el.dataset.msg = String(msg);
   toastsEl.append(el);
   while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
   const ms = opt.timeout ?? (opt.action ? 7000 : type === 'error' ? 6500 : 4000);

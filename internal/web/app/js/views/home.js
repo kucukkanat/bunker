@@ -46,8 +46,8 @@ export default async function home(root, ctx) {
     reset(e) {
       drop.classList.remove('busy');
       drop.classList.add('failed');
-      title.textContent = e?.code === 'secret_detected' ? 'We found a password or key in your files' : e?.code === 'blocked_type' ? 'That upload has a program in it' : e?.status === 413 ? 'That’s too big for one site' : 'That didn’t work';
-      status.textContent = (e?.message && e.status ? e.message : 'Please try again, or pick different files.');
+      title.textContent = e?.code === 'secret_detected' ? 'We found a password or key in your files' : e?.code === 'blocked_type' ? 'That upload has a program in it' : e?.status === 413 ? 'That’s too big for one site' : e?.code === 'network' ? 'Bunker isn’t answering' : 'That didn’t work';
+      status.textContent = (e?.message && (e.status || e.code === 'network') ? e.message : 'Please try again, or pick different files.');
       status.setAttribute('role', 'alert');
       bar.classList.remove('indeterminate'); bar.replaceWith(btnRow);
     },
