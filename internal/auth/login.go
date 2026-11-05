@@ -105,7 +105,7 @@ func Configured() bool {
 	if app.Cfg.Dev {
 		return true
 	}
-	return Provider().Validate() == nil
+	return SSOConfigured() || localReady()
 }
 
 type oidcClient struct {
@@ -203,6 +203,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if !Configured() {
 		http.Redirect(w, r, "/setup", http.StatusFound)
+		return
+	}
+	// Built-in accounts: show the sign-in page (with an SSO button when
+	// company sign-in is configured too) unless SSO was explicitly chosen.
+	if localReady() && (r.URL.Query().Get("sso") != "1" || !SSOConfigured()) && r.URL.Query().Get("scopes") == "" {
+		renderLogin(w, r, next, r.URL.Query().Get("login_hint"), "")
 		return
 	}
 	c, err := getClient(r.Context())

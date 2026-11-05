@@ -130,7 +130,7 @@ func Handler(a *core.App) http.Handler {
 			}
 			r = r.WithContext(core.WithUser(r.Context(), u))
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/oauth/") || strings.HasPrefix(r.URL.Path, "/mcp") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/oauth/") || strings.HasPrefix(r.URL.Path, "/mcp") || strings.HasPrefix(r.URL.Path, "/auth/password") || strings.HasPrefix(r.URL.Path, "/auth/invite") {
 			if !(a.Cfg.Dev && u != nil) && rateLimited(w, r, u, ip) {
 				return
 			}

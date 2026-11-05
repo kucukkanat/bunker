@@ -42,6 +42,10 @@ func initSetup(a *core.App) {
 			p := Provider()
 			return map[string]any{
 				"configured":  Configured(),
+				"sso":         SSOConfigured(),
+				"local":       LocalEnabled(),
+				"localReady":  localReady(),
+				"codeNeeded":  !isLoopback(r),
 				"dev":         a.Cfg.Dev,
 				"provider":    p.Kind,
 				"url":         a.Cfg.URL,
@@ -53,7 +57,8 @@ func initSetup(a *core.App) {
 	a.Handle(core.Op{Name: "setup.configure", Method: "POST", Path: "/api/v1/setup", Summary: "Configure sign-in (first run with setup code, or admin)", Access: core.AccessPublic, Hidden: true,
 		Params: []core.Param{
 			{Name: "code", In: "body", Desc: "Setup code from the server log (not needed for admins)"},
-			{Name: "provider", In: "body", Required: true, Enum: []string{"entra", "google", "oidc"}},
+			{Name: "provider", In: "body", Required: true, Enum: []string{"local", "entra", "google", "oidc"}, Desc: "local = built-in email + password accounts (no company sign-in needed)"},
+			{Name: "email", In: "body", Desc: "local: your email"}, {Name: "name", In: "body", Desc: "local: your name"}, {Name: "password", In: "body", Desc: "local: your password (10+ characters)"},
 			{Name: "tenantId", In: "body"}, {Name: "issuer", In: "body"},
 			{Name: "clientId", In: "body", Required: true}, {Name: "clientSecret", In: "body", Required: true},
 			{Name: "allowedDomains", In: "body"}, {Name: "admins", In: "body"},
@@ -61,6 +66,7 @@ func initSetup(a *core.App) {
 		Fn: func(r *http.Request) (any, error) {
 			var in struct {
 				Code, Provider, TenantID, Issuer, ClientID, ClientSecret, AllowedDomains, Admins, AllowedGroups string
+				Email, Name, Password                                                                           string
 				DryRun                                                                                          bool
 			}
 			if err := core.Decode(r, &in); err != nil {
@@ -71,9 +77,30 @@ func initSetup(a *core.App) {
 			if Configured() && !isAdmin {
 				return nil, core.Forbidden("already configured; sign in as an admin to change it")
 			}
-			if !isAdmin && subtle.ConstantTimeCompare([]byte(strings.ToUpper(strings.TrimSpace(in.Code))), []byte(strings.ToUpper(SetupCode()))) != 1 {
+			// On the machine itself (localhost) the code isn't needed.
+			if !isAdmin && !isLoopback(r) && subtle.ConstantTimeCompare([]byte(strings.ToUpper(strings.TrimSpace(in.Code))), []byte(strings.ToUpper(SetupCode()))) != 1 {
 				a.Audit(r.Context(), "setup.denied", 0, "", nil)
 				return nil, core.Forbidden("that setup code isn't right: check the server log")
+			}
+			if in.Provider == "local" {
+				if isAdmin {
+					return nil, core.BadRequest("built-in accounts are already available; invite people from Admin → People")
+				}
+				if in.DryRun {
+					if err := validPassword(in.Password); err != nil {
+						return nil, err
+					}
+					return map[string]any{"ok": true, "dryRun": true}, nil
+				}
+				u, err := createLocalUser(r.Context(), in.Email, in.Name, in.Password, true, nil)
+				if err != nil {
+					return nil, err
+				}
+				a.SetSetting(r.Context(), "auth.local", "on")
+				a.SetSetting(r.Context(), "setup.code", "")
+				os.Remove(filepath.Join(a.Cfg.DataDir, "setup-code.txt"))
+				a.Audit(core.WithUser(r.Context(), u), "admin.config", 0, "auth", map[string]any{"provider": "local"})
+				return map[string]any{"ok": true, "loginUrl": "/auth/login", "email": u.Email}, nil
 			}
 			if in.ClientSecret == "" && isAdmin {
 				in.ClientSecret = Provider().ClientSecret

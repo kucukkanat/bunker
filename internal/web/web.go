@@ -148,7 +148,7 @@ func initWeb(a *core.App) error {
 
 // configured asks the setup op without importing auth (avoids a cycle).
 func configured(a *core.App) bool {
-	return a.Cfg.Dev || a.Setting("auth.client_id") != "" || core.Env("ENTRA_CLIENT_ID", "") != ""
+	return a.Cfg.Dev || a.Setting("auth.client_id") != "" || core.Env("ENTRA_CLIENT_ID", "") != "" || a.Setting("auth.local_ready") == "1"
 }
 
 // Asset exposes an embedded file (used by other modules, e.g. templates).

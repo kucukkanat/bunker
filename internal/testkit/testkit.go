@@ -30,9 +30,14 @@ type Kit struct {
 
 // New starts a dev-mode Bunker with a temp data dir. Extra modules must
 // be imported by the test package itself.
-func New(t *testing.T) *Kit {
+func New(t *testing.T) *Kit { return newKit(t, true) }
+
+// NewProd starts Bunker without dev mode (real sign-in required).
+func NewProd(t *testing.T) *Kit { return newKit(t, false) }
+
+func newKit(t *testing.T, dev bool) *Kit {
 	t.Helper()
-	cfg := &core.Config{DataDir: t.TempDir(), Dev: true, Listen: "127.0.0.1:0", TLS: "off"}
+	cfg := &core.Config{DataDir: t.TempDir(), Dev: dev, Listen: "127.0.0.1:0", TLS: "off"}
 	a, err := server.New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +72,13 @@ type Client struct {
 	email string
 	Token string
 	Page  bool // send X-Bunker-Page like the SDK bridge
+}
+
+// WithCookies returns a client using raw session cookies.
+func (k *Kit) WithCookies(cs []*http.Cookie) *Client {
+	key := "cookies:" + core.RandomToken(6)
+	k.jars[key] = cs
+	return &Client{k: k, email: key}
 }
 
 // Res is a decoded response.

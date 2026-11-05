@@ -63,7 +63,7 @@ CREATE TABLE idp_tokens (
   scopes TEXT NOT NULL DEFAULT '',
   updated_at INTEGER NOT NULL
 );
-`},
+`, localMigration},
 		Init: initAuth,
 	})
 }
@@ -81,6 +81,7 @@ func initAuth(a *core.App) error {
 	a.Public("/device")
 	initSetup(a)
 	registerLogin(a)
+	registerLocal(a)
 	registerTokens(a)
 	registerUsers(a)
 	registerDirectory(a)
