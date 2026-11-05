@@ -29,18 +29,34 @@ $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("bunker-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Path $Tmp | Out-Null
 try {
     Write-Host "==> Downloading $Asset ($Version)"
-    Invoke-WebRequest -UseBasicParsing -Uri "$Base/$Asset" -OutFile (Join-Path $Tmp 'bunker.exe')
-    Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt" -OutFile (Join-Path $Tmp 'checksums.txt')
-
-    $want = $null
-    foreach ($line in Get-Content (Join-Path $Tmp 'checksums.txt')) {
-        $parts = $line -split '\s+'
-        if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $Asset) { $want = $parts[0].ToLower() }
+    $fromSource = $false
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$Base/$Asset" -OutFile (Join-Path $Tmp 'bunker.exe')
+    } catch {
+        # No release published yet: build from source if Go is installed.
+        if (Get-Command go -ErrorAction SilentlyContinue) {
+            Write-Host "    no release binary yet; building from source with Go"
+            $env:GOBIN = $Tmp
+            go install "github.com/$Repo/cmd/bunker@latest"
+            if ($LASTEXITCODE -ne 0) { throw "Building Bunker from source failed" }
+            $fromSource = $true
+        } else {
+            throw "No Bunker release is published yet. Install Go (https://go.dev/dl/) and run this again, or run: go install github.com/$Repo/cmd/bunker@latest"
+        }
     }
-    if (-not $want) { throw "No checksum for $Asset in checksums.txt" }
-    $got = (Get-FileHash -Algorithm SHA256 (Join-Path $Tmp 'bunker.exe')).Hash.ToLower()
-    if ($want -ne $got) { throw "Checksum mismatch for $Asset (expected $want, got $got)" }
-    Write-Host "    sha256 $got ok"
+
+    if (-not $fromSource) {
+        Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt" -OutFile (Join-Path $Tmp 'checksums.txt')
+        $want = $null
+        foreach ($line in Get-Content (Join-Path $Tmp 'checksums.txt')) {
+            $parts = $line -split '\s+'
+            if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $Asset) { $want = $parts[0].ToLower() }
+        }
+        if (-not $want) { throw "No checksum for $Asset in checksums.txt" }
+        $got = (Get-FileHash -Algorithm SHA256 (Join-Path $Tmp 'bunker.exe')).Hash.ToLower()
+        if ($want -ne $got) { throw "Checksum mismatch for $Asset (expected $want, got $got)" }
+        Write-Host "    sha256 $got ok"
+    }
 
     Write-Host "==> Installing to $InstallDir\bunker.exe"
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
