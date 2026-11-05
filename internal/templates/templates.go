@@ -1,13 +1,16 @@
 // Package templates seeds Bunker's built-in starter templates on first
 // run. They are ordinary sites marked is_template=1, owned by a disabled
 // "Bunker" system user and viewable by everyone, so people can preview
-// them and start a copy. Seeding happens once (setting templates.seeded);
-// templates admins later edit or delete are never touched again.
+// them and start a copy. Each built-in template is seeded once, by slug
+// (setting templates.known lists the slugs already handled), so a new
+// release adds its new templates to existing installs, while templates
+// admins later edit or delete are never touched again.
 package templates
 
 import (
 	"context"
 	"embed"
+	"sort"
 	"strings"
 
 	"github.com/kucukkanat/bunker/internal/core"
@@ -32,7 +35,19 @@ var All = []Template{
 	{"template-dashboard", "dashboard", "Simple dashboard", "KPIs and charts from a CSV, a SharePoint list or sample data.", "📈"},
 	{"template-directory", "team-directory", "Team directory & who’s out", "Profiles, skills and a shared calendar of time away.", "👋"},
 	{"template-meetings", "meeting-notes", "Meeting notes & decisions", "Notes, decisions and action items you can find again later.", "🗒️"},
+	{"template-assets", "asset-checkout", "Equipment check-out", "Laptops, cameras and kit: who has what, until when, with a full history.", "💻"},
+	{"template-booking", "room-booking", "Room & desk booking", "A day grid of rooms and desks. Book a slot in two taps; no double booking.", "🗓️"},
+	{"template-inventory", "inventory", "Inventory & stock count", "Stock levels with low-stock alerts, quick counts, a change log and CSV export.", "📦"},
+	{"template-incidents", "incident-log", "Incident & issue log", "Report issues by severity, follow a live timeline and alert the on-call group.", "🚨"},
+	{"template-onboarding", "onboarding", "Onboarding checklist", "A first-weeks checklist each new starter ticks off privately; managers see progress.", "🧭"},
+	{"template-okrs", "okrs", "Goals & OKRs", "Quarterly objectives with key results, owners, progress bars and check-ins.", "🎯"},
+	{"template-kudos", "kudos", "Kudos wall", "Thank a teammate in public. Live wall with reactions and company values.", "🙌"},
+	{"template-lunch", "lunch-orders", "Lunch orders", "A weekly menu, one order per person per day and live tallies for the organizer.", "🥪"},
 }
+
+// firstRelease are the templates of the first release. Installs seeded by
+// it only have templates.seeded set; these count as already handled there.
+var firstRelease = []string{"template-requests", "template-tracker", "template-signup", "template-feedback", "template-poll", "template-dashboard", "template-directory", "template-meetings"}
 
 func init() {
 	core.Register(core.Module{Name: "templates", Order: 70, Init: initTemplates})
@@ -52,9 +67,19 @@ func initTemplates(a *core.App) error {
 // Rules are the data rules a built-in template works best with. Copies of
 // a template start with its rules (see the data module), so a team tracker
 // lets teammates move each other's cards without extra setup.
+// Collections not listed use the default rule, "own" (everyone reads,
+// people change only what they added).
 var Rules = map[string]map[string]string{
-	"template-tracker":  {"cards": "open"},
-	"template-meetings": {"meetings": "open"},
+	"template-tracker":    {"cards": "open"},
+	"template-meetings":   {"meetings": "open"},
+	"template-assets":     {"assets": "read", "loans": "own"},
+	"template-booking":    {"rooms": "read", "bookings": "own"},
+	"template-inventory":  {"items": "open", "stocklog": "own"},
+	"template-incidents":  {"incidents": "open", "updates": "own"},
+	"template-onboarding": {"tasks": "read", "progress": "private"},
+	"template-okrs":       {"objectives": "open"},
+	"template-kudos":      {"kudos": "own", "reactions": "own"},
+	"template-lunch":      {"menu": "read", "orders": "own"},
 }
 
 // applyRules sets missing rules on the built-in templates (an admin's
@@ -85,46 +110,90 @@ func Render(dir string) ([]byte, error) {
 	return []byte(s), nil
 }
 
-// Seed creates the templates once. It does nothing if templates exist or
-// were seeded before (so deleting or editing them sticks).
+// Seed creates each built-in template once. A template is skipped when
+// its slug was handled before (seeded, or deleted since) or the address is
+// taken. On the very first start, if templates already exist, the current
+// catalogue is marked as handled without creating anything. Seed is
+// idempotent and safe to run on every start.
 func Seed(ctx context.Context, a *core.App) error {
-	if a.Setting("templates.seeded") == "1" {
-		return nil
+	known := map[string]bool{}
+	for _, s := range strings.Split(a.Setting("templates.known"), ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			known[s] = true
+		}
 	}
-	var n int
-	a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE is_template=1`).Scan(&n)
-	if n > 0 {
-		return a.SetSetting(ctx, "templates.seeded", "1")
+	if a.Setting("templates.seeded") == "1" && len(known) == 0 {
+		for _, s := range firstRelease {
+			known[s] = true
+		}
 	}
-	owner, err := systemUser(ctx, a)
+	if a.Setting("templates.seeded") != "1" && len(known) == 0 {
+		var n int
+		a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE is_template=1`).Scan(&n)
+		if n > 0 {
+			for _, t := range All {
+				known[t.Slug] = true
+			}
+		}
+	}
+	var owner *core.User
+	var err error
+	for _, t := range All {
+		if known[t.Slug] {
+			continue
+		}
+		var exists int
+		a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE slug=?`, t.Slug).Scan(&exists)
+		if exists == 0 {
+			if owner == nil {
+				if owner, err = systemUser(ctx, a); err != nil {
+					return err
+				}
+			}
+			if err := create(ctx, a, owner, t); err != nil {
+				return err
+			}
+		}
+		known[t.Slug] = true
+		if err := saveKnown(ctx, a, known); err != nil {
+			return err
+		}
+	}
+	if err := saveKnown(ctx, a, known); err != nil {
+		return err
+	}
+	return a.SetSetting(ctx, "templates.seeded", "1")
+}
+
+func saveKnown(ctx context.Context, a *core.App, known map[string]bool) error {
+	list := make([]string, 0, len(known))
+	for s := range known {
+		list = append(list, s)
+	}
+	sort.Strings(list)
+	return a.SetSetting(ctx, "templates.known", strings.Join(list, ","))
+}
+
+// create publishes one built-in template as a site owned by owner.
+func create(ctx context.Context, a *core.App, owner *core.User, t Template) error {
+	html, err := Render(t.Dir)
 	if err != nil {
 		return err
 	}
-	for _, t := range All {
-		var exists int
-		a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE slug=?`, t.Slug).Scan(&exists)
-		if exists > 0 {
-			continue
-		}
-		html, err := Render(t.Dir)
-		if err != nil {
-			return err
-		}
-		s, err := sites.CreateSite(ctx, owner, t.Title, t.Slug, t.Description, t.Icon)
-		if err != nil {
-			return err
-		}
-		m, err := sites.StoreFiles(map[string][]byte{"index.html": html})
-		if err != nil {
-			return err
-		}
-		if _, err := sites.Commit(ctx, owner, s, m, "Built-in template", "template", true); err != nil {
-			return err
-		}
-		a.DB.ExecContext(ctx, `UPDATE sites SET is_template=1, org_view=1, kind='html' WHERE id=?`, s.ID)
-		sites.Invalidate(s.Slug)
+	s, err := sites.CreateSite(ctx, owner, t.Title, t.Slug, t.Description, t.Icon)
+	if err != nil {
+		return err
 	}
-	return a.SetSetting(ctx, "templates.seeded", "1")
+	m, err := sites.StoreFiles(map[string][]byte{"index.html": html})
+	if err != nil {
+		return err
+	}
+	if _, err := sites.Commit(ctx, owner, s, m, "Built-in template", "template", true); err != nil {
+		return err
+	}
+	a.DB.ExecContext(ctx, `UPDATE sites SET is_template=1, org_view=1, kind='html' WHERE id=?`, s.ID)
+	sites.Invalidate(s.Slug)
+	return nil
 }
 
 // systemUser returns the disabled account that owns built-in content.

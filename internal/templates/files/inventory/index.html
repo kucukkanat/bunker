@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventory & stock count</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1180px}
+.inv{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.inv table{box-shadow:none;border-radius:0;background:none}
+.inv th{background:var(--card2)}
+.inv td{vertical-align:middle}
+.inv tr.low td{background:var(--mid-bg)}.inv tr.out td{background:var(--bad-bg)}
+.inv tr.low .unit,.inv tr.out .unit,.inv tr.low .nm span,.inv tr.out .nm span{color:var(--text)}
+.inv .nm b{display:block}.inv .nm span{font-size:.8rem;color:var(--muted)}
+.qty{display:inline-flex;align-items:stretch;height:40px;vertical-align:middle;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}
+.qty button{height:100%;min-height:0;min-width:40px;padding:0;border-radius:0;background:none;color:var(--text);font-size:1.1rem;border:0}
+.qty button:hover{background:var(--soft);color:var(--text)}
+.qty input{width:4.2em!important;height:100%!important;min-height:0!important;display:inline-block!important;-moz-appearance:textfield;appearance:textfield;border:0!important;border-left:1px solid var(--line)!important;border-right:1px solid var(--line)!important;border-radius:0!important;text-align:center;padding:4px!important;font-variant-numeric:tabular-nums;font-weight:600;background:none!important}
+.qty input::-webkit-inner-spin-button,.qty input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.unit{font-size:.8rem;color:var(--muted);margin-left:6px}
+.acts{white-space:nowrap;text-align:right}
+.log{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto}.log li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:baseline;flex-wrap:wrap}
+.log .d{font-weight:700;font-variant-numeric:tabular-nums;min-width:3.2em}.log .d.up{color:var(--ok-t)}.log .d.down{color:var(--bad-t)}
+.log .when{font-size:.8rem;color:var(--muted);margin-left:auto}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+@media(max-width:720px){
+  .inv{background:none;border:0;box-shadow:none;overflow:visible}
+  .inv thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .inv table,.inv tbody,.inv tr,.inv td{display:block;width:100%}
+  .inv tr{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;padding:10px 14px;display:grid;grid-template-columns:1fr auto;gap:6px 10px;box-shadow:var(--sh)}
+  .inv tr.low{border-left:4px solid var(--mid-t)}.inv tr.out{border-left:4px solid var(--bad-t)}
+  .inv tr.low td,.inv tr.out td{background:none}
+  .inv td{border:0;padding:0}
+  .inv td.c-cat,.inv td.c-min{display:none}
+  .inv td.c-loc{grid-column:1;font-size:.82rem;color:var(--muted)}
+  .inv td.c-st{grid-row:1;grid-column:2;text-align:right}
+  .inv td.c-qty{grid-column:1/-1}
+  .inv td.acts{grid-column:1/-1;text-align:left}
+}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Inventory & stock count</h1><p>Know what you have, and what to reorder. Counts are saved for everyone instantly.</p></div>
+    <div class="row"><button class="btn" id="activity">Activity</button><button class="btn" id="export">Export CSV</button><button class="btn primary" id="add">+ Add item</button></div>
+  </div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="toolbar">
+    <label class="sr" for="q">Search items</label><input type="search" id="q" placeholder="Search by name, SKU or supplier…">
+    <label class="sr" for="cat">Category</label><select id="cat"></select>
+    <label class="sr" for="loc">Location</label><select id="loc"></select>
+    <div class="seg" role="group" aria-label="Show" id="seg"><button aria-pressed="true" data-f="all">All</button><button aria-pressed="false" data-f="low">Needs reorder</button></div>
+  </div>
+  <div id="list"><div class="empty" aria-busy="true">Loading stock…</div></div>
+</div>
+
+<dialog id="d-item" aria-labelledby="d-item-h">
+  <form id="f-item">
+    <h2 id="d-item-h">Add item</h2>
+    <div class="field"><label for="i-name">Name</label><input type="text" id="i-name" required maxlength="120" placeholder="e.g. A4 printer paper"></div>
+    <div class="grid g2"><div class="field"><label for="i-sku">SKU or code <span class="muted">(optional)</span></label><input type="text" id="i-sku" maxlength="60"></div>
+    <div class="field"><label for="i-cat">Category</label><input type="text" id="i-cat" maxlength="60" list="cats" placeholder="e.g. Office supplies"></div></div>
+    <div class="grid g2"><div class="field"><label for="i-loc">Location</label><input type="text" id="i-loc" maxlength="60" list="locs" placeholder="e.g. Store room"></div>
+    <div class="field"><label for="i-unit">Unit</label><input type="text" id="i-unit" maxlength="20" placeholder="e.g. boxes" value="pcs"></div></div>
+    <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))"><div class="field"><label for="i-qty">In stock</label><input type="number" id="i-qty" min="0" step="1" value="0" required></div>
+    <div class="field"><label for="i-min">Reorder at</label><input type="number" id="i-min" min="0" step="1" value="5"><div class="hint">Highlight when stock falls to this.</div></div>
+    <div class="field"><label for="i-cost">Unit cost <span class="muted">(optional)</span></label><input type="number" id="i-cost" min="0" step="0.01"></div></div>
+    <div class="field"><label for="i-sup">Supplier or reorder link <span class="muted">(optional)</span></label><input type="text" id="i-sup" maxlength="200"></div>
+    <div class="dlg-acts"><button class="btn danger" type="button" id="i-del" hidden>Delete</button><span class="spacer"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div>
+  </form>
+  <datalist id="cats"></datalist><datalist id="locs"></datalist>
+</dialog>
+
+<dialog id="d-log" aria-labelledby="d-log-h">
+  <h2 id="d-log-h">Activity</h2>
+  <ul class="log" id="log"></ul>
+  <div class="dlg-acts"><button class="btn" type="button" data-close>Close</button></div>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var CURRENCY = 'GBP'; // for unit costs and stock value
+// Data rules (set by the template): "items" is open, so anyone with access
+// can count stock; "stocklog" keeps a record of every change.
+// -------------------
+
+var items = BK.col('items'), stocklog = BK.col('stocklog');
+var I = [], LOG = [], me = {}, filter = 'all', editing = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+var money = function (n) { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: CURRENCY, maximumFractionDigits: 0 }).format(n); } catch (x) { return Math.round(n); } };
+function level(it) { var q = +it.qty || 0, m = +it.min || 0; return q <= 0 ? 'out' : q <= m ? 'low' : 'ok'; }
+function badge(it) { var l = level(it); return l === 'out' ? '<span class="badge bad">Out of stock</span>' : l === 'low' ? '<span class="badge mid">Low: reorder</span>' : '<span class="badge ok">In stock</span>'; }
+function uniq(k) { var s = {}; I.forEach(function (i) { if (i[k]) s[i[k]] = 1; }); return Object.keys(s).sort(); }
+function visible() {
+  var q = $('q').value.trim().toLowerCase(), cat = $('cat').value, loc = $('loc').value;
+  return I.filter(function (it) {
+    if (cat && it.category !== cat) return false;
+    if (loc && it.location !== loc) return false;
+    if (filter === 'low' && level(it) === 'ok') return false;
+    return !q || [it.name, it.sku, it.supplier, it.category, it.location].join(' ').toLowerCase().indexOf(q) >= 0;
+  }).sort(function (a, b) { var o = { out: 0, low: 1, ok: 2 }; return o[level(a)] - o[level(b)] || String(a.name).localeCompare(b.name); });
+}
+function fillSelect(id, all, vals) { var el = $(id), cur = el.value; el.innerHTML = '<option value="">' + all + '</option>' + vals.map(function (v) { return '<option' + (v === cur ? ' selected' : '') + '>' + e(v) + '</option>'; }).join(''); el.hidden = !vals.length; }
+
+function render() {
+  var low = I.filter(function (i) { return level(i) === 'low'; }).length, out = I.filter(function (i) { return level(i) === 'out'; }).length;
+  var value = I.reduce(function (s, i) { return s + (+i.cost || 0) * Math.max(+i.qty || 0, 0); }, 0);
+  $('stats').innerHTML = [['Items', I.length], ['Low stock', low], ['Out of stock', out], ['Stock value', value ? money(value) : '–']]
+    .map(function (s) { return '<div class="stat"><b>' + e(s[1]) + '</b><span>' + s[0] + '</span></div>'; }).join('');
+  fillSelect('cat', 'All categories', uniq('category')); fillSelect('loc', 'All locations', uniq('location'));
+  $('cats').innerHTML = uniq('category').map(function (v) { return '<option value="' + e(v) + '">'; }).join('');
+  $('locs').innerHTML = uniq('location').map(function (v) { return '<option value="' + e(v) + '">'; }).join('');
+  var box = $('list'), list = visible();
+  if (!I.length) {
+    box.innerHTML = '<div class="empty"><span class="ico" aria-hidden="true">📦</span><b>No items yet</b>Add what you keep in stock, with the level at which you reorder.<br><button class="btn primary" data-act="add">+ Add item</button> <button class="btn" data-act="sample">Add a few examples</button></div>';
+    return;
+  }
+  if (!list.length) { box.innerHTML = '<div class="empty"><b>' + (filter === 'low' ? 'Nothing needs reordering 🎉' : 'Nothing matches') + '</b>' + (filter === 'low' ? 'Everything is above its reorder level.' : 'Try another search or filter.') + '</div>'; return; }
+  box.innerHTML = '<div class="inv"><table><thead><tr><th scope="col">Item</th><th scope="col">Category</th><th scope="col">Location</th><th scope="col">In stock</th><th scope="col">Reorder at</th><th scope="col">Status</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>' +
+    list.map(function (it) {
+      var l = level(it), id = e(it._id), nm = e(it.name);
+      return '<tr class="' + (l === 'ok' ? '' : l) + '" data-id="' + id + '"><td class="nm"><b>' + nm + '</b><span>' + e([it.sku, it.supplier].filter(Boolean).join(' · ')) + '</span></td>' +
+        '<td class="c-cat">' + e(it.category || '') + '</td><td class="c-loc">' + e(it.location || '') + '</td>' +
+        '<td class="c-qty"><span class="qty"><button type="button" data-d="-1" aria-label="One less ' + nm + '">−</button><input type="number" min="0" step="1" value="' + (+it.qty || 0) + '" aria-label="Count of ' + nm + '" data-count><button type="button" data-d="1" aria-label="One more ' + nm + '">+</button></span><span class="unit">' + e(it.unit || '') + '</span></td>' +
+        '<td class="c-min">' + (+it.min || 0) + '</td><td class="c-st">' + badge(it) + '</td>' +
+        '<td class="acts"><button class="btn small ghost" data-act="hist" aria-label="History of ' + nm + '">History</button><button class="btn small ghost" data-act="edit" aria-label="Edit ' + nm + '">Edit</button></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+// Changes start from the latest saved count, so two people counting at once don't overwrite each other.
+function change(id, delta, absolute, reason) {
+  return items.get(id).then(function (cur) {
+    if (!cur) throw new Error('That item was removed.');
+    var from = +cur.qty || 0, to = absolute != null ? absolute : Math.max(0, from + delta);
+    if (to === from) return;
+    var it = I.filter(function (x) { return x._id === id; })[0]; if (it) { it.qty = to; render(); }
+    return items.update(id, { qty: to }).then(function () {
+      return stocklog.add({ item: id, name: cur.name, from: from, to: to, delta: to - from, reason: reason || (absolute != null ? 'count' : delta > 0 ? 'restock' : 'used'), who: me.name || '' });
+    }).then(function () { if (level({ qty: to, min: cur.min }) !== 'ok' && level({ qty: from, min: cur.min }) === 'ok') BK.toast(cur.name + ' is low: time to reorder.'); });
+  }).catch(function (err) { BK.err(err); load(); });
+}
+$('list').addEventListener('click', function (ev) {
+  var a = ev.target.closest('[data-act]');
+  if (a && a.dataset.act === 'add') return openItem(null);
+  if (a && a.dataset.act === 'sample') return sample();
+  var tr = ev.target.closest('tr[data-id]'); if (!tr) return;
+  var it = I.filter(function (x) { return x._id === tr.dataset.id; })[0];
+  var d = ev.target.closest('[data-d]');
+  if (d) return change(it._id, +d.dataset.d);
+  if (a && a.dataset.act === 'edit') openItem(it);
+  if (a && a.dataset.act === 'hist') openLog(it);
+});
+$('list').addEventListener('change', function (ev) {
+  if (!ev.target.matches('[data-count]')) return;
+  var v = Math.max(0, Math.round(+ev.target.value || 0)), tr = ev.target.closest('tr');
+  change(tr.dataset.id, 0, v, 'count');
+});
+$('list').addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && ev.target.matches('[data-count]')) ev.target.blur(); });
+
+function openItem(it) {
+  editing = it; $('d-item-h').textContent = it ? 'Edit item' : 'Add item';
+  $('i-name').value = it ? it.name || '' : ''; $('i-sku').value = it ? it.sku || '' : ''; $('i-cat').value = it ? it.category || '' : '';
+  $('i-loc').value = it ? it.location || '' : ''; $('i-unit').value = it ? it.unit || '' : 'pcs'; $('i-qty').value = it ? +it.qty || 0 : 0;
+  $('i-min').value = it ? +it.min || 0 : 5; $('i-cost').value = it && it.cost != null ? it.cost : ''; $('i-sup').value = it ? it.supplier || '' : '';
+  $('i-del').hidden = !it; $('d-item').showModal(); $('i-name').focus();
+}
+$('f-item').onsubmit = function (ev) {
+  ev.preventDefault();
+  var d = { name: $('i-name').value.trim(), sku: $('i-sku').value.trim(), category: $('i-cat').value.trim(), location: $('i-loc').value.trim(), unit: $('i-unit').value.trim(),
+    min: Math.max(0, +$('i-min').value || 0), cost: $('i-cost').value === '' ? null : +$('i-cost').value, supplier: $('i-sup').value.trim() };
+  var qty = Math.max(0, Math.round(+$('i-qty').value || 0)), it = editing;
+  var p = it ? items.update(it._id, d).then(function () { if (qty !== (+it.qty || 0)) return change(it._id, 0, qty, 'count'); })
+    : items.add(Object.assign(d, { qty: qty })).then(function (doc) { return stocklog.add({ item: doc._id, name: d.name, from: 0, to: qty, delta: qty, reason: 'added', who: me.name || '' }); });
+  p.then(function () { $('d-item').close(); BK.toast('Saved'); return load(); }).catch(BK.err);
+};
+$('i-del').onclick = function () {
+  if (!editing || !confirm('Delete “' + editing.name + '” from the inventory?')) return;
+  items.remove(editing._id).then(function () { $('d-item').close(); return load(); }).catch(BK.err);
+};
+function openLog(it) {
+  var list = LOG.filter(function (x) { return !it || x.item === it._id; }).sort(function (a, b) { return BK.ms(b._created) - BK.ms(a._created); }).slice(0, 100);
+  $('d-log-h').textContent = it ? 'History · ' + it.name : 'Recent activity';
+  var why = { count: 'Counted', restock: 'Restocked', used: 'Used', added: 'Added' };
+  $('log').innerHTML = list.length ? list.map(function (x) {
+    var d = +x.delta || 0;
+    return '<li><span class="d ' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '+' : '') + d + '</span><span>' + (it ? '' : '<b>' + e(x.name) + '</b> · ') + e(why[x.reason] || 'Changed') + ' ' + (+x.from || 0) + ' → ' + (+x.to || 0) + ' <span class="muted">by ' + e(x.who || x._authorName) + '</span></span><span class="when">' + e(BK.when(x._created)) + '</span></li>';
+  }).join('') : '<li class="muted">No changes recorded yet.</li>';
+  $('d-log').showModal();
+}
+function sample() {
+  var list = [
+    { name: 'A4 printer paper', sku: 'OFF-001', category: 'Office supplies', location: 'Store room', unit: 'reams', qty: 24, min: 10, cost: 4.5, supplier: 'Office Depot' },
+    { name: 'Black toner HP 26A', sku: 'OFF-014', category: 'Office supplies', location: 'Store room', unit: 'pcs', qty: 2, min: 2, cost: 89 },
+    { name: 'Coffee beans 1kg', sku: 'KIT-003', category: 'Kitchen', location: 'Kitchen', unit: 'bags', qty: 0, min: 3, cost: 18 },
+    { name: 'Dishwasher tablets', sku: 'KIT-010', category: 'Kitchen', location: 'Kitchen', unit: 'boxes', qty: 6, min: 2, cost: 9 },
+    { name: 'USB-C chargers 65W', sku: 'IT-220', category: 'IT', location: 'IT cupboard', unit: 'pcs', qty: 7, min: 4, cost: 35 },
+    { name: 'Branded tote bags', sku: 'MKT-005', category: 'Marketing', location: 'Store room', unit: 'pcs', qty: 140, min: 50, cost: 2.2 }
+  ];
+  Promise.all(list.map(function (x) { return items.add(x); })).then(load).catch(BK.err);
+}
+$('export').onclick = function () {
+  var rows = [['Name', 'SKU', 'Category', 'Location', 'In stock', 'Unit', 'Reorder at', 'Status', 'Unit cost', 'Supplier']];
+  visible().forEach(function (it) { var l = level(it); rows.push([it.name, it.sku, it.category, it.location, +it.qty || 0, it.unit, +it.min || 0, l === 'out' ? 'Out of stock' : l === 'low' ? 'Low' : 'OK', it.cost == null ? '' : +it.cost, it.supplier]); });
+  var d = new Date(); BK.download('inventory-' + d.toISOString().slice(0, 10) + (filter === 'low' ? '-reorder' : '') + '.csv', BK.csv(rows), 'text/csv');
+};
+$('activity').onclick = function () { openLog(null); };
+$('add').onclick = function () { openItem(null); };
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+$('seg').onclick = function (ev) { var b = ev.target.closest('button'); if (!b) return; filter = b.dataset.f; $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render(); };
+$('q').oninput = render; $('cat').onchange = render; $('loc').onchange = render;
+
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 200); }
+function load() {
+  return Promise.all([items.all(), stocklog.list({ order: '-_created', limit: 300 })]).then(function (r) {
+    I = r[0]; LOG = r[1];
+    // Don't redraw under someone typing a count.
+    var a = document.activeElement; if (a && a.matches && a.matches('[data-count]')) return;
+    render();
+  }).catch(BK.err);
+}
+BK.me().then(function (u) { me = u; BK.banner(); load(); });
+items.subscribe(reload); stocklog.subscribe(reload);
+</script>
+</body>
+</html>

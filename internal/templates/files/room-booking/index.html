@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Room & desk booking</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1240px}
+.daybar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.daybar h2{margin:0 8px 0 4px;font-size:1.15rem;min-width:12ch}
+.sched{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--sh)}
+.sgrid{display:grid;grid-template-columns:minmax(150px,190px) repeat(var(--n),minmax(34px,1fr));min-width:calc(170px + var(--n) * 36px);position:relative}
+.sgrid .h{font-size:.72rem;color:var(--muted);padding:8px 0 6px 4px;border-bottom:1px solid var(--line);border-left:1px solid var(--line);white-space:nowrap;overflow:visible}
+.sgrid .h.half{border-left-style:dotted;color:transparent}
+.sgrid .corner{border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:3}
+.res{position:sticky;left:0;z-index:2;background:var(--card);padding:10px 12px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);min-height:58px}
+.res b{display:block;font-size:.92rem;line-height:1.25}.res span{font-size:.76rem;color:var(--muted)}
+.cell,.bk{display:block;min-height:0;font:inherit;color:inherit;transition:none;transform:none!important;gap:0}
+.cell{border:0;border-radius:0;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:none;cursor:pointer;padding:0;min-height:58px}
+.cell.half{border-left-style:dotted}
+.cell:hover{background:var(--soft)}.cell:focus-visible{outline-offset:-3px}
+.cell.past{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--card2) 6px 8px);cursor:not-allowed}
+.bk{margin:5px 2px;border-radius:9px;padding:5px 8px;font-size:.78rem;line-height:1.25;overflow:hidden;background:var(--card2);border:1px solid var(--line);text-align:left;cursor:pointer;z-index:1;min-width:0}
+.bk b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bk span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.bk:hover{background:var(--card2);color:var(--text);border-color:var(--moss)}
+.bk.mine,.bk.mine:hover{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.bk.mine span{color:inherit;opacity:.85}
+.now{position:absolute;top:0;bottom:0;width:2px;background:var(--clay);z-index:2;pointer-events:none}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin:10px 2px 26px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}
+.mylist{list-style:none;margin:0;padding:0}.mylist li{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}.mylist li:last-child{border:0}
+.mylist .d{min-width:7.5rem;font-weight:600}
+.sched{margin-bottom:0}@media(max-width:600px){.sgrid{grid-template-columns:118px repeat(var(--n),minmax(34px,1fr));min-width:calc(118px + var(--n) * 34px)}.res{padding:8px 10px}.res b{font-size:.85rem}}
+.err{color:var(--bad-t);font-weight:500;margin:0 0 10px}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.reslist{list-style:none;padding:0;margin:0 0 16px;max-height:40vh;overflow:auto}.reslist li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Room & desk booking</h1><p>Pick a day, tap a free slot, done. Nobody can double-book.</p></div>
+    <div class="row"><button class="btn" id="manage" hidden>Manage rooms</button><button class="btn primary" id="book">+ Book</button></div>
+  </div>
+  <div class="daybar">
+    <button class="btn small" id="prev" aria-label="Previous day">‹</button>
+    <label class="sr" for="day">Day</label><input type="date" id="day" class="w-auto">
+    <button class="btn small" id="next" aria-label="Next day">›</button>
+    <button class="btn small" id="today">Today</button>
+    <h2 id="dayname" aria-live="polite"></h2>
+    <span class="spacer"></span>
+    <div class="seg" role="group" aria-label="Show" id="seg"><button aria-pressed="true" data-f="">All</button><button aria-pressed="false" data-f="Room">Rooms</button><button aria-pressed="false" data-f="Desk">Desks</button></div>
+  </div>
+  <div id="board"><div class="empty" aria-busy="true">Loading…</div></div>
+  <div class="legend" id="legend"><span><i style="background:var(--card)"></i>Free: click to book</span><span><i style="background:var(--accent)"></i>Your booking</span><span><i style="background:var(--card2)"></i>Booked</span></div>
+  <section class="card"><h2>Your upcoming bookings</h2><ul class="mylist" id="mine"></ul></section>
+</div>
+
+<dialog id="d-book" aria-labelledby="d-book-h">
+  <form id="f-book">
+    <h2 id="d-book-h">Book a room or desk</h2>
+    <p class="err" id="b-err" role="alert" hidden></p>
+    <div class="field"><label for="b-res">Room or desk</label><select id="b-res" required></select></div>
+    <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+      <div class="field"><label for="b-date">Day</label><input type="date" id="b-date" required></div>
+      <div class="field"><label for="b-start">From</label><select id="b-start"></select></div>
+      <div class="field"><label for="b-end">Until</label><select id="b-end"></select></div>
+    </div>
+    <div class="field"><label for="b-title">What for? <span class="muted">(optional)</span></label><input type="text" id="b-title" maxlength="120" placeholder="e.g. Design review"></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Book it</button></div>
+  </form>
+</dialog>
+
+<dialog id="d-view" aria-labelledby="d-view-h">
+  <h2 id="d-view-h"></h2>
+  <p id="v-body"></p>
+  <div class="dlg-acts"><button class="btn danger" type="button" id="v-cancel" hidden>Cancel booking</button><span class="spacer"></span><button class="btn" type="button" data-close>Close</button></div>
+</dialog>
+
+<dialog id="d-res" aria-labelledby="d-res-h">
+  <h2 id="d-res-h">Rooms and desks</h2>
+  <ul class="reslist" id="reslist"></ul>
+  <form id="f-res">
+    <h3>Add one</h3>
+    <div class="grid g2"><div class="field"><label for="r-name">Name</label><input type="text" id="r-name" required maxlength="80" placeholder="e.g. Boardroom"></div>
+    <div class="field"><label for="r-type">Type</label><select id="r-type"><option>Room</option><option>Desk</option></select></div></div>
+    <div class="grid g2"><div class="field"><label for="r-cap">Seats</label><input type="number" id="r-cap" min="1" max="500" value="6"></div>
+    <div class="field"><label for="r-where">Where <span class="muted">(optional)</span></label><input type="text" id="r-where" maxlength="80" placeholder="e.g. 3rd floor"></div></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Done</button><button class="btn primary" type="submit">Add</button></div>
+  </form>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var DAY_START = 8, DAY_END = 18, STEP = 30; // bookable hours and slot size (minutes)
+var WEEKENDS = false;                       // skip Saturday and Sunday with ‹ ›
+// Data rules (set by the template): "rooms" is maintained by editors;
+// "bookings" lets everyone book and cancel their own.
+// -------------------
+
+var rooms = BK.col('rooms'), bookings = BK.col('bookings');
+var R = [], D = [], M = [], me = {}, editor = false, kind = '', viewing = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function parse(s) { var p = s.split('-'); return new Date(+p[0], p[1] - 1, +p[2]); }
+function nice(s, long) { return parse(s).toLocaleDateString(undefined, long ? { weekday: 'long', month: 'long', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric' }); }
+function mins(t) { var p = String(t).split(':'); return +p[0] * 60 + +p[1]; }
+function hhmm(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+function label(t) { var p = t.split(':'); return new Date(2000, 0, 1, +p[0], +p[1]).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+var SLOTS = []; for (var m = DAY_START * 60; m < DAY_END * 60; m += STEP) SLOTS.push(m);
+var day = ymd(new Date());
+function nowMins() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+function isPast(date, m) { var t = ymd(new Date()); return date < t || (date === t && m + STEP <= nowMins()); }
+function resName(id) { var r = R.filter(function (x) { return x._id === id; })[0]; return r ? r.name : 'Removed room'; }
+function overlaps(list, res, date, s, en, skip) {
+  return list.filter(function (b) { return b.resource === res && b.date === date && b._id !== skip && mins(b.start) < en && s < mins(b.end); });
+}
+function mineB(b) { return b._author === me.id; }
+
+function render() {
+  $('dayname').textContent = nice(day, true); $('day').value = day;
+  var list = R.filter(function (r) { return !kind || (r.type || 'Room') === kind; }).sort(function (a, b) { return (b.type || 'Room').localeCompare(a.type || 'Room') || a.name.localeCompare(b.name); });
+  var box = $('board'); $('legend').hidden = !R.length;
+  if (!R.length) {
+    box.innerHTML = editor
+      ? '<div class="empty"><span class="ico" aria-hidden="true">🗓️</span><b>Add your rooms and desks</b>Then everyone can book them by the half hour.<br><button class="btn primary" data-act="manage">Add rooms</button> <button class="btn" data-act="sample">Add a few examples</button></div>'
+      : '<div class="empty"><span class="ico" aria-hidden="true">🗓️</span><b>No rooms to book yet</b>The people who run this app haven’t added any rooms or desks.</div>';
+  } else if (!list.length) {
+    box.innerHTML = '<div class="empty"><b>No ' + (kind === 'Desk' ? 'desks' : 'rooms') + ' yet</b>Switch to “All” to see everything.</div>';
+  } else {
+    var n = SLOTS.length, h = '<div class="sched" role="region" aria-label="Bookings for ' + e(nice(day, true)) + '"><div class="sgrid" style="--n:' + n + '">';
+    h += '<div class="corner"></div>' + SLOTS.map(function (m) { var half = m % 60 !== 0; return '<div class="h' + (half ? ' half' : '') + '" aria-hidden="true">' + (half ? '·' : e(label(hhmm(m)))) + '</div>'; }).join('');
+    list.forEach(function (r, ri) {
+      var row = ri + 2;
+      h += '<div class="res" style="grid-row:' + row + '"><b>' + e(r.name) + '</b><span>' + e([r.type === 'Desk' ? 'Desk' : (r.capacity ? r.capacity + ' seats' : 'Room'), r.where].filter(Boolean).join(' · ')) + '</span></div>';
+      var taken = {};
+      D.filter(function (b) { return b.resource === r._id; }).forEach(function (b) {
+        var s = Math.max(mins(b.start), DAY_START * 60), en = Math.min(mins(b.end), DAY_END * 60);
+        if (en <= s) return;
+        var c0 = Math.floor((s - DAY_START * 60) / STEP), c1 = Math.ceil((en - DAY_START * 60) / STEP);
+        for (var c = c0; c < c1; c++) taken[c] = 1;
+        var who = mineB(b) ? 'You' : b.who || b._authorName;
+        h += '<button class="bk' + (mineB(b) ? ' mine' : '') + '" style="grid-row:' + row + ';grid-column:' + (c0 + 2) + '/' + (c1 + 2) + '" data-b="' + e(b._id) + '">' +
+          '<b>' + e(b.title || who) + '</b><span>' + e(label(b.start) + '–' + label(b.end) + (b.title ? ' · ' + who : '')) + '</span><span class="sr">, ' + e(r.name) + ', booked by ' + e(mineB(b) ? 'you' : who) + '</span></button>';
+      });
+      SLOTS.forEach(function (m, c) {
+        if (taken[c]) return;
+        var past = isPast(day, m);
+        h += '<button class="cell' + (m % 60 ? ' half' : '') + (past ? ' past' : '') + '" style="grid-row:' + row + ';grid-column:' + (c + 2) + '" data-r="' + e(r._id) + '" data-m="' + m + '"' + (past ? ' disabled' : '') + ' aria-label="Book ' + e(r.name) + ' at ' + e(label(hhmm(m))) + '"></button>';
+      });
+    });
+    if (day === ymd(new Date()) && nowMins() > DAY_START * 60 && nowMins() < DAY_END * 60) h += '<div class="now" style="left:calc(var(--first) + (100% - var(--first)) * ' + ((nowMins() - DAY_START * 60) / (DAY_END * 60 - DAY_START * 60)).toFixed(4) + ')" aria-hidden="true"></div>';
+    box.innerHTML = h + '</div></div>';
+    var g = box.querySelector('.sgrid'), first = box.querySelector('.res');
+    if (g && first) g.style.setProperty('--first', first.getBoundingClientRect().width + 'px');
+  }
+  var mine = M.slice().sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); });
+  $('mine').innerHTML = mine.length ? mine.map(function (b) {
+    return '<li><span class="d">' + e(nice(b.date)) + '</span><span>' + e(label(b.start) + '–' + label(b.end)) + '</span><b>' + e(resName(b.resource)) + '</b>' + (b.title ? '<span class="muted">' + e(b.title) + '</span>' : '') +
+      '<span class="spacer"></span><button class="btn small" data-go="' + e(b.date) + '">Show</button><button class="btn small danger" data-cancel="' + e(b._id) + '">Cancel</button></li>';
+  }).join('') : '<li class="muted">Nothing booked. Pick a free slot above.</li>';
+}
+
+$('board').addEventListener('click', function (ev) {
+  var a = ev.target.closest('[data-act]');
+  if (a) { if (a.dataset.act === 'manage') openRes(); else sample(); return; }
+  var c = ev.target.closest('.cell');
+  if (c && !c.disabled) return openBook(c.dataset.r, day, +c.dataset.m);
+  var b = ev.target.closest('.bk');
+  if (b) openView(D.filter(function (x) { return x._id === b.dataset.b; })[0]);
+});
+$('mine').addEventListener('click', function (ev) {
+  var g = ev.target.closest('[data-go]'), c = ev.target.closest('[data-cancel]');
+  if (g) setDay(g.dataset.go);
+  if (c) cancel(M.filter(function (x) { return x._id === c.dataset.cancel; })[0]);
+});
+
+function fillTimes(startM) {
+  var opts = function (from, to, sel) { var o = ''; for (var m = from; m <= to; m += STEP) o += '<option value="' + hhmm(m) + '"' + (m === sel ? ' selected' : '') + '>' + e(label(hhmm(m))) + '</option>'; return o; };
+  $('b-start').innerHTML = opts(DAY_START * 60, DAY_END * 60 - STEP, startM);
+  var cur = mins($('b-end').value || '00:00'), s = mins($('b-start').value);
+  $('b-end').innerHTML = opts(s + STEP, DAY_END * 60, cur > s ? cur : Math.min(s + 60, DAY_END * 60));
+}
+function openBook(res, date, m) {
+  if (!R.length) return editor ? openRes() : BK.toast('There are no rooms to book yet.');
+  $('b-res').innerHTML = R.map(function (r) { return '<option value="' + e(r._id) + '"' + (r._id === res ? ' selected' : '') + '>' + e(r.name) + (r.type === 'Desk' ? ' (desk)' : '') + '</option>'; }).join('');
+  if (m == null) { var n = Math.ceil(nowMins() / STEP) * STEP; m = date === ymd(new Date()) && n > DAY_START * 60 && n < DAY_END * 60 ? n : DAY_START * 60 + 60; }
+  $('b-date').value = date; $('b-date').min = ymd(new Date()); $('b-end').value = ''; fillTimes(m);
+  $('b-end').value = hhmm(Math.min(m + 60, DAY_END * 60)); $('b-title').value = ''; $('b-err').hidden = true;
+  $('d-book').showModal(); $('b-title').focus();
+}
+$('b-start').onchange = function () { fillTimes(mins($('b-start').value)); };
+$('f-book').onsubmit = function (ev) {
+  ev.preventDefault();
+  var res = $('b-res').value, date = $('b-date').value, s = mins($('b-start').value), en = mins($('b-end').value), btn = $('f-book').querySelector('[type=submit]');
+  var fail = function (t) { $('b-err').textContent = t; $('b-err').hidden = false; };
+  if (!date) return fail('Pick a day.');
+  if (en <= s) return fail('The end time must be after the start.');
+  if (isPast(date, s)) return fail('That time has already passed.');
+  btn.disabled = true;
+  var d = { resource: res, date: date, start: hhmm(s), end: hhmm(en), title: $('b-title').value.trim(), who: me.name || '' };
+  dayList(date).then(function (list) {
+    var clash = overlaps(list, res, date, s, en)[0];
+    if (clash) throw new Error(resName(res) + ' is already booked ' + label(clash.start) + '–' + label(clash.end) + ' by ' + (mineB(clash) ? 'you' : clash.who || clash._authorName) + '.');
+    return bookings.add(d);
+  }).then(function (mine) {
+    // Two people booking at the same moment: the earlier booking wins.
+    return dayList(date).then(function (list) {
+      var first = overlaps(list, res, date, s, en).sort(function (a, b) { return BK.ms(a._created) - BK.ms(b._created) || String(a._id).localeCompare(String(b._id)); })[0];
+      if (first && first._id !== mine._id) return bookings.remove(mine._id).then(function () { throw new Error('Someone booked that slot a moment before you. Please pick another time.'); });
+    });
+  }).then(function () {
+    $('d-book').close(); BK.toast('Booked: ' + resName(res) + ', ' + nice(date) + ' ' + label(d.start)); if (date !== day) setDay(date); else load();
+  }).catch(function (err) { fail(err.message || String(err)); load(); }).then(function () { btn.disabled = false; });
+};
+
+function openView(b) {
+  if (!b) return; viewing = b;
+  $('d-view-h').textContent = b.title || resName(b.resource);
+  $('v-body').innerHTML = '<b>' + e(resName(b.resource)) + '</b><br>' + e(nice(b.date, true) + ', ' + label(b.start) + '–' + label(b.end)) + '<br>Booked by ' + e(mineB(b) ? 'you' : b.who || b._authorName);
+  $('v-cancel').hidden = !(mineB(b) || editor); $('d-view').showModal();
+}
+$('v-cancel').onclick = function () { var b = viewing; $('d-view').close(); cancel(b); };
+function cancel(b) {
+  if (!b || !confirm('Cancel ' + resName(b.resource) + ' on ' + nice(b.date) + ' at ' + label(b.start) + '?')) return;
+  bookings.remove(b._id).then(function () { BK.toast('Booking cancelled'); load(); }).catch(BK.err);
+}
+
+function openRes() {
+  $('reslist').innerHTML = R.length ? R.map(function (r) { return '<li><span style="flex:1"><b>' + e(r.name) + '</b> <span class="muted">' + e([r.type, r.capacity ? r.capacity + ' seats' : '', r.where].filter(Boolean).join(' · ')) + '</span></span><button class="btn small danger" data-del="' + e(r._id) + '" aria-label="Remove ' + e(r.name) + '">Remove</button></li>'; }).join('') : '<li class="muted">None yet.</li>';
+  if (!$('d-res').open) $('d-res').showModal();
+  $('r-name').focus();
+}
+$('reslist').onclick = function (ev) {
+  var b = ev.target.closest('[data-del]'); if (!b) return;
+  var r = R.filter(function (x) { return x._id === b.dataset.del; })[0];
+  if (r && confirm('Remove ' + r.name + '? Existing bookings stay in the data.')) rooms.remove(r._id).then(load).then(openRes).catch(BK.err);
+};
+$('f-res').onsubmit = function (ev) {
+  ev.preventDefault();
+  rooms.add({ name: $('r-name').value.trim(), type: $('r-type').value, capacity: +$('r-cap').value || null, where: $('r-where').value.trim() })
+    .then(function () { $('r-name').value = ''; $('r-where').value = ''; return load(); }).then(openRes).catch(BK.err);
+};
+function sample() {
+  var list = [{ name: 'Boardroom', type: 'Room', capacity: 12, where: '3rd floor' }, { name: 'Focus room', type: 'Room', capacity: 2, where: '3rd floor' }, { name: 'Garden room', type: 'Room', capacity: 6, where: 'Ground floor' },
+    { name: 'Desk A1', type: 'Desk', where: 'Window row' }, { name: 'Desk A2', type: 'Desk', where: 'Window row' }, { name: 'Desk B1', type: 'Desk', where: 'Quiet zone' }];
+  Promise.all(list.map(function (x) { return rooms.add(x); })).then(load).catch(BK.err);
+}
+
+function setDay(d) { day = d; load(); }
+function step(n) { var d = parse(day); do { d.setDate(d.getDate() + n); } while (!WEEKENDS && (d.getDay() === 0 || d.getDay() === 6)); setDay(ymd(d)); }
+$('prev').onclick = function () { step(-1); }; $('next').onclick = function () { step(1); };
+$('today').onclick = function () { setDay(ymd(new Date())); };
+$('day').onchange = function () { if ($('day').value) setDay($('day').value); };
+$('seg').onclick = function (ev) { var b = ev.target.closest('button'); if (!b) return; kind = b.dataset.f; $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render(); };
+$('book').onclick = function () { openBook(R[0] && R[0]._id, day >= ymd(new Date()) ? day : ymd(new Date())); };
+$('manage').onclick = openRes;
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+
+function dayList(d) { return bookings.all({ where: { date: d } }).then(function (l) { return l.filter(function (b) { return b.date === d; }); }); }
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 150); }
+function load() {
+  var t = ymd(new Date());
+  return Promise.all([rooms.all(), dayList(day), bookings.all({ where: { _author: 'me', date: { $gte: t } } })]).then(function (r) {
+    R = r[0]; D = r[1]; M = r[2].filter(function (b) { return mineB(b) && b.date >= t; }); render();
+  }).catch(BK.err);
+}
+BK.me().then(function (u) { me = u; editor = BK.canEdit(u); $('manage').hidden = !editor; BK.banner(); load(); });
+rooms.subscribe(reload); bookings.subscribe(reload);
+setInterval(function () { if (day === ymd(new Date())) render(); }, 60000);
+</script>
+</body>
+</html>
