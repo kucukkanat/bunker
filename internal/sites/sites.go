@@ -159,7 +159,7 @@ func initSites(a *core.App) error {
 	return nil
 }
 
-var slugRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$`)
+var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$`)
 
 var reservedSlugs = map[string]bool{"new": true, "admin": true, "api": true, "auth": true, "setup": true, "app": true, "lib": true, "static": true, "settings": true, "device": true, "mcp": true, "oauth": true, "well-known": true, "_": true}
 

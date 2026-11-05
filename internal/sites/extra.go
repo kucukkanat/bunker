@@ -2,6 +2,7 @@ package sites
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,9 +38,15 @@ func registerExtra(a *core.App) {
 			}
 			if len(m) > 0 {
 				if _, err := Commit(r.Context(), u, ns, m, "Copied from "+s.Title, "duplicate", true); err != nil {
+					discardNewSite(r.Context(), ns)
 					return nil, err
 				}
 				SetKind(r.Context(), ns.ID, s.Kind)
+			}
+			// The copy serves its files the same way (SPA routing, entry and
+			// 404 pages, badge).
+			if st, err := json.Marshal(s.Settings); err == nil && string(st) != "{}" {
+				a.DB.ExecContext(r.Context(), `UPDATE sites SET settings=? WHERE id=?`, string(st), ns.ID)
 			}
 			ns, _ = GetByID(r.Context(), ns.ID, false)
 			return core.Created{V: ns}, nil

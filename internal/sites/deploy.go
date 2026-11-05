@@ -724,6 +724,19 @@ func deployFiles2(ctx context.Context, u *core.User, s *SiteRecord, files map[st
 	return map[string]any{"version": n, "files": len(m), "bytes": m.Size(), "kind": kind, "url": app.Cfg.URL + "/s/" + s.Slug + "/"}, nil
 }
 
+// draftLocks serialize read-modify-write updates of a site's draft
+// (striped by site ID, so memory stays fixed).
+var draftLocks [64]sync.Mutex
+
+// LockDraft locks site siteID's draft for a read-modify-write (load the
+// working manifest, change it, SaveDraft) and returns the unlock func.
+// Without it, parallel file writes (the CLI, agents) lose each other's files.
+func LockDraft(siteID int64) func() {
+	m := &draftLocks[uint64(siteID)%uint64(len(draftLocks))]
+	m.Lock()
+	return m.Unlock
+}
+
 // SaveDraft stores the working copy used by the AI builder and editors.
 func SaveDraft(ctx context.Context, u *core.User, s *SiteRecord, m Manifest) error {
 	if m.Size() > siteMaxBytes() {
@@ -1108,6 +1121,7 @@ func registerDeploy(a *core.App) {
 			if err := ScanSecrets(map[string][]byte{p: b}); err != nil {
 				return nil, err
 			}
+			defer LockDraft(s.ID)()
 			m, _, err := WorkingManifest(r.Context(), s)
 			if err != nil {
 				return nil, err
@@ -1134,6 +1148,7 @@ func registerDeploy(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
+			defer LockDraft(s.ID)()
 			m, _, err := WorkingManifest(r.Context(), s)
 			if err != nil {
 				return nil, err
