@@ -33,6 +33,15 @@ func main() {
 	case "dev":
 		os.Setenv("BUNKER_DEV", "1")
 		os.Exit(serve(true))
+	case "demo":
+		// Dev mode with example apps, people and data. Data lives in a
+		// separate folder so it never mixes with a real install.
+		os.Setenv("BUNKER_DEV", "1")
+		os.Setenv("BUNKER_DEMO", "1")
+		if os.Getenv("BUNKER_DATA_DIR") == "" {
+			os.Setenv("BUNKER_DATA_DIR", "./bunker-demo-data")
+		}
+		os.Exit(serve(true))
 	case "healthcheck":
 		os.Exit(healthcheck())
 	case "version", "--version", "-v":

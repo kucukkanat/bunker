@@ -55,7 +55,7 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/kucukkanat/bunker/master/install.ps1 | iex
 ```
 
-Just want to try it on your laptop? `bunker dev` runs Bunker with a single local admin and no sign-in. Opening the setup page from the same machine (localhost) skips the setup code.
+Just want to look around? `bunker demo` starts Bunker on your laptop with example apps, people and data. `bunker dev` runs Bunker with a single local admin and no sign-in. Opening the setup page from the same machine (localhost) skips the setup code.
 
 ## After you deploy
 

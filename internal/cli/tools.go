@@ -391,7 +391,7 @@ func cmdCompletion(x *App, a *Args) error {
 	for _, c := range commands {
 		names = append(names, c.Name)
 	}
-	names = append(names, "serve", "dev", "version", "help")
+	names = append(names, "serve", "dev", "demo", "version", "help")
 	list := strings.Join(names, " ")
 	switch a.Arg(0) {
 	case "bash":

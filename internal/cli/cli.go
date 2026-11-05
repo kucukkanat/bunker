@@ -168,7 +168,7 @@ func commandNames() []string {
 		n = append(n, c.Name)
 		n = append(n, c.Aliases...)
 	}
-	return append(n, "serve", "dev", "version", "help")
+	return append(n, "serve", "dev", "demo", "version", "help")
 }
 
 // fail prints an error in a short, helpful way and returns the exit code.
@@ -257,6 +257,7 @@ func (x *App) mainHelp() {
 	fmt.Fprintln(w, s.bold("Server"))
 	row("serve", "Run the Bunker server (also the default with no command)")
 	row("dev", "Run a local single-user server for development")
+	row("demo", "Like dev, pre-filled with example apps, people and data")
 	row("version", "Print the version")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, s.bold("Global flags"))
