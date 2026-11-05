@@ -58,3 +58,5 @@ html,body{margin:0;height:100%;background:#fff;overflow:hidden}
 @keyframes bk-fade{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.bk-panel,.bk-toast,.bk-overlay{animation:none}.bk-badge-btn{transition:none}}
 @media print{.bk-badge,.bk-toasts,.bk-ribbon{display:none}}
+.bk-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#bk-main{display:contents}

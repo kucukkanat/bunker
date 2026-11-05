@@ -293,9 +293,10 @@ var shellTmpl = template.Must(template.New("shell").Parse(`<!doctype html>
 <link rel="icon" href="/_/icon.svg">
 <link rel="stylesheet" href="/_/shell.css">
 </head><body>
+<main id="bk-main"><h1 class="bk-sr">{{.Title}}</h1>
 <iframe id="bk-frame" title="{{.Title}}" src="{{.Src}}"
  sandbox="{{.Sandbox}}"
- allow="clipboard-write; fullscreen" data-base="{{.Base}}"></iframe>
+ allow="clipboard-write; fullscreen" data-base="{{.Base}}"></iframe></main>
 <div id="bk-shell" data-site="{{.Slug}}" data-site-id="{{.SiteID}}" data-role="{{.Role}}" data-version="{{.Version}}" data-live="{{.Live}}" data-draft="{{.Draft}}" data-badge="{{.Badge}}" data-title="{{.Title}}" data-icon="{{.Icon}}" data-user="{{.User}}" data-guest="{{.Guest}}"></div>
 <script src="/_/shell.js"></script>
 </body></html>`))

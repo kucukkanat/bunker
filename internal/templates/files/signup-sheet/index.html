@@ -18,6 +18,7 @@
 .names .avatar{width:22px;height:22px;font-size:.65rem}
 .names .me{background:var(--soft);font-weight:600}
 .event{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:.95rem;margin-top:8px}
+  .slot-name { font-size: 1.05rem; margin: 0; }
 </style>
 </head>
 <body>
@@ -61,7 +62,7 @@ function render() {
     var limit = EVENT.maxPerPerson > 0 && mine.length >= EVENT.maxPerPerson && !mineHere;
     var btn = mineHere ? '<button class="btn" data-cancel="' + e(mineHere._id) + '">Cancel</button>'
       : '<button class="btn primary" data-join="' + e(slot.id) + '"' + (full || limit ? ' disabled' : '') + ' title="' + (full ? 'This slot is full' : limit ? 'You’ve reached the limit' : '') + '">' + (full ? 'Full' : 'Sign up') + '</button>';
-    return '<div class="slot' + (full ? ' full' : '') + '"><div><h3>' + e(slot.label) + '</h3><div class="time">' + e(slot.time) + ' · ' + n + ' of ' + slot.capacity + ' taken</div>' +
+    return '<div class="slot' + (full ? ' full' : '') + '"><div><h2 class="slot-name">' + e(slot.label) + '</h2><div class="time">' + e(slot.time) + ' · ' + n + ' of ' + slot.capacity + ' taken</div>' +
       '<div class="bar" aria-hidden="true"><i style="width:' + Math.min(100, n / slot.capacity * 100) + '%"></i></div></div><div>' + btn + '</div>' +
       (n ? '<div class="names">' + list.map(function (s) { return '<span class="' + (isMine(s) ? 'me' : '') + '"><span class="avatar">' + e(BK.initials(s.name || s._authorName)) + '</span>' + e(s.name || s._authorName) + '</span>'; }).join('') + '</div>' : '') + '</div>';
   }).join('');

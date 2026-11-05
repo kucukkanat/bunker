@@ -76,7 +76,7 @@ func compileShell() {
 		attr := out[:i]
 		if strings.HasSuffix(attr, ` src="`) || strings.HasSuffix(attr, ` data-icon="`) {
 			kind = escURL
-		} else if !strings.HasSuffix(attr, `="`) && !strings.HasSuffix(attr, "<title>") {
+		} else if !strings.HasSuffix(attr, `="`) && !strings.HasSuffix(attr, "<title>") && !strings.HasSuffix(attr, `<h1 class="bk-sr">`) {
 			return // a position this renderer doesn't know: use the template
 		}
 		parts = append(parts, shellPart{static: out[:i], field: fields[n], kind: kind})
