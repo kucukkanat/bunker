@@ -1,0 +1,529 @@
+package sites
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"html/template"
+	"io"
+	"net/http"
+	"os"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/kucukkanat/bunker/internal/core"
+)
+
+// Content tickets: site files are served from
+//
+//	/s/<slug>/~r/<ticket>/<path>
+//
+// inside a sandboxed iframe with an opaque origin. Sandboxed documents
+// don't send our SameSite cookies on subresource requests, so access to
+// content is granted by a short-lived signed ticket bound to the site,
+// version, viewer and expiry. The HTML document itself additionally
+// requires the viewer's session cookie.
+type Ticket struct {
+	Site int64
+	Ver  int64 // 0 = draft
+	User int64
+	Exp  int64
+}
+
+const ticketWindow = 6 * 3600
+
+// MakeTicket issues a ticket. Expiry is bucketed so URLs stay stable (and
+// cacheable) for several hours.
+func MakeTicket(site, ver, user int64) string {
+	exp := (core.Now()/ticketWindow + 2) * ticketWindow
+	body := fmt.Sprintf("%d-%d-%d-%d", site, ver, user, exp)
+	return body + "-" + core.MAC("t:"+body)
+}
+
+// ParseTicket validates a ticket string.
+func ParseTicket(s string) (Ticket, bool) {
+	i := strings.LastIndex(s, "-")
+	if i < 0 {
+		return Ticket{}, false
+	}
+	body, mac := s[:i], s[i+1:]
+	if !core.MACEqual(mac, core.MAC("t:"+body)) {
+		return Ticket{}, false
+	}
+	parts := strings.Split(body, "-")
+	if len(parts) != 4 {
+		return Ticket{}, false
+	}
+	var t Ticket
+	var err error
+	nums := []*int64{&t.Site, &t.Ver, &t.User, &t.Exp}
+	for k, p := range parts {
+		if *nums[k], err = strconv.ParseInt(p, 10, 64); err != nil {
+			return Ticket{}, false
+		}
+	}
+	if t.Exp < core.Now() {
+		return Ticket{}, false
+	}
+	return t, true
+}
+
+// ContentCSP is the policy for all user content.
+func ContentCSP() string {
+	return "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; worker-src blob:; " +
+		"connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'; frame-src 'self' blob: data:; " +
+		"sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+}
+
+func registerServing(a *core.App) {
+	a.Mux.HandleFunc("GET /s/{site}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/s/"+r.PathValue("site")+"/", http.StatusMovedPermanently)
+	})
+	a.Mux.HandleFunc("GET /s/{site}/{path...}", serveSite)
+	a.Mux.HandleFunc("HEAD /s/{site}/{path...}", serveSite)
+}
+
+var viewMu sync.Mutex
+var viewSeen = map[string]int64{}
+
+func auditView(ctx context.Context, s *SiteRecord, u *core.User) {
+	key := itoa64(s.ID) + ":" + itoa64(u.ID)
+	now := core.Now()
+	viewMu.Lock()
+	last := viewSeen[key]
+	if now-last < 3600 {
+		viewMu.Unlock()
+		return
+	}
+	if len(viewSeen) > 200000 {
+		viewSeen = map[string]int64{}
+	}
+	viewSeen[key] = now
+	viewMu.Unlock()
+	app.Audit(ctx, "site.view", s.ID, s.Slug, nil)
+	app.Emit(ctx, "site.viewed", map[string]any{"siteId": s.ID, "userId": u.ID})
+}
+
+// RawHandler serves ticket-gated content under /s/<slug>/<prefix><ticket>/...
+// Other modules (uploads, generated assets) register prefixes like "~f/".
+type RawHandler func(w http.ResponseWriter, r *http.Request, s *SiteRecord, t Ticket, viewer *core.User, rest string)
+
+var rawPrefixes = map[string]RawHandler{}
+
+// RegisterRawPrefix installs a handler for /s/<slug>/<prefix>... (prefix like "~f/").
+// The ticket is validated (signature, expiry, site, viewer access) before h runs.
+func RegisterRawPrefix(prefix string, h RawHandler) { rawPrefixes[prefix] = h }
+
+func serveSite(w http.ResponseWriter, r *http.Request) {
+	rest := r.PathValue("path")
+	if strings.HasPrefix(rest, "~r/") {
+		serveRaw(w, r, strings.TrimPrefix(rest, "~r/"))
+		return
+	}
+	for pre, h := range rawPrefixes {
+		if strings.HasPrefix(rest, pre) {
+			tail := strings.TrimPrefix(rest, pre)
+			i := strings.Index(tail, "/")
+			if i < 0 {
+				rawError(w, http.StatusNotFound, "Not found")
+				return
+			}
+			t, ok := ParseTicket(tail[:i])
+			if !ok {
+				rawError(w, http.StatusForbidden, "This link has expired. Reload the page.")
+				return
+			}
+			s, err := GetBySlug(r.Context(), r.PathValue("site"))
+			if err != nil || s.ID != t.Site {
+				rawError(w, http.StatusNotFound, "Not found")
+				return
+			}
+			vu := loadTicketUser(r.Context(), t.User)
+			if vu == nil || RoleOf(r.Context(), vu, s) == core.RoleNone {
+				rawError(w, http.StatusForbidden, "Access revoked")
+				return
+			}
+			w.Header().Set("Content-Security-Policy", ContentCSP())
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			h(w, r, s, t, vu, tail[i+1:])
+			return
+		}
+	}
+	u := core.UserFrom(r.Context())
+	if u == nil {
+		http.Redirect(w, r, "/auth/login?next="+urlQueryEscape(r.URL.RequestURI()), http.StatusFound)
+		return
+	}
+	s, err := GetBySlug(r.Context(), r.PathValue("site"))
+	role := core.RoleNone
+	if err == nil {
+		role = RoleOf(r.Context(), u, s)
+	}
+	if err != nil || role == core.RoleNone {
+		renderNotFound(w, r, u)
+		return
+	}
+	draft := r.URL.Query().Get("draft") == "1" && role >= core.RoleEditor
+	ver := s.Version
+	if draft {
+		ver = 0
+		if _, err := LoadManifest(r.Context(), s.ID, 0); err != nil {
+			draft = false
+			ver = s.Version
+		}
+	}
+	if ver == 0 && !draft {
+		renderEmpty(w, r, s, role)
+		return
+	}
+	if v := r.URL.Query().Get("v"); v != "" && role >= core.RoleEditor {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			if _, err := LoadManifest(r.Context(), s.ID, n); err == nil {
+				ver = n
+			}
+		}
+	}
+	auditView(r.Context(), s, u)
+	markVisit(r.Context(), u.ID, s.ID)
+	t := MakeTicket(s.ID, ver, u.ID)
+	base := "/s/" + s.Slug + "/~r/" + t + "/"
+	src := base + rest
+	q := r.URL.Query()
+	q.Del("draft")
+	q.Del("v")
+	if enc := q.Encode(); enc != "" {
+		src += "?" + enc
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	shellTmpl.Execute(w, map[string]any{
+		"Title": s.Title, "Slug": s.Slug, "Src": src, "Base": base, "Role": role.String(),
+		"Draft": draft, "Version": ver, "Live": s.Version, "Icon": s.Icon,
+		"Badge": !s.Settings.HideBadge || role >= core.RoleEditor, "User": u.Name, "SiteID": s.ID,
+	})
+}
+
+var shellTmpl = template.Must(template.New("shell").Parse(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}}</title>
+<link rel="icon" href="/_/icon.svg">
+<link rel="stylesheet" href="/_/shell.css">
+</head><body>
+<iframe id="bk-frame" title="{{.Title}}" src="{{.Src}}"
+ sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+ allow="clipboard-write; fullscreen" data-base="{{.Base}}"></iframe>
+<div id="bk-shell" data-site="{{.Slug}}" data-site-id="{{.SiteID}}" data-role="{{.Role}}" data-version="{{.Version}}" data-live="{{.Live}}" data-draft="{{.Draft}}" data-badge="{{.Badge}}" data-title="{{.Title}}" data-icon="{{.Icon}}" data-user="{{.User}}"></div>
+<script src="/_/shell.js"></script>
+</body></html>`))
+
+func renderNotFound(w http.ResponseWriter, r *http.Request, u *core.User) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'")
+	w.WriteHeader(http.StatusNotFound)
+	simplePage(w, "Nothing here", "This site doesn't exist, or it hasn't been shared with you. Ask the owner to share it with "+u.Email+".", "/", "Go to Bunker")
+}
+
+func renderEmpty(w http.ResponseWriter, r *http.Request, s *SiteRecord, role core.Role) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'")
+	if role >= core.RoleEditor {
+		simplePage(w, s.Title, "This site hasn't been published yet.", "/sites/"+s.Slug, "Open the editor")
+		return
+	}
+	simplePage(w, s.Title, "This site hasn't been published yet. Check back soon.", "/", "Go to Bunker")
+}
+
+func simplePage(w io.Writer, title, msg, href, cta string) {
+	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>%s</title><link rel=stylesheet href="/_/kit.css">
+<main class="bk-center"><div class="bk-card"><img src="/_/icon.svg" width=40 height=40 alt=""><h1>%s</h1><p>%s</p><p><a class="bk-btn" href="%s">%s</a></p></div></main>`,
+		htmlEscape(title), htmlEscape(title), htmlEscape(msg), htmlEscape(href), htmlEscape(cta))
+}
+
+// rawCache caches transformed HTML/CSS (SDK injection + root path rewrite).
+type rawEntry struct {
+	b   []byte
+	exp time.Time
+}
+
+var (
+	rawMu    sync.Mutex
+	rawCache = map[string]rawEntry{}
+)
+
+func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
+	i := strings.Index(rest, "/")
+	tstr, p := rest, ""
+	if i >= 0 {
+		tstr, p = rest[:i], rest[i+1:]
+	}
+	t, ok := ParseTicket(tstr)
+	if !ok {
+		rawError(w, http.StatusForbidden, "This link has expired. Reload the page.")
+		return
+	}
+	ctx := r.Context()
+	s, err := GetBySlug(ctx, r.PathValue("site"))
+	if err != nil || s.ID != t.Site {
+		rawError(w, http.StatusNotFound, "Not found")
+		return
+	}
+	// Re-check the viewer's access (cached) so revoking a share takes effect.
+	vu := core.UserFrom(ctx)
+	if vu == nil || vu.ID != t.User {
+		vu = loadTicketUser(ctx, t.User)
+	}
+	if vu == nil {
+		rawError(w, http.StatusForbidden, "Access revoked")
+		return
+	}
+	role := RoleOf(ctx, vu, s)
+	if role == core.RoleNone || (t.Ver == 0 && role < core.RoleEditor) {
+		rawError(w, http.StatusForbidden, "Access revoked")
+		return
+	}
+	m, err := LoadManifest(ctx, s.ID, t.Ver)
+	if err != nil {
+		rawError(w, http.StatusNotFound, "Version not found")
+		return
+	}
+	clean := strings.TrimSuffix(p, "/")
+	name, f, found := resolveFile(m, p, s.Settings)
+	status := http.StatusOK
+	if !found {
+		status = http.StatusNotFound
+		if s.Settings.NotFound != "" {
+			if nf, ok := m[s.Settings.NotFound]; ok {
+				name, f, found = s.Settings.NotFound, nf, true
+			}
+		} else if nf, ok := m["404.html"]; ok {
+			name, f, found = "404.html", nf, true
+		}
+		if !found {
+			rawError(w, http.StatusNotFound, "No page at /"+clean)
+			return
+		}
+	}
+	h := w.Header()
+	h.Set("Content-Security-Policy", ContentCSP())
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cross-Origin-Resource-Policy", "cross-origin") // opaque-origin frames are cross-origin; tickets gate access
+	h.Del("Cross-Origin-Opener-Policy")
+	ct := f.Type
+	isHTML := strings.HasPrefix(ct, "text/html")
+	isCSS := strings.HasPrefix(ct, "text/css")
+	// Session cookie required for documents (not for subresources, which
+	// sandboxed frames can't send cookies with).
+	if isHTML && r.Header.Get("Sec-Fetch-Dest") != "iframe" && r.Header.Get("Sec-Fetch-Dest") != "" && core.UserFrom(ctx) == nil {
+		rawError(w, http.StatusForbidden, "Open this page through Bunker.")
+		return
+	}
+	etag := `"` + f.Hash[:20] + `"`
+	if t.Ver > 0 {
+		h.Set("Cache-Control", "private, max-age=86400, immutable")
+	} else {
+		h.Set("Cache-Control", "no-cache")
+	}
+	h.Set("ETag", etag)
+	h.Set("Content-Type", ct)
+	if r.Header.Get("If-None-Match") == etag && status == 200 {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if isHTML || isCSS {
+		prefix := "/s/" + s.Slug + "/~r/" + tstr + "/"
+		key := f.Hash + "|" + prefix
+		rawMu.Lock()
+		e, ok := rawCache[key]
+		rawMu.Unlock()
+		if !ok || time.Now().After(e.exp) {
+			b, err := app.Blobs.Read(f.Hash)
+			if err != nil {
+				rawError(w, 500, "content missing")
+				return
+			}
+			if isHTML {
+				b = InjectSDK(rewriteRoot(b, prefix), name)
+			} else {
+				b = rewriteCSS(b, prefix)
+			}
+			e = rawEntry{b: b, exp: time.Now().Add(10 * time.Minute)}
+			rawMu.Lock()
+			if len(rawCache) > 2000 {
+				rawCache = map[string]rawEntry{}
+			}
+			rawCache[key] = e
+			rawMu.Unlock()
+		}
+		h.Set("Content-Length", strconv.Itoa(len(e.b)))
+		w.WriteHeader(status)
+		if r.Method != http.MethodHead {
+			w.Write(e.b)
+		}
+		return
+	}
+	if compressible(ct) && f.Size > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && r.Header.Get("Range") == "" {
+		if gz := app.Blobs.Gzip(f.Hash); gz != "" {
+			if fh, err := os.Open(gz); err == nil {
+				defer fh.Close()
+				h.Set("Content-Encoding", "gzip")
+				h.Add("Vary", "Accept-Encoding")
+				if st, err := fh.Stat(); err == nil {
+					h.Set("Content-Length", strconv.FormatInt(st.Size(), 10))
+				}
+				w.WriteHeader(status)
+				if r.Method != http.MethodHead {
+					io.Copy(w, fh)
+				}
+				return
+			}
+		}
+	}
+	fh, err := app.Blobs.Open(f.Hash)
+	if err != nil {
+		rawError(w, 500, "content missing")
+		return
+	}
+	defer fh.Close()
+	if status != 200 {
+		w.WriteHeader(status)
+		io.Copy(w, fh)
+		return
+	}
+	http.ServeContent(w, r, "", time.Time{}, fh) // handles Range for video/audio
+}
+
+func loadTicketUser(ctx context.Context, id int64) *core.User {
+	var email, name, gj string
+	var admin, disabled int
+	if app.DB.QueryRowContext(ctx, `SELECT email,name,is_admin,groups_json,disabled FROM users WHERE id=?`, id).Scan(&email, &name, &admin, &gj, &disabled) != nil || disabled == 1 {
+		return nil
+	}
+	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
+	_ = jsonUnmarshal(gj, &u.Groups)
+	return u
+}
+
+func resolveFile(m Manifest, p string, st Settings) (string, FileRef, bool) {
+	if p == "" || strings.HasSuffix(p, "/") {
+		entry := "index.html"
+		if p == "" && st.Entry != "" {
+			entry = st.Entry
+		}
+		if f, ok := m[p+entry]; ok {
+			return p + entry, f, true
+		}
+		if p == "" {
+			return "", FileRef{}, false
+		}
+		p = strings.TrimSuffix(p, "/")
+	}
+	if f, ok := m[p]; ok {
+		return p, f, true
+	}
+	if f, ok := m[p+"/index.html"]; ok {
+		return p + "/index.html", f, true
+	}
+	if f, ok := m[p+".html"]; ok {
+		return p + ".html", f, true
+	}
+	if st.SPA && path.Ext(p) == "" {
+		if f, ok := m["index.html"]; ok {
+			return "index.html", f, true
+		}
+	}
+	return "", FileRef{}, false
+}
+
+func compressible(ct string) bool {
+	return strings.HasPrefix(ct, "text/") || strings.Contains(ct, "javascript") || strings.Contains(ct, "json") || strings.Contains(ct, "svg") || strings.Contains(ct, "wasm") || strings.Contains(ct, "xml")
+}
+
+func rawError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><body style="font:15px system-ui;display:grid;place-items:center;min-height:90vh;color:#5a635d">%s</body>`, htmlEscape(msg))
+}
+
+var sdkTag = []byte(`<script src="/_/bunker.js"></script>`)
+var headRe = regexp.MustCompile(`(?i)<head[^>]*>`)
+var htmlRe = regexp.MustCompile(`(?i)<html[^>]*>`)
+
+// InjectSDK adds the Bunker SDK script as the first thing in <head>.
+func InjectSDK(b []byte, name string) []byte {
+	if bytes.Contains(b, sdkTag) {
+		return b
+	}
+	if loc := headRe.FindIndex(b); loc != nil {
+		return concat(b[:loc[1]], sdkTag, b[loc[1]:])
+	}
+	if loc := htmlRe.FindIndex(b); loc != nil {
+		return concat(b[:loc[1]], sdkTag, b[loc[1]:])
+	}
+	return concat(sdkTag, b)
+}
+
+func concat(parts ...[]byte) []byte {
+	n := 0
+	for _, p := range parts {
+		n += len(p)
+	}
+	out := make([]byte, 0, n)
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
+// Root-relative URLs ("/assets/app.js") would escape the site's prefix;
+// rewrite them in HTML attributes and CSS so build tools with base "/" work.
+var attrRe = regexp.MustCompile(`(?i)(\s(?:src|href|action|poster|data|formaction)\s*=\s*["']?)/([^/"'\s>][^"'\s>]*)?`)
+var srcsetRe = regexp.MustCompile(`(?i)(\ssrcset\s*=\s*["'])([^"']*)`)
+var cssURLRe = regexp.MustCompile(`(?i)(url\(\s*["']?)/([^/)"'][^)"']*)`)
+var importRe = regexp.MustCompile(`(?i)(@import\s+["'])/([^/"'][^"']*)`)
+
+func rewriteRoot(b []byte, prefix string) []byte {
+	if !bytes.Contains(b, []byte(`="/`)) && !bytes.Contains(b, []byte(`='/`)) && !bytes.Contains(b, []byte("url(")) && !bytes.Contains(b, []byte("srcset")) {
+		return b
+	}
+	b = attrRe.ReplaceAllFunc(b, func(m []byte) []byte {
+		sm := attrRe.FindSubmatch(m)
+		if bytes.HasPrefix(sm[2], []byte("_/")) || bytes.HasPrefix(sm[2], []byte("s/")) {
+			return m // Bunker platform assets or other sites
+		}
+		return concat(sm[1], []byte(prefix), sm[2])
+	})
+	b = srcsetRe.ReplaceAllFunc(b, func(m []byte) []byte {
+		sm := srcsetRe.FindSubmatch(m)
+		parts := bytes.Split(sm[2], []byte(","))
+		for i, p := range parts {
+			t := bytes.TrimLeft(p, " ")
+			if bytes.HasPrefix(t, []byte("/")) && !bytes.HasPrefix(t, []byte("//")) {
+				lead := p[:len(p)-len(t)]
+				parts[i] = concat(lead, []byte(prefix), t[1:])
+			}
+		}
+		return concat(sm[1], bytes.Join(parts, []byte(",")))
+	})
+	return rewriteCSS(b, prefix)
+}
+
+func rewriteCSS(b []byte, prefix string) []byte {
+	b = cssURLRe.ReplaceAll(b, []byte("${1}"+prefix+"${2}"))
+	return importRe.ReplaceAll(b, []byte("${1}"+prefix+"${2}"))
+}
+
+func urlQueryEscape(s string) string {
+	return strings.NewReplacer("%", "%25", "&", "%26", "?", "%3F", "#", "%23", "+", "%2B", " ", "%20").Replace(s)
+}

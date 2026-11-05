@@ -61,7 +61,7 @@ func initSetup(a *core.App) {
 		Fn: func(r *http.Request) (any, error) {
 			var in struct {
 				Code, Provider, TenantID, Issuer, ClientID, ClientSecret, AllowedDomains, Admins, AllowedGroups string
-				DryRun                                                                                           bool
+				DryRun                                                                                          bool
 			}
 			if err := core.Decode(r, &in); err != nil {
 				return nil, err

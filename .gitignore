@@ -2,3 +2,4 @@ bunker-data/
 /bunker
 /dist/
 *.test
+.claude/worktrees/

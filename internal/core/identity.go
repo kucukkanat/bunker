@@ -127,13 +127,13 @@ func ParseRole(s string) Role {
 
 // Site is the minimal site record shared across modules.
 type Site struct {
-	ID        int64  `json:"id"`
-	Slug      string `json:"slug"`
-	Title     string `json:"title"`
-	OwnerID   int64  `json:"ownerId"`
-	Version   int64  `json:"version"` // live version number, 0 = none
-	Kind      string `json:"kind"`
-	OrgView   bool   `json:"orgView"`
+	ID      int64  `json:"id"`
+	Slug    string `json:"slug"`
+	Title   string `json:"title"`
+	OwnerID int64  `json:"ownerId"`
+	Version int64  `json:"version"` // live version number, 0 = none
+	Kind    string `json:"kind"`
+	OrgView bool   `json:"orgView"`
 }
 
 // SiteResolver looks up a site and the caller's role on it.

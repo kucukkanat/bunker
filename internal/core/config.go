@@ -10,13 +10,13 @@ import (
 // Runtime settings that admins change in the UI live in the settings
 // table (see Settings).
 type Config struct {
-	URL      string // public base URL, e.g. https://bunker.corp.com (no trailing slash)
-	Listen   string // listen address
-	DataDir  string
-	TLS      string // auto | off | file
-	TLSCert  string
-	TLSKey   string
-	Dev      bool // local single-user development mode
+	URL        string // public base URL, e.g. https://bunker.corp.com (no trailing slash)
+	Listen     string // listen address
+	DataDir    string
+	TLS        string // auto | off | file
+	TLSCert    string
+	TLSKey     string
+	Dev        bool // local single-user development mode
 	TrustProxy bool
 }
 

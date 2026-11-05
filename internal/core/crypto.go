@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -121,3 +122,14 @@ func (a *App) SetSecretSetting(key, value string) error {
 	}
 	return a.SetSetting(context.Background(), key, "enc:"+e)
 }
+
+// MAC returns a truncated HMAC-SHA256 of data under the server secret,
+// base64url encoded. Used for signed URLs (content tickets).
+func MAC(data string) string {
+	m := hmac.New(sha256.New, secretKey)
+	m.Write([]byte("bunker-mac:" + data))
+	return base64.RawURLEncoding.EncodeToString(m.Sum(nil)[:18])
+}
+
+// MACEqual compares MACs in constant time.
+func MACEqual(a, b string) bool { return hmac.Equal([]byte(a), []byte(b)) }

@@ -27,20 +27,20 @@ const (
 // Param describes one input of an operation. The same metadata drives
 // the OpenAPI document, CLI flags and MCP tool schemas.
 type Param struct {
-	Name     string `json:"name"`
-	In       string `json:"in"`   // path | query | body
-	Type     string `json:"type"` // string | integer | boolean | object | array | file
-	Required bool   `json:"required,omitempty"`
-	Desc     string `json:"description,omitempty"`
+	Name     string   `json:"name"`
+	In       string   `json:"in"`   // path | query | body
+	Type     string   `json:"type"` // string | integer | boolean | object | array | file
+	Required bool     `json:"required,omitempty"`
+	Desc     string   `json:"description,omitempty"`
 	Enum     []string `json:"enum,omitempty"`
 }
 
 // Op is a single API operation. Every action available in the web UI
 // must be an Op so the CLI, MCP server and agents get it for free.
 type Op struct {
-	Name    string  `json:"name"`    // dotted, e.g. "sites.create"
-	Method  string  `json:"method"`  // GET POST PATCH PUT DELETE
-	Path    string  `json:"path"`    // Go 1.22 mux pattern path, e.g. /api/v1/sites/{site}
+	Name    string  `json:"name"`   // dotted, e.g. "sites.create"
+	Method  string  `json:"method"` // GET POST PATCH PUT DELETE
+	Path    string  `json:"path"`   // Go 1.22 mux pattern path, e.g. /api/v1/sites/{site}
 	Summary string  `json:"summary"`
 	Params  []Param `json:"params,omitempty"`
 	Access  string  `json:"access"`
@@ -53,6 +53,11 @@ type Op struct {
 	Hidden bool `json:"hidden,omitempty"`
 	// Destructive ops ask for confirmation in CLI/MCP clients.
 	Destructive bool `json:"destructive,omitempty"`
+	// PageSafe ops may be called by site pages through the SDK bridge
+	// (the shell marks those requests with X-Bunker-Page: 1). Everything
+	// else (deploy, sharing, settings...) is refused for page requests so a
+	// page can never act on the platform with its viewer's full rights.
+	PageSafe bool `json:"pageSafe,omitempty"`
 
 	// Fn handles the request and returns a JSON-able value.
 	Fn func(r *http.Request) (any, error) `json:"-"`
@@ -110,6 +115,10 @@ func (a *App) Handle(op Op) {
 				Err(w, Forbidden("token lacks scope "+o.Scope))
 				return
 			}
+		}
+		if r.Header.Get("X-Bunker-Page") != "" && !o.PageSafe {
+			Err(w, Forbidden("pages can't call "+o.Name))
+			return
 		}
 		if o.Handler != nil {
 			o.Handler(w, r)
@@ -199,7 +208,7 @@ func Decode(r *http.Request, v any) error {
 // Created wraps a value so Handle responds 201.
 type Created struct{ V any }
 
-func (c Created) StatusCode() int        { return http.StatusCreated }
+func (c Created) StatusCode() int              { return http.StatusCreated }
 func (c Created) MarshalJSON() ([]byte, error) { return json.Marshal(c.V) }
 
 // OpenAPI renders a minimal OpenAPI 3.1 document for all non-hidden ops.
@@ -246,9 +255,9 @@ func (a *App) OpenAPI() map[string]any {
 		p[strings.ToLower(op.Method)] = m
 	}
 	return map[string]any{
-		"openapi": "3.1.0",
-		"info":    map[string]any{"title": "Bunker API", "version": Version},
-		"servers": []map[string]any{{"url": a.Cfg.URL}},
+		"openapi":    "3.1.0",
+		"info":       map[string]any{"title": "Bunker API", "version": Version},
+		"servers":    []map[string]any{{"url": a.Cfg.URL}},
 		"components": map[string]any{"securitySchemes": map[string]any{"token": map[string]any{"type": "http", "scheme": "bearer"}}},
 		"security":   []map[string]any{{"token": []string{}}},
 		"paths":      paths,
