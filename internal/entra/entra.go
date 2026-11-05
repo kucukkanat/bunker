@@ -509,7 +509,7 @@ func register(ctx context.Context, tok, tid string) (*registered, error) {
 		},
 		"groupMembershipClaims": "SecurityGroup",
 		"optionalClaims": map[string]any{"idToken": []map[string]any{
-			{"name": "email", "essential": false}, {"name": "preferred_username", "essential": false}, {"name": "groups", "essential": false},
+			{"name": "email", "essential": false}, {"name": "preferred_username", "essential": false}, {"name": "groups", "essential": false}, {"name": "acct", "essential": false},
 		}},
 		"requiredResourceAccess": []map[string]any{{"resourceAppId": graphAppID, "resourceAccess": access}},
 		"notes":                  "Created by Bunker automatic setup. Bunker signs people in with this app and reads Microsoft 365 data with each viewer's own permissions.",
