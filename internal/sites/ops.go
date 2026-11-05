@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kucukkanat/bunker/internal/core"
 )
@@ -473,7 +474,26 @@ WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR (m.ptype='user' 
 	return map[string]any{"sites": out}, nil
 }
 
+var (
+	visitMu   sync.Mutex
+	visitSeen = map[[2]int64]int64{}
+)
+
+// markVisit records "recently opened" at most every 5 minutes per viewer
+// and site, so page views don't turn into a write per request.
 func markVisit(ctx context.Context, uid, sid int64) {
+	now := core.Now()
+	k := [2]int64{uid, sid}
+	visitMu.Lock()
+	if now-visitSeen[k] < 300 {
+		visitMu.Unlock()
+		return
+	}
+	if len(visitSeen) > 200000 {
+		visitSeen = map[[2]int64]int64{}
+	}
+	visitSeen[k] = now
+	visitMu.Unlock()
 	app.DB.ExecContext(ctx, `INSERT INTO site_stars(user_id,site_id,visited_at) VALUES(?,?,?) ON CONFLICT DO UPDATE SET visited_at=excluded.visited_at`, uid, sid, core.Now())
 }
 
