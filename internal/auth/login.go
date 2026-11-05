@@ -148,7 +148,7 @@ func getClient(ctx context.Context) (*oidcClient, error) {
 		verifier: prov.Verifier(&oidc.Config{ClientID: p.ClientID}),
 		oauth: &oauth2.Config{
 			ClientID: p.ClientID, ClientSecret: p.ClientSecret,
-			Endpoint: prov.Endpoint(), RedirectURL: app.Cfg.URL + "/auth/callback", Scopes: scopes,
+			Endpoint: prov.Endpoint(), RedirectURL: app.Cfg.PublicURL() + "/auth/callback", Scopes: scopes,
 		},
 	}
 	client, clientKey = c, key
@@ -232,7 +232,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		authError(w, r, "Sign-in failed", "could not create state")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "bunker_login", Value: enc, Path: "/auth/", HttpOnly: true, Secure: strings.HasPrefix(app.Cfg.URL, "https://"), SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	http.SetCookie(w, &http.Cookie{Name: "bunker_login", Value: enc, Path: "/auth/", HttpOnly: true, Secure: strings.HasPrefix(app.Cfg.PublicURL(), "https://"), SameSite: http.SameSiteLaxMode, MaxAge: 600})
 	opts := []oauth2.AuthCodeOption{oidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(st.Verifier)}
 	if h := r.URL.Query().Get("login_hint"); h != "" {
 		opts = append(opts, oauth2.SetAuthURLParam("login_hint", h))

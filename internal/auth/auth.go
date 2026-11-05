@@ -258,7 +258,7 @@ func startSession(w http.ResponseWriter, r *http.Request, u *core.User) error {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: tok, Path: "/", HttpOnly: true,
-		Secure:   strings.HasPrefix(app.Cfg.URL, "https://"),
+		Secure:   strings.HasPrefix(app.Cfg.PublicURL(), "https://"),
 		SameSite: http.SameSiteLaxMode, MaxAge: int(days * 86400),
 	})
 	return nil

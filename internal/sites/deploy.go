@@ -714,14 +714,14 @@ func deployFiles2(ctx context.Context, u *core.User, s *SiteRecord, files map[st
 			return nil, err
 		}
 		SetKind(ctx, s.ID, kind)
-		return map[string]any{"draft": true, "files": len(m), "kind": kind, "previewUrl": app.Cfg.URL + "/s/" + s.Slug + "/?draft=1"}, nil
+		return map[string]any{"draft": true, "files": len(m), "kind": kind, "previewUrl": app.Cfg.PublicURL() + "/s/" + s.Slug + "/?draft=1"}, nil
 	}
 	n, err := Commit(ctx, u, s, m, message, source, true)
 	if err != nil {
 		return nil, err
 	}
 	SetKind(ctx, s.ID, kind)
-	return map[string]any{"version": n, "files": len(m), "bytes": m.Size(), "kind": kind, "url": app.Cfg.URL + "/s/" + s.Slug + "/"}, nil
+	return map[string]any{"version": n, "files": len(m), "bytes": m.Size(), "kind": kind, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
 }
 
 // draftLocks serialize read-modify-write updates of a site's draft
@@ -930,7 +930,7 @@ func registerDeploy(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"version": n, "url": app.Cfg.URL + "/s/" + s.Slug + "/"}, nil
+			return map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
 		}})
 
 	// ---- versions ----
@@ -1180,7 +1180,7 @@ func registerDeploy(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"version": n, "url": app.Cfg.URL + "/s/" + s.Slug + "/"}, nil
+			return map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
 		}})
 	a.Handle(core.Op{Name: "drafts.discard", Method: "DELETE", Path: "/api/v1/sites/{site}/draft", Summary: "Throw away unpublished changes", Destructive: true,
 		Params: []core.Param{siteParam},

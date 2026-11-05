@@ -94,7 +94,7 @@ func registerUsers(a *core.App) {
 				return nil, core.NotFound("that person isn't in Bunker. Refresh the list and try again.")
 			}
 			var toID int64
-			if t :=strings.TrimSpace(in.TransferTo); t != "" {
+			if t := strings.TrimSpace(in.TransferTo); t != "" {
 				if in.Disabled == nil || !*in.Disabled {
 					return nil, core.BadRequest("transferTo only works together with disabled: true")
 				}

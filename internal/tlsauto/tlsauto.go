@@ -23,7 +23,7 @@ func init() {
 }
 
 func serve(a *core.App, srv *http.Server) error {
-	u, err := url.Parse(a.Cfg.URL)
+	u, err := url.Parse(a.Cfg.PublicURL())
 	if err != nil || u.Hostname() == "" {
 		return errors.New("BUNKER_TLS=auto needs BUNKER_URL=https://your.domain")
 	}

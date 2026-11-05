@@ -579,7 +579,7 @@ func streamBuild(w http.ResponseWriter, r *http.Request, c *Config, p Provider, 
 		"summary":    res.Summary,
 		"draft":      len(res.Files) > 0,
 		"files":      res.Files,
-		"previewUrl": app.Cfg.URL + "/s/" + s.Slug + "/?draft=1",
+		"previewUrl": app.Cfg.PublicURL() + "/s/" + s.Slug + "/?draft=1",
 		"usage":      map[string]any{"inputTokens": res.Usage.InputTokens + res.Usage.CacheReadTokens + res.Usage.CacheWriteTokens, "outputTokens": res.Usage.OutputTokens, "turns": res.Turns},
 		"budget":     userBudget(context.WithoutCancel(ctx), u.ID),
 	})

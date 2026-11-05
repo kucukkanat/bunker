@@ -196,8 +196,8 @@ func registerTokens(a *core.App) {
 			}
 			return map[string]any{
 				"deviceCode": dev, "userCode": code, "expiresIn": 600, "interval": 2,
-				"verificationUri":         a.Cfg.URL + "/device",
-				"verificationUriComplete": a.Cfg.URL + "/device?code=" + code,
+				"verificationUri":         a.Cfg.PublicURL() + "/device",
+				"verificationUriComplete": a.Cfg.PublicURL() + "/device?code=" + code,
 			}, nil
 		}})
 	a.Handle(core.Op{Name: "auth.device.poll", Method: "POST", Path: "/api/v1/auth/device/token", Summary: "Poll for a device sign-in token", Access: core.AccessPublic, Hidden: true,

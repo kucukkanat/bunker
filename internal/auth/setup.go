@@ -30,7 +30,7 @@ func initSetup(a *core.App) {
 	if !a.Cfg.Dev && !Configured() {
 		code := SetupCode()
 		os.WriteFile(filepath.Join(a.Cfg.DataDir, "setup-code.txt"), []byte(code+"\n"), 0o600)
-		url := a.Cfg.URL
+		url := a.Cfg.PublicURL()
 		if url == "" {
 			if strings.HasPrefix(a.Cfg.Listen, ":") {
 				url = "http://localhost" + a.Cfg.Listen
@@ -58,9 +58,9 @@ func initSetup(a *core.App) {
 				"codeNeeded":    !isLoopback(r),
 				"dev":           a.Cfg.Dev,
 				"provider":      p.Kind,
-				"url":           a.Cfg.URL,
-				"urlKnown":      a.Cfg.URL != "",
-				"redirectUri":   a.Cfg.URL + "/auth/callback",
+				"url":           a.Cfg.PublicURL(),
+				"urlKnown":      a.Cfg.PublicURL() != "",
+				"redirectUri":   a.Cfg.PublicURL() + "/auth/callback",
 				"version":       core.Version,
 			}, nil
 		}})
@@ -177,7 +177,7 @@ func checkIssuer(r *http.Request, issuer string) error {
 // request when BUNKER_URL wasn't given, so company sign-in gets a full
 // redirect URI. Anonymous requests never set it (Host can be anything).
 func RememberURL(r *http.Request) {
-	if app.Cfg.URL != "" || isLoopback(r) {
+	if app.Cfg.PublicURL() != "" || isLoopback(r) {
 		return
 	}
 	host := r.Host
@@ -192,6 +192,6 @@ func RememberURL(r *http.Request) {
 	if r.TLS != nil || (app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
 		scheme = "https"
 	}
-	app.Cfg.URL = scheme + "://" + host
-	app.SetSetting(r.Context(), "server.url", app.Cfg.URL)
+	app.Cfg.SetPublicURL(scheme + "://" + host)
+	app.SetSetting(r.Context(), "server.url", app.Cfg.PublicURL())
 }

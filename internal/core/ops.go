@@ -257,7 +257,7 @@ func (a *App) OpenAPI() map[string]any {
 	return map[string]any{
 		"openapi":    "3.1.0",
 		"info":       map[string]any{"title": "Bunker API", "version": Version},
-		"servers":    []map[string]any{{"url": a.Cfg.URL}},
+		"servers":    []map[string]any{{"url": a.Cfg.PublicURL()}},
 		"components": map[string]any{"securitySchemes": map[string]any{"token": map[string]any{"type": "http", "scheme": "bearer"}}},
 		"security":   []map[string]any{{"token": []string{}}},
 		"paths":      paths,

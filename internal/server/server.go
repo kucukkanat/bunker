@@ -100,7 +100,7 @@ func writable(dir string) error {
 // Handler wraps the mux with global middleware.
 func Handler(a *core.App) http.Handler {
 	var allowedOrigin string
-	if u, err := url.Parse(a.Cfg.URL); err == nil && u.Host != "" {
+	if u, err := url.Parse(a.Cfg.PublicURL()); err == nil && u.Host != "" {
 		allowedOrigin = u.Scheme + "://" + u.Host
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func Handler(a *core.App) http.Handler {
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-		if strings.HasPrefix(a.Cfg.URL, "https://") {
+		if strings.HasPrefix(a.Cfg.PublicURL(), "https://") {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		ip := clientIP(r, a.Cfg.TrustProxy)
@@ -132,7 +132,7 @@ func Handler(a *core.App) http.Handler {
 		if a.Authn != nil {
 			u = a.Authn(r)
 		}
-		if u != nil && a.Cfg.URL == "" && u.IsAdmin && !u.ViaToken {
+		if u != nil && a.Cfg.PublicURL() == "" && u.IsAdmin && !u.ViaToken {
 			// Only a signed-in admin's browser may teach us our address:
 			// anyone else could send any Host header.
 			learnURL(a, r)
@@ -148,7 +148,7 @@ func Handler(a *core.App) http.Handler {
 				}
 				want := allowedOrigin
 				if want == "" {
-					want = originOf(a.Cfg.URL) // learned after start
+					want = originOf(a.Cfg.PublicURL()) // learned after start
 				}
 				if o := r.Header.Get("Origin"); o != "" && want != "" && o != want && !a.Cfg.Dev {
 					core.Err(w, core.Forbidden("cross-origin request blocked"))
@@ -264,7 +264,7 @@ func Run(a *core.App) error {
 	defer stop()
 	errc := make(chan error, 1)
 	go func() {
-		a.Log.Info("bunker listening", "addr", a.Cfg.Listen, "url", a.Cfg.URL, "version", core.Version)
+		a.Log.Info("bunker listening", "addr", a.Cfg.Listen, "url", a.Cfg.PublicURL(), "version", core.Version)
 		var err error
 		switch a.Cfg.TLS {
 		case "file":
@@ -330,12 +330,12 @@ func learnURL(a *core.App, r *http.Request) {
 	}
 	learnMu.Lock()
 	defer learnMu.Unlock()
-	if a.Cfg.URL != "" {
+	if a.Cfg.PublicURL() != "" {
 		return
 	}
-	a.Cfg.URL = scheme + "://" + host
-	a.SetSetting(context.Background(), "server.url", a.Cfg.URL)
-	a.Log.Info("learned public URL from first request; set BUNKER_URL to override", "url", a.Cfg.URL)
+	a.Cfg.SetPublicURL(scheme + "://" + host)
+	a.SetSetting(context.Background(), "server.url", a.Cfg.PublicURL())
+	a.Log.Info("learned public URL from first request; set BUNKER_URL to override", "url", a.Cfg.PublicURL())
 }
 
 // applyMemoryLimit sets a soft memory limit for the Go runtime from

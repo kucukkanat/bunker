@@ -328,7 +328,7 @@ func scanSite(row interface{ Scan(...any) error }) (*SiteRecord, error) {
 	if arch.Valid {
 		s.ArchivedAt = &arch.Int64
 	}
-	s.URL = app.Cfg.URL + "/s/" + s.Slug + "/"
+	s.URL = app.Cfg.PublicURL() + "/s/" + s.Slug + "/"
 	return s, nil
 }
 

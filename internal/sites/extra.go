@@ -140,8 +140,8 @@ var _ = strings.TrimSpace
 
 // AppBase is Bunker's public origin (BUNKER_URL, else the request's).
 func AppBase(r *http.Request) string {
-	if app.Cfg.URL != "" {
-		return strings.TrimRight(app.Cfg.URL, "/")
+	if app.Cfg.PublicURL() != "" {
+		return strings.TrimRight(app.Cfg.PublicURL(), "/")
 	}
 	scheme := "http"
 	if r.TLS != nil || (app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {

@@ -56,8 +56,8 @@ func TestAnonymousRequestCantPoisonPublicURL(t *testing.T) {
 	a, srv := newUnconfigured(t)
 	get(t, srv.URL+"/", "Host", "evil.example")
 	get(t, srv.URL+"/api/v1/setup", "Host", "evil.example", "X-Forwarded-Proto", "https")
-	if a.Cfg.URL != "" || a.Setting("server.url") != "" {
-		t.Fatalf("public URL learned from an anonymous request: %q / %q", a.Cfg.URL, a.Setting("server.url"))
+	if a.Cfg.PublicURL() != "" || a.Setting("server.url") != "" {
+		t.Fatalf("public URL learned from an anonymous request: %q / %q", a.Cfg.PublicURL(), a.Setting("server.url"))
 	}
 	// The first signed-in admin teaches it.
 	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/setup", strings.NewReader(`{"provider":"local","email":"me@home.dev","password":"correct horse battery"}`))
@@ -77,8 +77,8 @@ func TestAnonymousRequestCantPoisonPublicURL(t *testing.T) {
 	if res, err := http.DefaultClient.Do(req); err == nil {
 		res.Body.Close()
 	}
-	if a.Cfg.URL != "http://bunker.example.com" {
-		t.Fatalf("admin request didn't set the URL: %q", a.Cfg.URL)
+	if a.Cfg.PublicURL() != "http://bunker.example.com" {
+		t.Fatalf("admin request didn't set the URL: %q", a.Cfg.PublicURL())
 	}
 }
 
@@ -133,7 +133,7 @@ func TestSetupRemembersURL(t *testing.T) {
 	if err != nil || res.StatusCode != 200 {
 		t.Fatalf("setup: %v %v", err, res)
 	}
-	if a.Cfg.URL != "https://bunker.example.com" {
-		t.Fatalf("URL after setup: %q", a.Cfg.URL)
+	if a.Cfg.PublicURL() != "https://bunker.example.com" {
+		t.Fatalf("URL after setup: %q", a.Cfg.PublicURL())
 	}
 }

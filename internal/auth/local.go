@@ -206,7 +206,7 @@ func sameOrigin(r *http.Request) bool {
 	if o == "" || o == "null" {
 		return r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin" || r.Header.Get("Sec-Fetch-Site") == "none"
 	}
-	if app.Cfg.URL != "" && strings.EqualFold(strings.TrimRight(app.Cfg.URL, "/"), o) {
+	if app.Cfg.PublicURL() != "" && strings.EqualFold(strings.TrimRight(app.Cfg.PublicURL(), "/"), o) {
 		return true
 	}
 	return strings.EqualFold(o, "http://"+r.Host) || strings.EqualFold(o, "https://"+r.Host)
@@ -305,7 +305,7 @@ func registerLocal(a *core.App) {
 			a.Audit(r.Context(), "auth.invite", 0, in.Email, map[string]any{"admin": in.IsAdmin})
 			by := core.MustUser(r).Name
 			emailed := mail.Send(mail.Message{To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
-				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in "+inviteDays(in.Days)+".", ButtonText: "Join Bunker", ButtonURL: link})
+				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in " + inviteDays(in.Days) + ".", ButtonText: "Join Bunker", ButtonURL: link})
 			note := "Send this link to them. It works once."
 			if emailed {
 				note = "We emailed them the link. You can also send it yourself; it works once."
@@ -422,7 +422,7 @@ func makeInvite(ctx context.Context, by *core.User, email, name string, admin bo
 	if err != nil {
 		return "", err
 	}
-	return app.Cfg.URL + "/auth/invite?token=" + tok, nil
+	return app.Cfg.PublicURL() + "/auth/invite?token=" + tok, nil
 }
 
 type inviteRow struct {

@@ -116,7 +116,7 @@ func initEntra(a *core.App) error {
 			if !auth.Configured() {
 				auth.RememberURL(r) // authorized by the setup code
 			}
-			if a.Cfg.URL == "" {
+			if a.Cfg.PublicURL() == "" {
 				return nil, core.BadRequest("Bunker doesn't know its own address yet. Set BUNKER_URL (e.g. https://bunker.corp.com) and restart, then try again.")
 			}
 			return startFlow(r.Context())
@@ -137,7 +137,7 @@ func initEntra(a *core.App) error {
 	a.Handle(core.Op{Name: "setup.entra.script", Method: "GET", Path: "/api/v1/setup/entra/script", Access: core.AccessPublic,
 		Summary: "Azure Cloud Shell script that registers Bunker (fallback when automatic setup is blocked)",
 		Fn: func(r *http.Request) (any, error) {
-			base := a.Cfg.URL
+			base := a.Cfg.PublicURL()
 			if base == "" {
 				base = "https://bunker.example.com"
 			}
@@ -495,16 +495,16 @@ func register(ctx context.Context, tok, tid string) (*registered, error) {
 	}
 	// 2. The app registration (single tenant).
 	name := "Bunker"
-	if u, err := url.Parse(app.Cfg.URL); err == nil && u.Host != "" {
+	if u, err := url.Parse(app.Cfg.PublicURL()); err == nil && u.Host != "" {
 		name = "Bunker (" + u.Host + ")"
 	}
 	appBody := map[string]any{
 		"displayName":    name,
 		"signInAudience": "AzureADMyOrg",
 		"web": map[string]any{
-			"redirectUris":          []string{app.Cfg.URL + "/auth/callback"},
-			"homePageUrl":           app.Cfg.URL,
-			"logoutUrl":             app.Cfg.URL + "/auth/logout",
+			"redirectUris":          []string{app.Cfg.PublicURL() + "/auth/callback"},
+			"homePageUrl":           app.Cfg.PublicURL(),
+			"logoutUrl":             app.Cfg.PublicURL() + "/auth/logout",
 			"implicitGrantSettings": map[string]bool{"enableIdTokenIssuance": false, "enableAccessTokenIssuance": false},
 		},
 		"groupMembershipClaims": "SecurityGroup",

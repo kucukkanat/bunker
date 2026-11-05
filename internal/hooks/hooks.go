@@ -116,7 +116,7 @@ func initHooks(a *core.App) error {
 			}
 			id, _ := res.LastInsertId()
 			a.Audit(r.Context(), "hook.create", s.ID, in.Name, map[string]any{"collection": in.Collection})
-			hookURL := a.Cfg.URL + "/hooks/" + tok
+			hookURL := a.Cfg.PublicURL() + "/hooks/" + tok
 			return core.Created{V: map[string]any{
 				"id": id, "url": hookURL,
 				"note":    "Copy this URL now; it won't be shown again. Anyone who has it can add data, so keep it secret.",

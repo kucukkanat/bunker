@@ -119,8 +119,8 @@ func EmbedCSP() string {
 
 // appOrigin is who may frame user content: Bunker's own origin.
 func appOrigin() string {
-	if app != nil && app.Cfg.ContentURL != "" && app.Cfg.URL != "" {
-		return app.Cfg.URL
+	if app != nil && app.Cfg.ContentURL != "" && app.Cfg.PublicURL() != "" {
+		return app.Cfg.PublicURL()
 	}
 	return "'self'"
 }

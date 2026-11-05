@@ -47,8 +47,8 @@ func initRemote(a *core.App) error {
 
 // BaseURL returns the server's public URL, falling back to the request.
 func BaseURL(r *http.Request) string {
-	if app != nil && app.Cfg.URL != "" {
-		return app.Cfg.URL
+	if app != nil && app.Cfg.PublicURL() != "" {
+		return app.Cfg.PublicURL()
 	}
 	scheme := "http"
 	if r.TLS != nil || (app != nil && app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {

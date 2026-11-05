@@ -64,7 +64,7 @@ func (c *client) do(method, path string, body any) map[string]any {
 }
 
 func seed(a *core.App) {
-	base := strings.TrimRight(a.Cfg.URL, "/")
+	base := strings.TrimRight(a.Cfg.PublicURL(), "/")
 	// Wait until the server answers.
 	for i := 0; i < 100; i++ {
 		if res, err := http.Get(base + "/healthz"); err == nil {

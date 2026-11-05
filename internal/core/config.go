@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // Config is static process configuration from environment variables.
@@ -20,6 +21,8 @@ type Config struct {
 	// ContentURL optionally serves user content from a separate origin
 	// (e.g. https://usercontent.bunker.corp.com) for defense in depth.
 	ContentURL string
+	// learned holds a URL discovered at runtime (see SetPublicURL).
+	learned    atomic.Pointer[string]
 	TrustProxy bool
 }
 
@@ -162,3 +165,15 @@ func detectPlatformURL() string {
 	}
 	return ""
 }
+
+// PublicURL returns the public base URL, including one learned at runtime.
+// Safe for concurrent use.
+func (c *Config) PublicURL() string {
+	if p := c.learned.Load(); p != nil {
+		return *p
+	}
+	return c.URL
+}
+
+// SetPublicURL records a URL learned while serving (safe for concurrent use).
+func (c *Config) SetPublicURL(u string) { c.learned.Store(&u) }

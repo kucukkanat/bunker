@@ -75,7 +75,7 @@ func Send(ctx context.Context, email, kind, title, body, link string, siteID int
 	if mail.Enabled() && mail.WantsEmail(ctx, email) {
 		full := link
 		if strings.HasPrefix(link, "/") {
-			full = app.Cfg.URL + link
+			full = app.Cfg.PublicURL() + link
 		}
 		mail.Send(mail.Message{To: email, Subject: title, Text: strings.TrimSpace(body + "\n\nOpen it in Bunker."), ButtonText: "Open in Bunker", ButtonURL: full})
 	}
