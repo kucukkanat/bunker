@@ -203,4 +203,13 @@ func (c *Client) BaseURL() string { return c.Server }
 
 func siteURL(server, slug string) string { return server + "/s/" + slug + "/" }
 
+// absURL makes a server-relative address ("/s/x/") a full one, for servers
+// that don't know their public address yet.
+func absURL(server, u string) string {
+	if strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") {
+		return strings.TrimRight(server, "/") + u
+	}
+	return u
+}
+
 func pathEsc(s string) string { return url.PathEscape(s) }

@@ -127,7 +127,7 @@ body.slides:hover .deck-ui{opacity:1}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .toolbar .grow{flex:1;min-width:180px}
 .grid-scroll{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);max-height:calc(100vh - 220px)}
-table.grid{border-collapse:separate;border-spacing:0;width:100%;font-size:.9rem}
+table.grid{display:table;gap:0;border-collapse:separate;border-spacing:0;width:100%;font-size:.9rem}
 table.grid th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;border-bottom:1px solid var(--line);padding:0;z-index:2;white-space:nowrap}
 table.grid th button{all:unset;display:flex;gap:6px;align-items:center;padding:9px 12px;cursor:pointer;width:100%;box-sizing:border-box}
 table.grid th .ty{font:600 .65rem var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);border-radius:4px;padding:0 4px}
@@ -214,4 +214,11 @@ table.grid td.rn{color:var(--muted);font-size:.75rem;text-align:right;width:1%}
 .cards a:hover{border-color:var(--moss)}
 .cards small{color:var(--muted)}
 .empty{padding:48px;text-align:center;color:var(--muted)}
+/* kit.css is loaded first for shared tokens; undo its page-layout defaults
+   that don't fit generated apps (full-width bars, plain articles, tables). */
+body>header.bk-top{max-width:none;margin:0;padding:10px 20px}
+body>main{max-width:none;margin-inline:0}
+article.prose{background:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}
+.prose table{background:none;box-shadow:none;border-radius:0;width:auto;max-width:100%}
+.prose th{text-transform:none;letter-spacing:0;font-size:inherit;color:var(--text)}
 @media print{.bk-top,.docs nav.side,.docs aside.toc,.toolbar,.menu-btn{display:none!important}.docs{display:block}}

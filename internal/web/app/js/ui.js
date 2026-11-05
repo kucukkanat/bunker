@@ -125,9 +125,12 @@ export function archArt(w = 92) {
 }
 
 // ---- formatting ----
+// Times come as unix seconds, milliseconds or ISO strings (data rows).
+const toMs = (ts) => (typeof ts === 'string' ? (/^\d+$/.test(ts) ? toMs(+ts) : Date.parse(ts)) : ts > 1e12 ? ts : ts * 1000);
 export function relTime(ts) {
   if (!ts) return '';
-  const ms = ts > 1e12 ? ts : ts * 1000;
+  const ms = toMs(ts);
+  if (!ms) return '';
   const s = Math.round((Date.now() - ms) / 1000);
   if (s < 45) return 'just now';
   const m = Math.round(s / 60);
@@ -144,7 +147,8 @@ export function relTime(ts) {
 }
 export function fullTime(ts) {
   if (!ts) return '';
-  return new Date(ts > 1e12 ? ts : ts * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const ms = toMs(ts);
+  return ms ? new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 }
 export function bytes(n) {
   if (n == null) return '';
@@ -198,6 +202,8 @@ export function toast(msg, opt = {}) {
     document.body.append(toastsEl);
   }
   const type = opt.type || 'info';
+  // The same message again: drop the old copy instead of stacking.
+  for (const t of toastsEl.children) if (t.dataset.msg === String(msg)) t.remove();
   let timer;
   const close = () => {
     clearTimeout(timer);
@@ -205,10 +211,11 @@ export function toast(msg, opt = {}) {
     setTimeout(() => el.remove(), 200);
   };
   const el = h('div.toast.' + type,
-    icon(type === 'error' ? 'warn' : type === 'ok' ? 'check' : 'info', 18, 'lead'),
+    icon(type === 'error' || type === 'warn' ? 'warn' : type === 'ok' ? 'check' : 'info', 18, 'lead'),
     h('div.msg-t', msg),
     opt.action && h('button.btn.sm', { onclick: () => { close(); opt.action.run(); } }, opt.action.label),
     h('button.x', { 'aria-label': 'Dismiss', onclick: close }, icon('x', 16)));
+  el.dataset.msg = String(msg);
   toastsEl.append(el);
   while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
   const ms = opt.timeout ?? (opt.action ? 7000 : type === 'error' ? 6500 : 4000);

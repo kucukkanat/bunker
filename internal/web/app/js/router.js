@@ -40,7 +40,23 @@ export async function render() {
   const root = onRender(r.layout, path);
   let mod;
   try { mod = await r.load(); }
-  catch (e) { console.warn(e); root.textContent = 'Couldn’t load this page. Please refresh.'; return; }
+  catch (e) {
+    console.warn(e);
+    root.replaceChildren();
+    const box = document.createElement('div');
+    box.className = 'empty';
+    box.style.cssText = 'max-width:560px;margin:48px auto';
+    box.setAttribute('role', 'alert');
+    box.innerHTML = '<h3>This page didn’t load</h3><p>Bunker isn’t answering right now, or it was just updated. Check your connection and try again.</p>';
+    const b = document.createElement('a');
+    b.className = 'btn primary';
+    b.href = location.href;
+    b.dataset.native = '';
+    b.textContent = 'Try again';
+    box.append(b);
+    root.append(box);
+    return;
+  }
   if (my !== seq) return;
   const c = await mod.default(root, ctx);
   if (my !== seq) { if (typeof c === 'function') c(); return; }

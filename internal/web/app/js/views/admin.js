@@ -2,7 +2,7 @@
 import { h, icon, clear, empty, avatar, toast, modal, copyBtn, confirmDialog, promptDialog, relTime, fullTime, bytes, busy, toggle, siteIcon, skeletons, debounce, plural, sparkline } from '../ui.js';
 import { get, put, post, patch, del, maybe, enc, list } from '../api.js';
 import { state } from '../state.js';
-import { providerForm } from './setup.js';
+import { providerForm, entraAuto } from './setup.js';
 
 const SECTIONS = [
   ['', 'Overview'], ['people', 'People'], ['sites', 'Sites'], ['sign-in', 'Sign-in'], ['ai', 'AI'],
@@ -63,6 +63,7 @@ async function people(el, ctx) {
   clear(el, h('div.row.wrap', { style: { marginBottom: '16px' } }, q, h('span.spacer'), transferBtn, inviteBtn), invitesEl, listEl);
   let users = [];
   const linkDialog = (title, text, link) => {
+    link = new URL(link, location.origin).href; // a full address people can open
     const m = modal({ title, body: [h('p.muted', text), h('div.copy-field', { style: { marginTop: '14px' } }, h('span', { 'data-testid': 'invite-link' }, link), copyBtn(link))], footer: [h('button.btn.primary', { onclick: () => m.close() }, 'Done')] });
   };
   function invite() {
@@ -182,6 +183,7 @@ async function signin(el, ctx) {
   const pick = h('select.input', { 'aria-label': 'Provider', style: { maxWidth: '320px' }, onchange: () => { provider = pick.value; drawForm(); } },
     Object.entries(NAMES).map(([k, v]) => h('option', { value: k, selected: k === provider }, v)));
   const drawForm = () => clear(formSlot, st.dev && h('div.notice.warn', { style: { marginBottom: '16px' } }, icon('warn', 18), h('div', 'Bunker is in dev mode, so sign-in is simulated and these settings can’t be saved here.')),
+    provider === 'entra' && !st.dev && [entraAuto({ codeNeeded: false, onDone: () => setTimeout(() => signin(el, ctx), 2500) }), h('p.small.muted', { style: { margin: '16px 0 8px' } }, 'Or enter the values by hand:')],
     providerForm({ provider, admin: true, onSaved: () => { toast('Company sign-in saved. New sign-ins use it right away.', { type: 'ok' }); signin(el, ctx); } }));
   const local = methods && h('div.setting',
     h('div', h('b', 'Built-in accounts'), h('span.d', sso ? 'Let people sign in with an email and password you invite them to. Turn off to require company sign-in.' : 'People sign in with an email and password. Set up company sign-in below before you can turn this off.')),
@@ -193,7 +195,8 @@ async function signin(el, ctx) {
     h('dl.kv',
       h('dt', 'People sign in with'), h('dd', [sso && NAMES[provider], methods?.local && 'Built-in accounts', st.dev && 'Dev mode (simulated)'].filter(Boolean).join(' and ') || 'Not set up'),
       h('dt', 'Web address'), h('dd', st.url || h('span.badge.draft', 'Not set: use BUNKER_URL')),
-      h('dt', 'Redirect URI'), h('dd.mono', st.redirectUri)),
+      h('dt', 'Redirect URI'), h('dd.mono', st.urlKnown ? st.redirectUri : location.origin + '/auth/callback'),
+      st.secretExpires && [h('dt', 'Client secret valid until'), h('dd', expiry(st.secretExpires))]),
     local,
     h('hr.divider'),
     h('h3', sso ? 'Change company sign-in' : 'Set up company sign-in'),
@@ -201,6 +204,16 @@ async function signin(el, ctx) {
     h('label.field', h('span.label', 'Provider'), pick),
     formSlot));
   drawForm();
+}
+
+function expiry(iso) {
+  const t = Date.parse(iso);
+  if (!t) return iso;
+  const days = Math.round((t - Date.now()) / 86400000);
+  const when = new Date(t).toLocaleDateString();
+  if (days < 0) return h('span.badge.danger', 'Expired on ' + when + ': sign-in stops working. Make a new secret.');
+  if (days < 30) return h('span.badge.draft', when + ' (in ' + plural(days, 'day') + '). Make a new secret soon.');
+  return when;
 }
 
 // Generic settings form for config objects of any shape.
@@ -261,6 +274,13 @@ async function ai(el, ctx) {
     fVersion.classList.toggle('hidden', !/azure/.test(v.provider));
     models.classList.toggle('hidden', off);
     limits.classList.toggle('hidden', off);
+    // Hints that fit the chosen provider.
+    const az = /azure/.test(v.provider), local = v.provider === 'openai-compatible';
+    const hint = (f, t) => { const el = f.querySelector('.hint'); if (el) el.textContent = t; };
+    hint(fEndpoint, az ? 'Your Azure OpenAI resource, like https://my-team.openai.azure.com' : 'The address of your Ollama, LM Studio or vLLM server, like http://localhost:11434/v1');
+    hint(fKey, local ? 'Leave empty if your server doesn’t need one. Stored encrypted; pages never see it.' : 'Stored encrypted on the server. Pages and people never see it.');
+    hint(models.firstChild, az ? 'The deployment name in Azure.' : local ? 'The model name on your server, like llama3.1 or qwen2.5-coder.' : 'Leave as is unless you want a different model.');
+    builderModel.placeholder = local ? 'llama3.1' : '';
   };
   const status = h('div');
   const paintStatus = (c) => clear(status, c.configured ? h('div.notice.ok', icon('check', 18), h('div', h('b', 'AI is on. '), 'Using ' + (c.providerLabel || c.provider) + '.'))
@@ -351,25 +371,33 @@ async function connections(el, ctx) {
 }
 
 async function sharing(el, ctx) {
-  const cfg = await maybe('/api/v1/admin/settings').catch(() => null);
+  const d = await maybe('/api/v1/admin/policy').catch(() => null);
   if (!ctx.alive()) return;
-  if (!cfg) {
-    return clear(el, h('div.card.pad.stack',
-      h('h3', 'Sharing policy'),
-      h('p.muted', 'Sites are private by default and can never be shared outside your organization.'),
-      h('div.notice', icon('info', 18), h('div', 'Editing these in the browser isn’t available on this server yet. Your IT team can set them when starting Bunker:',
-        h('ul', { style: { margin: '8px 0 0', paddingLeft: '18px' } },
-          h('li', h('code', 'BUNKER_SHARING_ORG_WIDE=false'), ' stops people from sharing a site with the whole organization.'),
-          h('li', h('code', 'BUNKER_SHARING_EDITORS_CAN_SHARE=false'), ' lets only owners share.'))))));
-  }
-  const v = (k, d = true) => (cfg[k] ?? cfg.settings?.[k] ?? String(d)) !== 'false' && cfg[k] !== false;
-  const setK = async (k, val, t) => {
-    try { await put('/api/v1/admin/settings', { [k]: String(val) }); toast('Saved.', { type: 'ok', timeout: 2000 }); }
-    catch { t.checked = !val; }
+  if (!d) return clear(el, notYet('Sharing policy'));
+  const p = d.policy || {}, pinned = d.pinned || {};
+  const save = async (body, undo) => {
+    try { await put('/api/v1/admin/policy', body, { quiet: true }); toast('Saved.', { type: 'ok', timeout: 2000 }); return true; }
+    catch (e) { toast(e.message, { type: 'error' }); undo && undo(); return false; }
+  };
+  const lock = (k) => pinned[k] && h('span.badge', { title: 'Set by the server’s environment, so it can’t be changed here.' }, icon('lock', 12), ' Set by the server');
+  const sw = (k, title, desc) => h('div.setting', h('div', h('b', title, ' ', lock(k)), h('span.d', desc)),
+    toggle({ checked: !!p[k], disabled: pinned[k], label: title, onchange: (x, t) => save({ [k]: x }, () => (t.checked = !x)) }));
+  const num = (k, title, desc, unit) => {
+    const inp = h('input.input', { type: 'number', min: 1, value: p[k], disabled: pinned[k], 'aria-label': title, style: { width: '110px' }, onchange: async () => {
+      const v = Math.round(+inp.value);
+      if (!(v >= (k === 'maxSitesPerUser' ? 0 : 1))) { inp.value = p[k]; return; }
+      if (await save({ [k]: v }, () => (inp.value = p[k]))) p[k] = v;
+    } });
+    return h('div.setting', h('div', h('b', title, ' ', lock(k)), h('span.d', desc)), h('label.row.small', inp, unit));
   };
   clear(el, h('div.card.pad',
-    h('div.setting', h('div', h('b', 'Allow sharing with the whole organization'), h('span.d', 'Owners can let everyone who signs in to Bunker view a site.')), toggle({ checked: v('sharing.org_wide'), label: 'Allow organization-wide sharing', onchange: (x, t) => setK('sharing.org_wide', x, t) })),
-    h('div.setting', h('div', h('b', 'Editors can share'), h('span.d', 'When off, only a site’s owner can add people.')), toggle({ checked: v('sharing.editors_can_share'), label: 'Editors can share', onchange: (x, t) => setK('sharing.editors_can_share', x, t) }))));
+    h('p.muted', { style: { marginBottom: '8px' } }, 'Sites are private until their owner shares them, and can never be shared outside this Bunker.'),
+    sw('orgWideSharing', 'Allow sharing with everyone', 'Owners can let everyone who signs in to Bunker view a site.'),
+    sw('editorsCanShare', 'Editors can share', 'When off, only a site’s owner can add people.'),
+    'publicLinks' in p && sw('publicLinks', 'Allow public links', 'Owners can let anyone with the link view a site, without signing in. Turning this off closes every public link at once.'),
+    num('siteMaxMB', 'Largest site', 'The most a single site can hold, files included.', 'MB'),
+    num('uploadMaxMB', 'Largest upload', 'The most someone can upload at once.', 'MB'),
+    num('maxSitesPerUser', 'Sites per person', 'How many sites each person can own.', 'sites')));
 }
 
 async function audit(el, ctx) {
@@ -391,7 +419,8 @@ async function audit(el, ctx) {
     const p = params();
     const ex = new URLSearchParams(p);
     ex.set('format', 'csv');
-    exp.href = '/api/v1/admin/audit?' + ex;
+    ex.delete('limit');
+    exp.href = '/api/v1/admin/audit/export?' + ex;
     let d;
     try { d = await get('/api/v1/admin/audit?' + p, { quiet: true }); }
     catch (e) { if (ctx.alive()) { clear(tbl, notYet('The audit log viewer')); exp.classList.add('hidden'); } return; }

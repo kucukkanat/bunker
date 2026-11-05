@@ -1,5 +1,5 @@
 // Share dialog (Google Docs style).
-import { h, icon, clear, modal, avatar, toast, copyText, debounce, toggle, isOwner, relTime, busy } from '../ui.js';
+import { h, icon, clear, modal, avatar, toast, copyText, debounce, toggle, isOwner, relTime, busy, confirmDialog } from '../ui.js';
 import { get, post, del, patch, site as sp, enc, maybe } from '../api.js';
 import { state } from '../state.js';
 import { setQuery } from '../router.js';
@@ -104,6 +104,16 @@ export function openShare(ws, onChange) {
   }
 
   function drawOrg() {
+    const pub = !!ws.site.public;
+    const pubRow = (state.me?.policy?.publicLinks || pub) && h('div.org-row' + (pub ? '.public' : ''), { style: { marginTop: '10px' } },
+      h('span.ic', icon(pub ? 'globe' : 'lock', 18)),
+      h('div', { style: { flex: '1' } }, h('b', 'Anyone with the link (no sign-in)'),
+        h('div.small' + (pub ? '.warn-text' : '.muted'), !owner ? 'Only the owner can change this.' : pub ? 'Anyone on the internet who has the link can view this site. They can’t sign in or change data.' : 'For things you’d put on a public web page. Off by default.')),
+      toggle({ checked: pub, disabled: !owner || (!pub && !state.me?.policy?.publicLinks), label: 'Anyone with the link can view, without signing in', onchange: async (v, el) => {
+        if (v && !(await confirmDialog({ title: 'Make “' + s.title + '” public?', message: 'Anyone on the internet who has the link can view this site, without signing in. They can’t sign in or change data. You can turn this off any time.', confirm: 'Make it public' }))) { el.checked = false; return; }
+        try { await patch(sp(ws.slug), { public: v }); ws.site.public = v; drawOrg(); toast(v ? 'Anyone with the link can view it now.' : 'The public link is off. Only people with access can open it.', { type: 'ok' }); }
+        catch (e) { el.checked = !v; if (e.status === 403) toast('Your admin has turned off public links.', { type: 'error' }); }
+      } }));
     clear(orgSlot, h('div.org-row',
       h('span.ic', icon(orgView ? 'globe' : 'lock', 18)),
       h('div', { style: { flex: '1' } }, h('b', 'Everyone in the organization can view'),
@@ -111,7 +121,7 @@ export function openShare(ws, onChange) {
       toggle({ checked: orgView, disabled: !owner, label: 'Everyone in the organization can view', onchange: async (v, el) => {
         try { await patch(sp(ws.slug), { orgView: v }); orgView = v; ws.site.orgView = v; drawOrg(); toast(v ? 'Everyone in your organization can view it now.' : 'Only people you’ve added can open it now.', { type: 'ok' }); }
         catch { el.checked = !v; }
-      } })));
+      } })), pubRow);
   }
 
   async function loadRequests() {
@@ -137,6 +147,6 @@ export function openShare(ws, onChange) {
   drawPeople();
   drawOrg();
   loadRequests();
-  get(sp(ws.slug, '/members'), { quiet: true }).then((d) => { members = d.members || []; ownerP = d.owner || ownerP; orgView = d.orgView; drawPeople(); drawOrg(); }).catch(() => {});
+  get(sp(ws.slug, '/members'), { quiet: true }).then((d) => { members = d.members || []; ownerP = d.owner || ownerP; orgView = d.orgView; if (d.public != null) ws.site.public = d.public; drawPeople(); drawOrg(); }).catch(() => {});
   return m;
 }

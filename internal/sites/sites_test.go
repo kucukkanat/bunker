@@ -134,7 +134,7 @@ func TestSecretsAndExecutablesBlocked(t *testing.T) {
 	k := testkit.New(t)
 	ada := k.As("ada@corp.com", "")
 	r := ada.Do("POST", "/api/v1/drop", map[string]any{"files": map[string]string{"index.html": `<script>const k="sk-ant-` + strings.Repeat("a", 40) + `"</script>`}})
-	if r.Status != 422 || !strings.Contains(string(r.Body), "index.html:1") {
+	if r.Status != 422 || !strings.Contains(string(r.Body), "index.html (line 1) looks like an Anthropic API key") {
 		t.Errorf("secret not blocked: %d %s", r.Status, r.Body)
 	}
 	r = ada.Do("POST", "/api/v1/drop", map[string]any{"files": map[string]string{"index.html": "ok", "setup.exe": "MZ"}})

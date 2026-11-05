@@ -34,6 +34,7 @@ export function siteCard(s, i = 0, onStar) {
     h('div.meta',
       role && h('span.badge' + (role === 'Owner' ? '.ok' : ''), role),
       !s.version && h('span.badge.draft', 'Not published'),
+      s.public && h('span.badge.draft', { title: 'Anyone with the link can view it' }, icon('globe', 12), 'Public'),
       h('span.by', when + (owner !== 'you' ? ' · ' + owner : ''))),
   );
 }
@@ -73,15 +74,22 @@ export async function dropCreate(items, ui) {
   const size = totalSize(items);
   ui.start('Uploading ' + describe(items) + ' (' + bytes(size) + ')…');
   try {
-    const res = await upload('/api/v1/drop', toForm(items), (p) => ui.progress(p));
+    const res = await upload('/api/v1/drop', toForm(items), (p) => ui.progress(p), { quiet: true });
     ui.progress(1);
     state.sites = null;
     celebrate();
     toast('“' + (res.title || res.slug) + '” is live. Share it when you’re ready.', { type: 'ok' });
     navigate('/sites/' + res.slug);
-  } catch {
-    ui.reset();
+    warnToast(res.warnings);
+  } catch (e) {
+    ui.reset(e);
   }
+}
+
+// After an upload: say what might not work (e.g. internet libraries).
+export function warnToast(list) {
+  if (!list?.length) return;
+  toast('Heads up: ' + list[0] + (list.length > 1 ? ' (and ' + (list.length - 1) + ' more like it)' : ''), { type: 'warn', timeout: 15000 });
 }
 
 export async function htmlCreate(html, title) {

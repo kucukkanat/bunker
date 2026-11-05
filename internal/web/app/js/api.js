@@ -14,7 +14,8 @@ export class ApiError extends Error {
 function friendly(msg) {
   msg = String(msg || '').trim();
   if (!msg) return 'Something went wrong. Please try again.';
-  msg = msg[0].toUpperCase() + msg.slice(1);
+  // Don't capitalize a leading file name ("index.html is…").
+  if (!/^\S*[./]\S/.test(msg)) msg = msg[0].toUpperCase() + msg.slice(1);
   return /[.!?]$/.test(msg) ? msg : msg + '.';
 }
 
@@ -94,7 +95,8 @@ export function list(d, ...keys) {
 }
 
 // Multipart upload with progress (fetch has no upload progress).
-export function upload(path, form, onProgress) {
+// opt.quiet: the caller shows the error itself.
+export function upload(path, form, onProgress, opt = {}) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open('POST', path);
@@ -110,12 +112,12 @@ export function upload(path, form, onProgress) {
       const e = data && data.error;
       const err = e ? new ApiError(x.status, e.code, friendly(e.message))
         : new ApiError(x.status, x.status === 404 ? 'missing' : 'error', x.status === 413 ? 'That’s too big to upload. Try fewer or smaller files.' : 'The upload didn’t go through. Please try again.');
-      toast(err.message, { type: 'error' });
+      if (!opt.quiet) toast(err.message, { type: 'error' });
       reject(err);
     };
     x.onerror = () => {
       const err = new ApiError(0, 'network', 'The upload was interrupted. Check your connection and try again.');
-      toast(err.message, { type: 'error' });
+      if (!opt.quiet) toast(err.message, { type: 'error' });
       reject(err);
     };
     x.send(form);

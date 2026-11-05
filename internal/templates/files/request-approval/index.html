@@ -68,7 +68,8 @@ document.title = CONFIG.title; $('title').textContent = CONFIG.title;
 CONFIG.categories.forEach(function (c) { var o = document.createElement('option'); o.textContent = c; $('f-cat').appendChild(o); });
 $('route').textContent = 'Goes to: ' + CONFIG.approvers;
 var money = function (n) { return n == null || n === '' ? '' : Number(n).toLocaleString(undefined, { style: 'currency', currency: CONFIG.currency }); };
-function isApprover() { return BK.demo || (me.groups || []).some(function (g) { return g.id === CONFIG.approvers || String(g.name || g).toLowerCase() === CONFIG.approvers.toLowerCase(); }) || me.isAdmin; }
+// Approvers: people in the approvers group, plus the site's owner and editors.
+function isApprover() { return BK.demo || me.canEdit || me.approver || (me.groups || []).some(function (g) { return g.id === CONFIG.approvers || String(g.name || g).toLowerCase() === CONFIG.approvers.toLowerCase(); }); }
 function status(r) {
   var ds = D.filter(function (d) { return d.requestId === r._id; }).sort(function (a, b) { return (a._created || 0) - (b._created || 0); });
   var last = ds[ds.length - 1];
@@ -114,7 +115,9 @@ document.addEventListener('click', function (e) {
   decs.add({ requestId: b.dataset.id, decision: b.dataset.act, note: note || '' }).then(function () { BK.toast(b.dataset.act === 'approve' ? 'Approved' : 'Declined'); return load(); }).catch(BK.err);
 });
 $('q').oninput = render; $('st').onchange = render;
-BK.me().then(function (u) { me = u; $('who').textContent = u.name ? 'Signed in as ' + u.name : ''; $('tab-review').hidden = !isApprover(); BK.banner(); return load(); });
+BK.me().then(function (u) { me = u; $('who').textContent = u.name ? 'Signed in as ' + u.name : ''; $('tab-review').hidden = !isApprover(); BK.banner();
+  BK.inGroup(CONFIG.approvers).then(function (v) { if (v) { me.approver = true; $('tab-review').hidden = false; render(); } });
+  return load(); });
 reqs.subscribe(load); decs.subscribe(load);
 </script>
 </body>

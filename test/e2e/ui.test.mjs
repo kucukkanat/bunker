@@ -68,6 +68,7 @@ async function shot(page, name) {
   await page.screenshot({ path: join(SHOTS, name + '.png') });
 }
 const current = new Set();
+let expect422 = false;
 function watch(page, label) {
   current.add(page);
   page.on('close', () => current.delete(page));
@@ -76,6 +77,7 @@ function watch(page, label) {
     const t = m.text();
     // Optional APIs that aren't installed answer 404; the UI hides those features.
     if (/Failed to load resource: the server responded with a status of 404/.test(t)) return;
+    if (expect422 && /status of 422/.test(t)) return; // a refused upload, on purpose
     errors.push(`[${label}] ${t}`);
   });
   page.on('pageerror', (e) => errors.push(`[${label}] pageerror: ${e.message}`));
@@ -137,6 +139,32 @@ try {
     await page.getByRole('heading', { name: 'My sites' }).waitFor();
     await page.locator('.site-card').first().waitFor();
     await shot(page, 'home');
+  });
+
+  await check('a refused upload explains why in the drop zone', async () => {
+    await page.goto(BASE + '/');
+    expect422 = true;
+    await page.getByTestId('pick-files').setInputFiles({ name: 'index.html', mimeType: 'text/html', buffer: Buffer.from('<script>const k = "sk-ant-' + 'a'.repeat(40) + '"</script>') });
+    await page.getByTestId('dropzone').getByText('We found a password or key in your files').waitFor();
+    assert.match(await page.getByTestId('dropzone').innerText(), /index\.html \(line 1\) looks like an Anthropic API key/);
+    await shot(page, 'drop-refused');
+    expect422 = false;
+  });
+
+  await check('a Markdown drop is named after its heading; a CSV shows a proper table', async () => {
+    await page.goto(BASE + '/');
+    await page.getByTestId('pick-files').setInputFiles({ name: 'q3-notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Quarterly planning\n\nHello.\n') });
+    await page.waitForURL(/\/sites\/quarterly-planning/);
+    await page.goto(BASE + '/');
+    await page.getByTestId('pick-files').setInputFiles({ name: 'sales.csv', mimeType: 'text/csv', buffer: Buffer.from('Region,Amount\nNorth,10\nSouth,20\n') });
+    await page.waitForURL(/\/sites\/sales/);
+    const grid = page.frameLocator('.pv-frame iframe').frameLocator('#bk-frame').locator('table.grid');
+    await grid.locator('tbody tr').first().waitFor();
+    // Header above the rows (kit.css's .grid once laid them side by side).
+    const [head, row] = await Promise.all([grid.locator('thead').boundingBox(), grid.locator('tbody tr').first().boundingBox()]);
+    assert.ok(row.y >= head.y + head.height - 1 && Math.abs(row.x - head.x) < 2, `table layout: head ${JSON.stringify(head)} row ${JSON.stringify(row)}`);
+    await page.goto(BASE + '/');
+    await page.getByRole('heading', { name: 'My sites' }).waitFor();
   });
 
   await check('search filters the home page ("/" focuses it)', async () => {
@@ -202,6 +230,21 @@ try {
   await check('data tab degrades gracefully', async () => {
     await page.getByRole('tab', { name: 'Data' }).click();
     await page.locator('.tab-panel .empty').waitFor();
+  });
+
+  await check('data tab: a webhook shows its full URL once and adds rows', async () => {
+    await page.getByRole('button', { name: 'New webhook' }).click();
+    await page.locator('.dialog input').first().fill('Script: test');
+    await page.getByRole('button', { name: 'Create webhook' }).click();
+    const url = await page.getByTestId('hook-url').innerText();
+    assert.match(url, /^https?:\/\/[^/]+\/hooks\//);
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"Ada"}' });
+    assert.equal(r.status, 201);
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('tab', { name: 'Build' }).click();
+    await page.getByRole('tab', { name: 'Data' }).click();
+    await page.locator('.tab-panel').getByText('1 call, last just now').waitFor();
+    await page.locator('.tab-panel td', { hasText: 'just now' }).first().waitFor(); // dates in data rows render
   });
 
   await check('device size toggles resize the preview', async () => {
@@ -288,6 +331,8 @@ try {
     await shot(p2, 'setup-1');
     await p2.getByRole('button', { name: /Company sign-in/ }).click();
     await p2.getByRole('button', { name: /Microsoft Entra ID/ }).click();
+    await p2.getByRole('button', { name: /Set up automatically with Microsoft/ }).waitFor();
+    await p2.getByText('Do it by hand instead').click();
     await p2.getByTestId('redirect-uri').waitFor();
     assert.match(await p2.getByTestId('redirect-uri').innerText(), /\/auth\/callback$/);
     await shot(p2, 'setup-entra');
@@ -300,8 +345,12 @@ try {
     await p2.getByLabel('Type the password again').fill('a long enough password');
     await shot(p2, 'setup-local');
     await p2.getByRole('button', { name: 'Create my account' }).click();
-    await p2.getByRole('heading', { name: 'You’re ready' }).waitFor();
+    await p2.getByRole('heading', { name: 'You’re all set' }).waitFor();
     await shot(p2, 'setup-done');
+    // Signed in right away: no second password prompt.
+    await p2.getByRole('link', { name: /Open Bunker/ }).click();
+    await p2.waitForURL(/\/welcome$/);
+    await p2.getByRole('heading', { name: 'Welcome to Bunker' }).waitFor();
     await p2.close();
   });
 
@@ -311,11 +360,12 @@ try {
   const mp = await m.newPage();
   watch(mp, 'mobile');
   await check('phone layout has no horizontal scroll', async () => {
-    for (const [n, p] of [['home', '/'], ['new', '/new'], ['workspace', '/sites/' + slug], ['settings', '/settings/tokens'], ['admin', '/admin/people'], ['connect', '/settings/connect']]) {
+    for (const [n, p] of [['home', '/'], ['new', '/new'], ['workspace', '/sites/' + slug], ['settings', '/settings/tokens'], ['admin', '/admin/people'], ['audit', '/admin/audit'], ['templates', '/templates'], ['connect', '/settings/connect']]) {
       await mp.goto(BASE + p);
       await mp.waitForLoadState('networkidle');
       await mp.waitForTimeout(300);
-      const over = await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+      // On phones the layout viewport grows to fit wide content, so compare with the device width too.
+      const over = await mp.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) - 390);
       assert.ok(over <= 1, `${p} overflows by ${over}px`);
       await shot(mp, 'm-' + n);
     }

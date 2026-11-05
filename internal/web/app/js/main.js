@@ -110,6 +110,20 @@ function liveNotes() {
     toast(d.title + (d.body ? ': ' + d.body : ''), d.link ? { action: { label: 'Open', run: () => navigate(d.link) } } : {});
   };
   es.addEventListener('notification', (e) => es.onmessage(e));
+  // The stream drops when Bunker goes away: say so, and say when it's back.
+  let lost = 0, banner;
+  es.onerror = () => {
+    if (lost) return;
+    lost = setTimeout(() => {
+      banner = h('div.conn-banner', { role: 'status' }, h('span.spin'), 'Can’t reach Bunker. Trying again…');
+      document.body.append(banner);
+    }, 2500);
+  };
+  es.onopen = () => {
+    clearTimeout(lost);
+    lost = 0;
+    if (banner) { banner.remove(); banner = null; toast('You’re back online.', { type: 'ok', timeout: 2500 }); }
+  };
 }
 export function bell() {
   const badge = h('span.bell-badge', { 'aria-hidden': 'true' });

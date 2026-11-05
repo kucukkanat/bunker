@@ -45,7 +45,31 @@ func initTemplates(a *core.App) error {
 	if err := Seed(context.Background(), a); err != nil {
 		a.Log.Warn("template seeding failed", "err", err)
 	}
+	applyRules(context.Background(), a)
 	return nil
+}
+
+// Rules are the data rules a built-in template works best with. Copies of
+// a template start with its rules (see the data module), so a team tracker
+// lets teammates move each other's cards without extra setup.
+var Rules = map[string]map[string]string{
+	"template-tracker":  {"cards": "open"},
+	"template-meetings": {"meetings": "open"},
+}
+
+// applyRules sets missing rules on the built-in templates (an admin's
+// change to a template's rule is kept).
+func applyRules(ctx context.Context, a *core.App) {
+	now := core.Now()
+	for slug, rules := range Rules {
+		var id int64
+		if a.DB.QueryRowContext(ctx, `SELECT id FROM sites WHERE slug=? AND is_template=1`, slug).Scan(&id) != nil {
+			continue
+		}
+		for coll, rule := range rules {
+			a.DB.ExecContext(ctx, `INSERT OR IGNORE INTO collections(site_id,name,rule,created_at,updated_at) VALUES(?,?,?,?,?)`, id, coll, rule, now, now)
+		}
+	}
 }
 
 // Render returns a template's final index.html (shared CSS/JS inlined).

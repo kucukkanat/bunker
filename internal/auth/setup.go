@@ -45,18 +45,23 @@ func initSetup(a *core.App) {
 	a.Handle(core.Op{Name: "setup.status", Method: "GET", Path: "/api/v1/setup", Summary: "First-run setup status", Access: core.AccessPublic, Hidden: true,
 		Fn: func(r *http.Request) (any, error) {
 			p := Provider()
+			var expires string
+			if u := core.UserFrom(r.Context()); u != nil && u.IsAdmin && p.Kind == "entra" {
+				expires = a.Setting("auth.client_secret_expires")
+			}
 			return map[string]any{
-				"configured":  Configured(),
-				"sso":         SSOConfigured(),
-				"local":       LocalEnabled(),
-				"localReady":  localReady(),
-				"codeNeeded":  !isLoopback(r),
-				"dev":         a.Cfg.Dev,
-				"provider":    p.Kind,
-				"url":         a.Cfg.URL,
-				"urlKnown":    a.Cfg.URL != "",
-				"redirectUri": a.Cfg.URL + "/auth/callback",
-				"version":     core.Version,
+				"secretExpires": expires,
+				"configured":    Configured(),
+				"sso":           SSOConfigured(),
+				"local":         LocalEnabled(),
+				"localReady":    localReady(),
+				"codeNeeded":    !isLoopback(r),
+				"dev":           a.Cfg.Dev,
+				"provider":      p.Kind,
+				"url":           a.Cfg.URL,
+				"urlKnown":      a.Cfg.URL != "",
+				"redirectUri":   a.Cfg.URL + "/auth/callback",
+				"version":       core.Version,
 			}, nil
 		}})
 	a.Handle(core.Op{Name: "setup.configure", Method: "POST", Path: "/api/v1/setup", Summary: "Configure sign-in (first run with setup code, or admin)", Access: core.AccessPublic, Hidden: true,
@@ -133,6 +138,9 @@ func initSetup(a *core.App) {
 			a.SetSetting(ctx, "auth.tenant_id", p.TenantID)
 			a.SetSetting(ctx, "auth.issuer", p.Issuer)
 			a.SetSetting(ctx, "auth.client_id", p.ClientID)
+			if a.SecretSetting("auth.client_secret") != p.ClientSecret {
+				a.SetSetting(ctx, "auth.client_secret_expires", "") // a new secret typed in: we don't know when it expires
+			}
 			a.SetSecretSetting("auth.client_secret", p.ClientSecret)
 			a.SetSetting(ctx, "auth.allowed_domains", strings.Join(p.AllowedDomains, ","))
 			if in.AllowedGroups != "" || isAdmin {

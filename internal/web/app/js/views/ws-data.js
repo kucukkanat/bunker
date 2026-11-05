@@ -1,6 +1,6 @@
 // Data tab: browse and edit the site's collections (bunker.db).
-import { h, icon, clear, empty, toast, confirmDialog, relTime, skeletons } from '../ui.js';
-import { get, put, patch, del, site as sp, enc, list } from '../api.js';
+import { h, icon, clear, empty, toast, confirmDialog, relTime, fullTime, skeletons, modal, copyBtn, codeBlock, busy, plural } from '../ui.js';
+import { get, post, put, patch, del, site as sp, enc, list, maybe } from '../api.js';
 
 const RULES = [
   ['own', 'Everyone adds; people edit only their own rows'],
@@ -13,7 +13,9 @@ const SYS = ['_id', '_author', '_authorName', '_created', '_updated'];
 
 export default async function data(panel, ws) {
   const wrap = h('div.data-wrap', skeletons(3, '.line'));
-  clear(panel, wrap);
+  const hooksEl = h('section.hooks', { 'aria-label': 'Webhooks' });
+  clear(panel, wrap, hooksEl);
+  hooks(hooksEl, ws);
   let colls;
   try {
     colls = list(await get(sp(ws.slug, '/db'), { quiet: true }), 'collections', 'items');
@@ -96,7 +98,7 @@ export default async function data(panel, ws) {
     clear(table, h('div.table-wrap', h('table.t',
       h('thead', h('tr', cols.map((k) => h('th', { scope: 'col' }, k)), h('th', { scope: 'col' }, 'Added by'), h('th', { scope: 'col' }, 'When'), h('th', h('span.sr-only', 'Actions')))),
       h('tbody', rows.map((r) => h('tr', cols.map((k) => cell(r, k)),
-        h('td.sys', r._authorName || r._author || ''), h('td.sys', { title: r._created ? new Date((r._created > 1e12 ? r._created : r._created * 1000)).toLocaleString() : '' }, relTime(r._created)),
+        h('td.sys', r._authorName || r._author || ''), h('td.sys', { title: fullTime(r._created) }, relTime(r._created)),
         h('td', h('button.btn.ghost.icon.sm', { 'aria-label': 'Delete row', onclick: async (e) => {
           if (!(await confirmDialog({ title: 'Delete this entry?', message: 'It’s removed for everyone. This can’t be undone.', confirm: 'Delete', danger: true }))) return;
           await del(sp(ws.slug, '/db/' + enc(cur) + '/' + enc(r._id)));
@@ -126,4 +128,47 @@ function fmt(v) {
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
+}
+
+// Webhooks: a secret URL that adds the JSON it receives to a collection.
+async function hooks(el, ws) {
+  const d = await maybe(sp(ws.slug, '/hooks')).catch(() => null);
+  if (!ws.alive() || !d) return;
+  const items = d.hooks || [];
+  const add = h('button.btn.sm', { onclick: () => create(ws, () => hooks(el, ws)) }, icon('plus', 14), 'New webhook');
+  clear(el, h('div.row', h('h3', 'Webhooks'), h('span.spacer'), add),
+    h('p.small.muted', 'Send data in from Power Automate, Zapier or a script. Each webhook adds what it receives to a collection.'),
+    items.length > 0 && h('div.list', items.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('plug', 16)),
+      h('div.n', h('b', x.name), h('span', 'Into “' + x.collection + '” · ' + (x.calls ? plural(x.calls, 'call') + ', last ' + relTime(x.lastUsedAt) : 'not used yet') + ' · ' + x.prefix + '…')),
+      h('button.btn.sm.ghost.danger', { 'aria-label': 'Delete webhook ' + x.name, onclick: async () => {
+        if (!(await confirmDialog({ title: 'Delete “' + x.name + '”?', message: 'Its URL stops working right away. Data it already sent stays.', confirm: 'Delete webhook', danger: true }))) return;
+        await del(sp(ws.slug, '/hooks/' + x.id));
+        toast('Webhook deleted.');
+        hooks(el, ws);
+      } }, icon('trash', 16))))));
+}
+
+function create(ws, done) {
+  const name = h('input.input', { required: true, maxlength: 100, placeholder: 'Power Automate: new hires', autofocus: true });
+  const coll = h('input.input', { required: true, maxlength: 64, value: 'entries', pattern: '[A-Za-z0-9_\\-]+', title: 'Letters, numbers, - and _' });
+  const go = h('button.btn.primary', { type: 'submit' }, 'Create webhook');
+  const m = modal({ title: 'New webhook', body: h('form.stack', { onsubmit: async (e) => {
+    e.preventDefault();
+    await busy(go, async () => {
+      const r = await post(sp(ws.slug, '/hooks'), { name: name.value.trim(), collection: coll.value.trim() });
+      m.close();
+      const url = new URL(r.url, location.origin).href;
+      const ex = (r.example || '').replace(r.url, url);
+      const m2 = modal({ title: 'Copy your webhook URL', body: [
+        h('div.notice.warn', icon('warn', 18), h('div', h('b', 'You’ll only see it once. '), 'Anyone who has it can add data, so keep it secret.')),
+        h('div.copy-field', { style: { marginTop: '14px' } }, h('span', { 'data-testid': 'hook-url' }, url), copyBtn(url)),
+        h('p.small.muted', { style: { margin: '14px 0 6px' } }, 'Send JSON to it with a POST. For example:'),
+        codeBlock(ex)],
+        footer: [h('button.btn.primary', { onclick: () => m2.close() }, 'Done')] });
+      done();
+    });
+  } },
+    h('label.field', h('span.label', 'Name'), name, h('span.hint', 'What sends to it, so you recognise it later.')),
+    h('label.field', h('span.label', 'Collection'), coll, h('span.hint', 'Where the data goes. It’s created if it doesn’t exist yet.')),
+    h('div.row', h('span.spacer'), go)) });
 }

@@ -78,8 +78,19 @@ func TestBuiltInAccounts(t *testing.T) {
 		t.Errorf("friend: %v", fw)
 	}
 	// Invite links work once.
-	if res := postForm(t, k, "/auth/invite", url.Values{"token": {tok}, "password": {"another long password"}}, nil); res.StatusCode != 403 {
+	if res := postForm(t, k, "/auth/invite", url.Values{"token": {tok}, "password": {"another long password"}}, nil); res.StatusCode != http.StatusGone {
 		t.Errorf("invite reused: %d", res.StatusCode)
+	}
+	// A short password keeps the form (with the reason); an expired link says so.
+	inv2 := me.Must("POST", "/api/v1/admin/invites", map[string]any{"email": "late@home.dev"})
+	link2 := inv2["link"].(string)
+	tok2 := link2[strings.Index(link2, "token=")+6:]
+	if res := postForm(t, k, "/auth/invite", url.Values{"token": {tok2}, "password": {"short"}}, nil); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("short invite password: %d", res.StatusCode)
+	}
+	k.App.DB.Exec(`UPDATE invites SET expires_at=1 WHERE email='late@home.dev'`)
+	if r := anon.Do("GET", "/auth/invite?token="+tok2, nil); r.Status != http.StatusGone || !strings.Contains(string(r.Body), "expired") {
+		t.Errorf("expired invite: %d %s", r.Status, r.Body)
 	}
 	// Can't turn off built-in accounts without SSO.
 	if r := me.Do("PUT", "/api/v1/admin/auth/local", map[string]any{"enabled": false}); r.Status != 400 {

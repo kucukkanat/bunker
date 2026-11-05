@@ -43,7 +43,7 @@ export default async function device(root, ctx) {
       await post('/api/v1/auth/device/' + enc(code), { approve });
       clear(card, h('div.big-check', icon(approve ? 'check' : 'x', 36)),
         h('h1', approve ? 'You’re signed in' : 'Sign-in denied'),
-        h('p.lead', approve ? 'Go back to ' + who.toLowerCase().replace(/^the /, 'the ') + '. You can close this tab.' : 'Nothing was given access. If this wasn’t you, you can safely ignore it.'),
+        h('p.lead', approve ? 'Go back to ' + (CLIENTS[info.client] ? who.replace(/^The /, 'the ') : who) + '. You can close this tab.' : 'Nothing was given access. If this wasn’t you, you can safely ignore it.'),
         h('p', { style: { marginTop: '20px' } }, h('a.btn', { href: '/' }, 'Go to Home')));
     });
   }

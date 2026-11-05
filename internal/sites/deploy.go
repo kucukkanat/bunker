@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/kucukkanat/bunker/internal/core"
 )
@@ -348,8 +350,8 @@ var secretPatterns = []struct {
 }{
 	{"AWS access key", regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)},
 	{"GitHub token", regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{36,}\b`)},
-	{"OpenAI API key", regexp.MustCompile(`\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b`)},
 	{"Anthropic API key", regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{32,}\b`)},
+	{"OpenAI API key", regexp.MustCompile(`\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b`)},
 	{"Slack token", regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}\b`)},
 	{"Stripe secret key", regexp.MustCompile(`\bsk_live_[A-Za-z0-9]{20,}\b`)},
 	{"Google API key", regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`)},
@@ -371,7 +373,7 @@ func ScanSecrets(files map[string][]byte) error {
 		for _, sp := range secretPatterns {
 			if loc := sp.re.FindIndex(b); loc != nil {
 				line := bytes.Count(b[:loc[0]], []byte("\n")) + 1
-				return core.NewErr(422, "secret_detected", fmt.Sprintf("%s:%d looks like a %s. Remove it: pages never need keys, Bunker calls services for you.", p, line, sp.name))
+				return core.NewErr(422, "secret_detected", fmt.Sprintf("%s (line %d) looks like %s %s. Remove it and try again: pages never need keys, Bunker calls services for you.", p, line, article(sp.name), sp.name))
 			}
 		}
 	}
@@ -391,7 +393,7 @@ func checkTypes(files map[string][]byte) error {
 	for p := range files {
 		switch strings.ToLower(path.Ext(p)) {
 		case ".exe", ".dll", ".msi", ".bat", ".cmd", ".ps1", ".scr", ".com", ".vbs", ".jar", ".app", ".dmg", ".pkg", ".deb", ".rpm", ".sh":
-			return core.NewErr(415, "blocked_type", p+": executable files can't be uploaded")
+			return core.NewErr(415, "blocked_type", p+" is a program, and programs can't be uploaded to Bunker. Leave it out and try again")
 		}
 	}
 	return nil
@@ -419,7 +421,7 @@ func Commit(ctx context.Context, u *core.User, s *SiteRecord, m Manifest, messag
 		return 0, core.BadRequest("nothing to publish")
 	}
 	if m.Size() > siteMaxBytes() {
-		return 0, core.TooLarge(fmt.Sprintf("this site would be %s; the limit is %s", humanSize(m.Size()), humanSize(siteMaxBytes())))
+		return 0, core.TooLarge(fmt.Sprintf("this site would be %s, and the limit is %s. Leave out big files you don't need (like videos or backups) and try again", humanSize(m.Size()), humanSize(siteMaxBytes())))
 	}
 	for p, f := range m {
 		if !app.Blobs.Exists(f.Hash) {
@@ -597,7 +599,7 @@ func extFor(mt string) string {
 func tooLargeOr(err error, msg string) error {
 	var mbe *http.MaxBytesError
 	if errors.As(err, &mbe) {
-		return core.TooLarge("the upload is too large")
+		return core.TooLarge(fmt.Sprintf("that's more than this Bunker accepts in one upload (%s). Try fewer or smaller files, or ask your admin to raise the limit", humanSize(mbe.Limit)))
 	}
 	return core.BadRequest(msg)
 }
@@ -623,7 +625,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			}
 			total += int64(f.UncompressedSize64)
 			if total > max || len(zr.File) > 20000 {
-				return core.TooLarge("the zip expands beyond the site size limit")
+				return core.TooLarge("this zip expands beyond the site size limit (" + humanSize(max) + "). Leave out big files you don't need and try again")
 			}
 			rc, err := f.Open()
 			if err != nil {
@@ -637,7 +639,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			}
 			read += int64(len(b))
 			if read > max {
-				return core.TooLarge("the zip expands beyond the site size limit")
+				return core.TooLarge("this zip expands beyond the site size limit (" + humanSize(max) + "). Leave out big files you don't need and try again")
 			}
 			p := f.Name
 			if dir != "." && dir != "" {
@@ -1151,29 +1153,113 @@ func registerDeploy(a *core.App) {
 }
 
 func guessTitle(files map[string][]byte) string {
-	for _, p := range sortedKeys(files) {
-		if strings.HasSuffix(strings.ToLower(p), ".html") {
-			if m := titleRe.FindSubmatch(files[p]); m != nil {
-				t := strings.TrimSpace(string(m[1]))
-				if t != "" && len(t) < 100 {
+	keys := sortedKeys(files)
+	htmlTitle := func(p string) string {
+		if m := titleRe.FindSubmatch(files[p]); m != nil {
+			t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " ")
+			if t != "" && len(t) < 100 {
+				return t
+			}
+		}
+		return ""
+	}
+	// The start page's <title> wins, then any page's.
+	for _, p := range keys {
+		if b := strings.ToLower(path.Base(p)); (b == "index.html" || b == "index.htm") && strings.Count(p, "/") <= 1 {
+			if t := htmlTitle(p); t != "" {
+				return t
+			}
+		}
+	}
+	for _, p := range keys {
+		if l := strings.ToLower(p); strings.HasSuffix(l, ".html") || strings.HasSuffix(l, ".htm") {
+			if t := htmlTitle(p); t != "" {
+				return t
+			}
+		}
+	}
+	// Markdown: the main document's first "# Heading".
+	mds := 0
+	for _, p := range keys {
+		if l := strings.ToLower(p); strings.HasSuffix(l, ".md") || strings.HasSuffix(l, ".markdown") {
+			mds++
+		}
+	}
+	for _, p := range keys {
+		b := strings.ToLower(path.Base(p))
+		if (mds == 1 && (strings.HasSuffix(b, ".md") || strings.HasSuffix(b, ".markdown"))) || ((b == "readme.md" || b == "index.md") && strings.Count(p, "/") <= 1) {
+			if m := fmTitleRe.FindSubmatch(files[p]); m != nil {
+				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
+					return t
+				}
+			}
+			if m := mdTitleRe.FindSubmatch(files[p]); m != nil {
+				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
 					return t
 				}
 			}
 		}
 	}
-	for p := range files {
+	if len(keys) == 0 {
+		return "Untitled site"
+	}
+	// A dropped folder: use its name.
+	if top, _, ok := strings.Cut(keys[0], "/"); ok {
+		same := true
+		for _, p := range keys {
+			if !strings.HasPrefix(p, top+"/") {
+				same = false
+				break
+			}
+		}
+		if same && top != "" && top != "dist" && top != "build" && top != "public" && top != "out" {
+			return niceTitle(top)
+		}
+	}
+	images := 0
+	for _, p := range keys {
+		switch strings.ToLower(path.Ext(p)) {
+		case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif":
+			images++
+		}
+	}
+	if images > 1 && images == len(keys) {
+		return "Gallery"
+	}
+	for _, p := range keys {
 		base := path.Base(p)
 		if i := strings.LastIndex(base, "."); i > 0 {
 			base = base[:i]
 		}
-		if base != "index" && base != "" {
-			return strings.ReplaceAll(strings.ReplaceAll(base, "-", " "), "_", " ")
+		if base != "index" && base != "" && base != "README" && base != "readme" {
+			return niceTitle(base)
 		}
 	}
 	return "Untitled site"
 }
 
+// article picks "a" or "an" for a word.
+func article(w string) string {
+	if w != "" && strings.ContainsRune("AEIOUaeiou", rune(w[0])) {
+		return "an"
+	}
+	return "a"
+}
+
+// niceTitle turns a file or folder name like "q3-sales_report" into "Q3 sales report".
+func niceTitle(s string) string {
+	s = strings.Join(strings.Fields(strings.NewReplacer("-", " ", "_", " ").Replace(s)), " ")
+	if s == "" {
+		return "Untitled site"
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
+}
+
 var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+var fmTitleRe = regexp.MustCompile(`(?s)\A---\r?\n(?:[^\n]*\n)*?(?:site|title):[ \t]*["']?([^"'\r\n]+?)["']?[ \t]*\r?\n`)
+var mdTitleRe = regexp.MustCompile(`(?m)^#[ \t]+(.+?)[ \t#]*\r?$`)
 
 func firstNonEmpty(v ...string) string {
 	for _, s := range v {

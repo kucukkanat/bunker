@@ -668,23 +668,59 @@ func suggestName(ctx context.Context, c *Config, p Provider, u *core.User, promp
 	return title, icon
 }
 
+// fallbackTitle makes a short name from the request when the AI can't:
+// "A page where my team can book the meeting room" -> "Book the meeting room".
 func fallbackTitle(prompt string) string {
-	words := strings.Fields(prompt)
-	skip := map[string]bool{"a": true, "an": true, "the": true, "make": true, "build": true, "create": true, "me": true, "i": true, "want": true, "need": true, "please": true, "for": true, "us": true, "our": true, "can": true, "you": true, "to": true}
-	var out []string
-	for _, w := range words {
-		lw := strings.ToLower(strings.Trim(w, ".,!?:;\"'"))
-		if lw == "" || (len(out) == 0 && skip[lw]) {
-			continue
+	var words []string
+	for _, w := range strings.Fields(prompt) {
+		if w = strings.Trim(w, ".,!?:;\"'“”‘’()"); w != "" {
+			words = append(words, w)
 		}
-		r, n := utf8.DecodeRuneInString(lw)
-		out = append(out, strings.ToUpper(string(r))+lw[n:])
-		if len(out) == 4 {
+		if len(words) == 24 {
 			break
 		}
 	}
-	if len(out) == 0 {
+	lower := func(i int) string { return strings.ToLower(words[i]) }
+	// "... where/so/that my team can <what they do>": keep what they do.
+	for i := 0; i < len(words) && i < 8; i++ {
+		if w := lower(i); w == "where" || w == "so" || w == "that" || w == "which" {
+			k := i + 1
+			for k < len(words) && titleSubject[lower(k)] {
+				k++
+			}
+			if k < len(words) && k > i+1 {
+				words = words[k:]
+			}
+			break
+		}
+	}
+	for len(words) > 0 && titleFiller[strings.ToLower(words[0])] {
+		words = words[1:]
+	}
+	if len(words) > 5 {
+		words = words[:5]
+	}
+	for len(words) > 1 && titleTail[strings.ToLower(words[len(words)-1])] {
+		words = words[:len(words)-1]
+	}
+	if len(words) == 0 {
 		return "New app"
 	}
-	return strings.Join(out, " ")
+	out := strings.Join(words, " ")
+	r, n := utf8.DecodeRuneInString(out)
+	return strings.ToUpper(string(r)) + out[n:]
+}
+
+var (
+	titleFiller  = setOf("a", "an", "the", "make", "build", "create", "me", "i", "want", "need", "please", "us", "our", "my", "can", "you", "to", "simple", "small", "quick", "little", "basic", "page", "app", "site", "website", "tool", "we", "let", "lets", "could", "would", "will", "should", "for", "just", "new")
+	titleSubject = setOf("my", "our", "the", "team", "teams", "people", "everyone", "anyone", "we", "i", "you", "staff", "colleagues", "coworkers", "users", "employees", "managers", "can", "could", "will", "should", "may", "to")
+	titleTail    = setOf("a", "an", "the", "and", "or", "of", "with", "for", "to", "in", "on", "at", "by", "who", "what", "where", "that")
+)
+
+func setOf(w ...string) map[string]bool {
+	m := make(map[string]bool, len(w))
+	for _, x := range w {
+		m[x] = true
+	}
+	return m
 }

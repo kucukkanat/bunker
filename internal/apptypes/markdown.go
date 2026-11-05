@@ -327,12 +327,14 @@ func (d *mdDoc) render(outOf map[string]string) {
 	}
 }
 
-var h23Re = regexp.MustCompile(`<h([23]) id="([^"]+)">`)
+var h23Re = regexp.MustCompile(`(?s)<h([23]) id="([^"]+)">(.*?)</h[23]>`)
 
+// addAnchors adds a "#" link after each h2/h3 (after the text, so it
+// doesn't push the heading in while it's hidden).
 func addAnchors(h string) string {
 	return h23Re.ReplaceAllStringFunc(h, func(m string) string {
 		sm := h23Re.FindStringSubmatch(m)
-		return m + `<a class="anchor" href="#` + sm[2] + `" aria-hidden="true">#</a> `
+		return `<h` + sm[1] + ` id="` + sm[2] + `">` + sm[3] + ` <a class="anchor" href="#` + sm[2] + `" aria-hidden="true">#</a></h` + sm[1] + `>`
 	})
 }
 
@@ -437,7 +439,9 @@ func docPage(d *mdDoc, docs []*mdDoc, siteTitle string, prev, next *mdDoc, depth
 
 	var body strings.Builder
 	single := len(docs) == 1
-	if single {
+	if single && len(d.heads) <= 1 {
+		body.WriteString(`<div class="docs" style="grid-template-columns:minmax(0,1fr)">`)
+	} else if single {
 		body.WriteString(`<div class="docs" style="grid-template-columns:minmax(0,1fr) 220px">`)
 	} else {
 		body.WriteString(`<button class="btn menu-btn" id="menu" aria-controls="side" aria-expanded="false">☰ Pages</button><div class="docs">`)
@@ -465,14 +469,18 @@ func docPage(d *mdDoc, docs []*mdDoc, siteTitle string, prev, next *mdDoc, depth
 		}
 		body.WriteString(`</div>`)
 	}
-	body.WriteString(`</main><aside class="toc" aria-label="On this page">`)
-	if len(d.heads) > 1 {
-		body.WriteString(`<b>On this page</b>`)
-		for _, h := range d.heads {
-			body.WriteString(`<a class="l` + strconv.Itoa(h.Level) + `" href="#` + esc(h.ID) + `">` + esc(h.Text) + `</a>`)
+	body.WriteString(`</main>`)
+	if !single || len(d.heads) > 1 {
+		body.WriteString(`<aside class="toc" aria-label="On this page">`)
+		if len(d.heads) > 1 {
+			body.WriteString(`<b>On this page</b>`)
+			for _, h := range d.heads {
+				body.WriteString(`<a class="l` + strconv.Itoa(h.Level) + `" href="#` + esc(h.ID) + `">` + esc(h.Text) + `</a>`)
+			}
 		}
+		body.WriteString(`</aside>`)
 	}
-	body.WriteString(`</aside></div>`)
+	body.WriteString(`</div>`)
 	title := d.title
 	if !single && title != siteTitle {
 		title += " · " + siteTitle

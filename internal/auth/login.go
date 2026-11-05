@@ -419,14 +419,7 @@ func handleDev(w http.ResponseWriter, r *http.Request) {
 
 func authError(w http.ResponseWriter, r *http.Request, title, detail string) {
 	app.Log.Warn("auth error", "title", title, "detail", detail)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-	w.WriteHeader(http.StatusForbidden)
-	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>%s</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;background:#f7f4ec;color:#1c211e;display:grid;place-items:center;min-height:100vh;margin:0}
-main{max-width:420px;padding:32px;background:#fffdf8;border:1px solid #ddd6c4;border-radius:16px}h1{font-family:Georgia,serif;color:#1f3a2e;margin:0 0 8px}a{color:#2f5543;font-weight:600}
-@media(prefers-color-scheme:dark){body{background:#121714;color:#e8ebe6}main{background:#1a211d;border-color:#2e3832}h1{color:#e8ebe6}a{color:#8fbf9f}}</style>
-<main><h1>%s</h1><p>%s</p><p><a href="/auth/login">Try again</a></p></main>`, htmlEsc(title), htmlEsc(title), htmlEsc(detail))
+	authPage(w, http.StatusForbidden, title, sentence(detail), "/auth/login", "Try again")
 }
 
 func htmlEsc(s string) string {
