@@ -46,7 +46,7 @@ Open the URL, create your admin account, and drop a file. Every option (Koyeb, C
 
 ## What you get
 
-- **Anything becomes an app.** HTML, folders, zips and build output; Markdown docs and slides; CSV and Excel table apps; Jupyter notebooks; PDFs; images, video and audio; single-file React, JSX and TSX. Or start from one of eight templates, or describe it to the AI builder. [What each file type becomes](https://kucukkanat.github.io/bunker/docs/build/drop-anything/).
+- **Anything becomes an app.** HTML, folders, zips and build output; Markdown docs and slides; CSV and Excel table apps; Jupyter notebooks; PDFs; images, video and audio; single-file React, JSX and TSX. Or start from one of 16 templates, or describe it to the AI builder. [What each file type becomes](https://kucukkanat.github.io/bunker/docs/build/drop-anything/).
 - **Share like a document.** People, groups or everyone, as viewer or editor. "Ask for access" requests, notifications, view stats.
 - **Every change is a version.** Drafts, diffs and one-click restore.
 - **A real backend without servers.** `window.bunker` gives pages a database with access rules and live updates, file uploads, per-person storage, live rooms, AI and notifications, all with the viewer's own permissions. Plus Microsoft 365 data and admin-defined connections to internal APIs.

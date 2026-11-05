@@ -8,7 +8,7 @@ Your own private app cloud: drop a file or describe an app, get a private, share
 - **Drop anything:** HTML, folders, zips, SPA build output (root-absolute paths rewritten), Markdown docs sites and slide decks, CSV/TSV/Excel table apps, JSON viewer, image galleries, PDFs (pdf.js), audio/video, Jupyter notebooks, text, React/JSX/TSX/TypeScript (esbuild at publish, preact/compat), `<script type="text/babel">` pages, unbuilt Vite projects.
 - **CDN links just work:** popular libraries (React, Vue, Chart.js, Tailwind, Alpine, d3, Bootstrap, Leaflet, …) are built in at `/_/lib` and CDN tags are rewritten at publish; unknown external URLs are reported as warnings.
 - **AI builder:** Claude, OpenAI, Azure OpenAI or any OpenAI-compatible/local model; edits drafts with diffs, streams progress, sets data rules, offers to fix preview errors (max 2 rounds), daily budgets. Zero setup with `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, one-click local Ollama/LM Studio.
-- **8 templates:** requests & approvals, kanban tracker, sign-up sheet, feedback with AI summary, poll, dashboard, team directory & who's out, meeting notes.
+- **16 templates:** requests & approvals, kanban tracker, sign-up sheet, feedback with AI summary, poll, dashboard, team directory & who’s out, meeting notes, equipment check-out, room & desk booking, inventory, incident log, onboarding checklist, goals & OKRs, kudos wall, lunch orders.
 - **Import from GitHub:** paste a public repo or folder link on Home.
 - **`bunker demo`:** dev mode pre-filled with example apps, teammates and data.
 - **Versions and drafts:** every publish is a version; diff, preview, one-click restore; duplicate; zip export.
