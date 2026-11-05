@@ -6,6 +6,11 @@ sidebar: { order: 1 }
 
 Bunker's [AI builder](/bunker/docs/build/ai-builder/) and [`bunker.ai`](/bunker/docs/sdk/ai/) use one provider that an admin chooses. Keys stay on the server, encrypted, and never reach a browser. Without a provider, everything except the AI features works.
 
+## Zero setup
+
+- **A key you already have.** If the server's environment has `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) and no provider is configured, Bunker uses it automatically. Starting Bunker in a terminal where you've exported your key is enough.
+- **A local model.** *Admin → AI* checks this machine for Ollama (`127.0.0.1:11434`) and LM Studio (`127.0.0.1:1234`) and offers a one-click **Use Ollama (model)** button. API: `bunker api ai.detect`.
+
 ## Providers
 
 | `provider` | Default builder model | Default page model | Notes |
