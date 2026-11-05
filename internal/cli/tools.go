@@ -8,6 +8,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -202,6 +203,10 @@ func cmdUpdate(x *App, a *Args) error {
 	sp := x.spin("Checking for updates…")
 	err := c.Get(x.ctx, "/repos/"+repo+"/releases/latest", nil, &rel)
 	sp.end()
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == 404 {
+		return fmt.Errorf("no Bunker release has been published yet. Get the latest code with: go install github.com/kucukkanat/bunker/cmd/bunker@latest (or run the install.sh one-liner again)")
+	}
 	if err != nil {
 		return fmt.Errorf("couldn't check for updates: %w", err)
 	}
