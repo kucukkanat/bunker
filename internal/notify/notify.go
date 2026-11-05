@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/kucukkanat/bunker/internal/auth"
 	"github.com/kucukkanat/bunker/internal/core"
 	"github.com/kucukkanat/bunker/internal/mail"
 	"github.com/kucukkanat/bunker/internal/sites"
@@ -204,7 +206,7 @@ func registerAccess(a *core.App) {
 			http.Error(w, "This form expired. Go back, refresh the page and ask again.", http.StatusForbidden)
 			return
 		}
-		requestAccess(r.Context(), u, slug, r.FormValue("message"))
+		requestAccess(r.Context(), u, slug, r.FormValue("message"), "viewer")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'")
 		fmt.Fprint(w, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Request sent</title><link rel=stylesheet href="/_/kit.css">
@@ -215,7 +217,7 @@ func registerAccess(a *core.App) {
 		Fn: func(r *http.Request) (any, error) {
 			var in struct{ Message, Role string }
 			_ = core.Decode(r, &in)
-			requestAccess(r.Context(), core.MustUser(r), r.PathValue("site"), in.Message)
+			requestAccess(r.Context(), core.MustUser(r), r.PathValue("site"), in.Message, in.Role)
 			// Same answer whether or not the site exists: no enumeration.
 			return map[string]any{"ok": true}, nil
 		}})
@@ -290,15 +292,22 @@ func AccessToken(uid int64, slug string) string {
 	return core.MAC(fmt.Sprintf("access:%d:%s", uid, slug))
 }
 
-func requestAccess(ctx context.Context, u *core.User, slug, msg string) {
+func requestAccess(ctx context.Context, u *core.User, slug, msg, role string) {
+	want := core.RoleViewer
+	if core.ParseRole(role) == core.RoleEditor {
+		want = core.RoleEditor // a viewer may ask to edit
+	}
 	s, err := sites.GetBySlug(ctx, slug)
-	if err != nil || sites.RoleOf(ctx, u, s) != core.RoleNone {
+	if err != nil || sites.RoleOf(ctx, u, s) >= want {
 		return
 	}
 	if len(msg) > 500 {
 		msg = msg[:500]
+		for len(msg) > 0 && !utf8.ValidString(msg) {
+			msg = msg[:len(msg)-1] // don't cut a character in half
+		}
 	}
-	res, err := app.DB.ExecContext(ctx, `INSERT OR IGNORE INTO access_requests(site_id,user_id,message,created_at) VALUES(?,?,?,?)`, s.ID, u.ID, msg, core.Now())
+	res, err := app.DB.ExecContext(ctx, `INSERT OR IGNORE INTO access_requests(site_id,user_id,message,role,created_at) VALUES(?,?,?,?,?)`, s.ID, u.ID, msg, want.String(), core.Now())
 	if err != nil {
 		return
 	}
@@ -311,7 +320,11 @@ func requestAccess(ctx context.Context, u *core.User, slug, msg string) {
 	if msg != "" {
 		body = "“" + msg + "”"
 	}
-	Send(ctx, ownerEmail, "access_request", fmt.Sprintf("%s wants to open “%s”", u.Name, s.Title), body, "/sites/"+s.Slug+"?share=1", s.ID)
+	verb := "open"
+	if want == core.RoleEditor {
+		verb = "edit"
+	}
+	Send(ctx, ownerEmail, "access_request", fmt.Sprintf("%s wants to %s “%s”", u.Name, verb, s.Title), body, "/sites/"+s.Slug+"?share=1", s.ID)
 	app.Audit(ctx, "access.request", s.ID, u.Email, nil)
 }
 
@@ -476,13 +489,11 @@ func registerPageNotify(a *core.App) {
 
 func loadByEmail(ctx context.Context, email string) *core.User {
 	var id int64
-	var name, gj string
-	var admin int
-	if app.DB.QueryRowContext(ctx, `SELECT id,name,is_admin,groups_json FROM users WHERE lower(email)=? AND disabled=0`, email).Scan(&id, &name, &admin, &gj) != nil {
+	if app.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE lower(email)=? AND disabled=0`, email).Scan(&id) != nil {
 		return nil
 	}
-	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
-	json.Unmarshal([]byte(gj), &u.Groups)
+	// auth.LoadUser also applies configured admins (BUNKER_ADMINS).
+	u, _ := auth.LoadUser(ctx, id)
 	return u
 }
 
