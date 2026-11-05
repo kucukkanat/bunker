@@ -23,8 +23,10 @@ Bunker is built in the open. Pages for features that aren't finished carry a **P
 
 ## Next
 
-- Dashboard buttons for automatic Entra setup and audit streaming (the API works today).
+- Dashboard settings for audit streaming (the API works today; automatic Entra setup is in Setup and Admin → Sign-in).
 - Editable table apps: CSV and Excel uploads that people can add rows to.
+- First tagged release with signed binaries and a public container image.
+- Arrow-key navigation inside the feedback template's star rating.
 
 ## Later
 
