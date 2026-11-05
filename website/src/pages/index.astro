@@ -45,7 +45,100 @@ const tiles: Tile[] = [
   { t: 'A notebook', ext: '.ipynb', d: 'Rendered with its charts and outputs, ready to read.' },
   { t: 'A PDF', ext: '.pdf', d: 'Opens in a built-in viewer that works inside the sandbox.' },
   { t: 'Images and video', ext: '.png · .jpg · .mp4', d: 'A tidy gallery page your team can browse.' },
-  { t: 'Describe it', ext: 'plain words', d: '“A holiday tracker where managers approve requests.” The AI builds a draft. You publish.', ai: true },
+  { t: 'Describe it', ext: 'plain words', d: '“A holiday tracker where managers approve requests.” The AI builds a draft, offers to fix any errors the preview shows, and you publish.', ai: true },
+];
+
+// Real screenshots from a Bunker server with demo data (website/public/shots).
+type Shot = { id: string; tab: string; img: string; dark?: string; alt: string; title: string; text: string; link?: [string, string] };
+const shots: Shot[] = [
+  {
+    id: 'home', tab: 'Home', img: 'home', dark: 'home-dark',
+    alt: 'Bunker home page: a greeting, a “Describe an app” box, a drop zone for files and folders, and cards for recent sites such as Q3 budget and Website launch.',
+    title: 'Everything you made, in one place',
+    text: 'Drop a file or folder, describe an app, or start from a template. Recent sites, favorites and public links are right there.',
+  },
+  {
+    id: 'builder', tab: 'AI builder', img: 'builder', dark: 'builder-dark',
+    alt: 'The site workspace: on the left a chat asking the builder to add a Review column; on the right a live draft preview of a kanban board with To do, In progress, Review and Done columns.',
+    title: 'Ask for a change, watch the preview',
+    text: 'The builder edits a draft and the preview updates beside it. Nothing is live until you publish. If the preview shows an error, it offers to fix it with one click.',
+    link: ['docs/build/ai-builder/', 'The AI builder'],
+  },
+  {
+    id: 'share', tab: 'Sharing', img: 'share',
+    alt: 'The Share dialog for “Onboarding handbook”: five people with view or edit access, an organization-wide switch, and “Anyone with the link” switched on.',
+    title: 'Share with people, or with a link',
+    text: 'Add people or groups as viewers or editors. If your admin allows it, a public link lets you show a portfolio or a page to friends who don’t have an account.',
+    link: ['docs/build/sharing/', 'Sharing and public links'],
+  },
+  {
+    id: 'table', tab: 'Spreadsheets', img: 'table',
+    alt: 'A table app made from q3-budget.csv: summary cards, a bar chart of plan by team, a search box and a sortable table.',
+    title: 'A CSV becomes a table app',
+    text: 'Drop a .csv or .xlsx and get search, filters, summary numbers and a chart. Every sheet becomes a tab, and people can export it again.',
+  },
+  {
+    id: 'docs', tab: 'Docs', img: 'docs',
+    alt: 'A docs site made from four Markdown files: a sidebar with page links and a page titled “Welcome to Fernhill”.',
+    title: 'A folder of Markdown becomes a docs site',
+    text: 'Navigation, headings and next-page links come for free. This handbook is four .md files in a folder.',
+    link: ['docs/build/drop-anything/', 'Everything you can drop'],
+  },
+  {
+    id: 'webhooks', tab: 'Webhooks', img: 'webhooks',
+    alt: 'The Data tab of an Equipment requests app: a table of requests, including one added by a webhook, and two webhooks named “Power Automate: new starters” and “Nightly script: renewals”.',
+    title: 'Data in from Power Automate, Zapier or a script',
+    text: 'A webhook is a secret URL that adds whatever it receives to one of the app’s collections. Pages that show it update live.',
+    link: ['docs/build/webhooks/', 'Inbound webhooks'],
+  },
+  {
+    id: 'admin', tab: 'Admin', img: 'admin-people',
+    alt: 'Admin, People: a list of people with admin switches and Disable buttons, plus Transfer sites and Invite people buttons.',
+    title: 'People, and what happens when they leave',
+    text: 'Invite people and choose admins. When someone leaves, disable them and move all their sites to a colleague in the same step. Sharing rules, AI, Microsoft 365 and the audit log are one tab away.',
+    link: ['docs/admin/policy/', 'Policy and people'],
+  },
+  {
+    id: 'setup', tab: 'First run', img: 'setup',
+    alt: 'The setup page: “Welcome! Let’s set up Bunker” with a choice between “Just me or my team” and “Company sign-in”.',
+    title: 'Set up in a minute',
+    text: 'Start Bunker on a laptop and it opens this page in your browser. Choose built-in accounts or company sign-in, create the first admin, and you’re in.',
+    link: ['docs/start/quickstart/', 'Quickstart'],
+  },
+  {
+    id: 'signin', tab: 'Sign-in', img: 'signin', dark: 'signin-dark',
+    alt: 'The Bunker sign-in page with email and password fields.',
+    title: 'One quiet sign-in page',
+    text: 'Built-in accounts with invite links, or your company’s Microsoft Entra ID, Google Workspace or OIDC. Apps never see a password or a token.',
+    link: ['docs/sign-in/built-in/', 'Sign-in options'],
+  },
+];
+
+const extras = [
+  {
+    t: 'Data from your other tools',
+    d: 'Power Automate, Zapier, a form or a nightly script can post JSON to a secret webhook URL. It lands in the app’s data and open pages update live.',
+    link: ['docs/build/webhooks/', 'Inbound webhooks'],
+    icon: 'M4 12h5l2-5 3 10 2-5h4',
+  },
+  {
+    t: 'Public when you want it',
+    d: 'Share a portfolio or a page with friends, no accounts needed. Off until an admin allows it, and one switch closes every public link.',
+    link: ['docs/build/sharing/', 'Public links'],
+    icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-9 9h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
+  },
+  {
+    t: 'A builder that checks its work',
+    d: 'After each change the builder looks at the draft preview. If it shows an error, you get one click to have it fixed, before anyone else sees it.',
+    link: ['docs/build/ai-builder/', 'The AI builder'],
+    icon: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z',
+  },
+  {
+    t: 'Looks like you from the start',
+    d: 'One line of CSS gives an app Bunker’s fonts and clean light and dark styles, served by your own server, so even quick drafts look tidy without loading anything from the internet.',
+    link: ['docs/sdk/overview/', 'The SDK and style kit'],
+    icon: 'M5 19 10 5h4l5 14M7.5 13h9',
+  },
 ];
 
 const security = [
@@ -83,7 +176,7 @@ const faq = [
   },
   {
     q: 'Is Bunker ready for production?',
-    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. So are the dashboard, app types from Markdown to notebooks, templates, Microsoft 365 data, connections, audit streaming and backups. Anything unfinished is marked Preview in the docs. Try it with a small group first.',
+    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. So are the dashboard, app types from Markdown to notebooks, templates, Microsoft 365 data, connections, webhooks, public links, MCP Apps, audit streaming and backups. Anything unfinished is marked Preview in the docs. Try it with a small group first.',
   },
   {
     q: 'Do we need wildcard DNS or a wildcard certificate?',
@@ -91,7 +184,7 @@ const faq = [
   },
   {
     q: 'Can apps be made public?',
-    a: 'No. Every request needs someone signed in to your Bunker: an invited built-in account or a member of your organization. Entra guests are blocked unless an admin allows them.',
+    a: 'Only if an admin allows it. By default every request needs someone signed in to your Bunker. An admin can switch on public links in Admin → Sharing; then an owner can let anyone with the link view a site, like a portfolio or an event page. Public visitors see the published version only, can’t use the app’s data, and one switch closes every public link at once.',
   },
   {
     q: 'Which AI models can it use?',
@@ -112,6 +205,10 @@ const faq = [
   {
     q: 'What happens to our apps if we stop using Bunker?',
     a: 'They are plain HTML, CSS and JavaScript files. Download any version and host it anywhere.',
+  },
+  {
+    q: 'What happens to someone’s apps when they leave?',
+    a: 'When an admin disables a person, Bunker asks who should get their sites and moves them in the same step, so nothing is orphaned. You can also archive apps nobody has opened for a while: owners get a heads-up a week before, and an editor can bring one back with one click.',
   },
 ];
 
@@ -154,6 +251,7 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
           <span>bunker</span>
         </a>
         <nav aria-label="Main">
+          <a href="#tour" class="hide-sm">Tour</a>
           <a href="#apps" class="hide-sm">Product</a>
           <a href="#agents" class="hide-sm">Agents</a>
           <a href="#security" class="hide-sm">Security</a>
@@ -193,52 +291,65 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
             </ul>
           </div>
 
-          <figure class="stage" aria-label="Animation: a spreadsheet is dropped into Bunker and becomes a live, shared app">
+          <figure class="stage">
             <div class="win">
-              <div class="win-bar">
-                <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-                <span class="addr"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/></svg> bunker.corp.com</span>
+              <div class="win-bar" aria-hidden="true">
+                <span class="lights"><i></i><i></i><i></i></span>
+                <span class="addr"><svg viewBox="0 0 16 16" width="11" height="11"><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/></svg> bunker.fernhill.example</span>
               </div>
-              <div class="win-body">
-                <aside class="side" aria-hidden="true">
-                  <b>My apps</b>
-                  <span class="s-item"><i style="--c:#4F7A63"></i>Holiday tracker</span>
-                  <span class="s-item"><i style="--c:#C2683F"></i>Lunch vote</span>
-                  <span class="s-item new"><i style="--c:#2F5543"></i>Q3 budget</span>
-                </aside>
-                <div class="canvas">
-                  <div class="drop" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="26" height="26"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 15V4m0 0L8 8m4-4 4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
-                    <span>Drop a file, folder or zip</span>
-                    <small>or describe what you need</small>
-                    <div class="bar"><i></i></div>
-                  </div>
-
-                  <div class="app" aria-hidden="true">
-                    <div class="app-head">
-                      <div>
-                        <p class="app-title">Q3 budget</p>
-                        <p class="app-url">/s/q3-budget <span class="live">● Live</span></p>
-                      </div>
-                      <span class="share-chip"><svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M5.5 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm5.5 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM1 13c0-2.2 2-3.5 4.5-3.5S10 10.8 10 13v1H1v-1zm10 1v-1c0-1.2-.4-2.2-1.1-3 .4-.1.7-.1 1.1-.1 2.2 0 4 1.2 4 3.1v1h-4z"/></svg>Finance · 14</span>
-                    </div>
-                    <div class="tbl">
-                      <div class="tr th"><span>Team</span><span>Plan</span><span>Actual</span></div>
-                      <div class="tr"><span>Sales</span><span>120k</span><span class="ok">112k</span></div>
-                      <div class="tr"><span>Ops</span><span>80k</span><span class="warn">86k</span></div>
-                      <div class="tr"><span>People</span><span>45k</span><span class="ok">41k</span></div>
-                      <div class="tr add"><span>+ Add row</span></div>
-                    </div>
-                  </div>
-                </div>
+              <div class="vid">
+                <video
+                  data-walk
+                  muted
+                  loop
+                  playsinline
+                  preload="none"
+                  width="1280"
+                  height="800"
+                  poster={u('shots/walkthrough-poster.webp')}
+                  aria-label="Screen recording: a folder is dropped on the Bunker home page, the site goes live, and it is shared with two colleagues."
+                >
+                  <source src={u('shots/walkthrough.webm')} type="video/webm" />
+                  <source src={u('shots/walkthrough.mp4')} type="video/mp4" />
+                </video>
+                <button class="vid-ctl" type="button" data-walk-toggle data-state="paused" hidden>
+                  <svg class="i-pause" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 3h3v10H4zm5 0h3v10H9z"/></svg>
+                  <svg class="i-play" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M5 3l8 5-8 5z"/></svg>
+                  <span data-walk-label>Play</span>
+                </button>
               </div>
             </div>
-            <div class="file" aria-hidden="true">
-              <span class="file-ic">XLSX</span>
-              <span>q3-budget.xlsx</span>
-            </div>
-            <div class="toast" aria-hidden="true">Link copied · Shared with Finance</div>
+            <figcaption class="stage-cap"><b>A real recording, not a mock-up:</b> drop a folder, it’s live, share it.</figcaption>
           </figure>
+        </div>
+      </section>
+
+      <!-- TOUR -->
+      <section id="tour" class="tour" aria-labelledby="tour-h">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="kicker">See it</p>
+            <h2 id="tour-h">This is what it looks like.</h2>
+            <p>Real screenshots of Bunker running the code on GitHub today, with a made-up company’s data. No mock-ups.</p>
+          </div>
+          <noscript><style>.tour-tabs { display: none; } .tour-panel[hidden] { display: block; margin-bottom: 48px; }</style></noscript>
+          <div class="tour-tabs" role="tablist" aria-label="Product screens" data-tabs>
+            {shots.map((s, i) => (
+              <button type="button" role="tab" id={`tab-${s.id}`} aria-controls={`panel-${s.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{s.tab}</button>
+            ))}
+          </div>
+          {shots.map((s, i) => (
+            <figure class="tour-panel" role="tabpanel" id={`panel-${s.id}`} aria-labelledby={`tab-${s.id}`} hidden={i !== 0}>
+              <div class={`shot${s.dark ? ' has-dark' : ''}`}>
+                <img class="s-light" src={u(`shots/${s.img}.webp`)} alt={s.alt} width="1600" height="1000" loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />
+                {s.dark && <img class="s-dark" src={u(`shots/${s.dark}.webp`)} alt={s.alt} width="1600" height="1000" loading="lazy" decoding="async" />}
+              </div>
+              <figcaption class="tour-cap">
+                <h3>{s.title}</h3>
+                <p>{s.text} {s.link && <a href={u(s.link[0])}>{s.link[1]} →</a>}</p>
+              </figcaption>
+            </figure>
+          ))}
         </div>
       </section>
 
@@ -312,6 +423,16 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
             <div><b>Every change is a version</b><span>restore any of them</span></div>
             <div><b>Drafts</b><span>preview before anyone sees it</span></div>
           </div>
+          <ul class="extras">
+            {extras.map((x) => (
+              <li>
+                <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d={x.icon} fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+                <h3>{x.t}</h3>
+                <p>{x.d}</p>
+                <a href={u(x.link[0])}>{x.link[1]} →</a>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -324,6 +445,7 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
             <p>Every button in Bunker is an API operation, and the CLI and MCP tools are generated from the same list. So whatever a person can do in the browser, an agent can do with that person’s permissions, and nothing more.</p>
             <ul class="checks">
               <li><b>MCP with just the URL.</b> Add <code>https://bunker.corp.com/mcp</code> to Claude, Cursor or ChatGPT. Sign-in happens through OAuth with your Bunker account.</li>
+              <li><b>Your apps, inside the chat.</b> With MCP Apps, Claude, VS Code Copilot and Microsoft 365 Copilot can open a Bunker app right in the conversation. It runs as you, in the same sandbox, through a short-lived link.</li>
               <li><b>A real CLI.</b> <code>bunker deploy</code>, <code>share</code>, <code>rollback</code>, <code>ai</code>, <code>api</code>. Uploads only what changed. One binary, same as the server.</li>
               <li><b>llms.txt.</b> Agents read <code>/llms.txt</code> and learn the SDK, the sandbox rules and every operation.</li>
               <li><b>Everything in the UI is in the API.</b> Listed live at <code>/api/v1/ops</code> and <code>/api/v1/openapi.json</code>.</li>
@@ -416,7 +538,12 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
               <p class="kicker">Small footprint</p>
               <h2>One binary. One folder. That’s the whole platform.</h2>
               <p>No Postgres, no Redis, no Kubernetes, no queue. Bunker is a pure-Go program with SQLite in WAL mode and a content-addressed file store. Files are compressed once at publish and served with ETags, so a small VM serves a big company.</p>
-              <p class="fine">Back up one folder. Upgrade by replacing one file.</p>
+              <ul class="ops">
+                <li><b>Backups in one command.</b> <code>bunker backup</code> takes a consistent snapshot while it runs; <code>bunker restore</code> puts it back.</li>
+                <li><b>Laptop-friendly.</b> The first start on a desktop opens the setup page in your browser.</li>
+                <li><b>Tidy over time.</b> Move someone’s sites when they leave, and archive apps nobody has opened for a while.</li>
+                <li><b>Upgrades</b> are one file. Migrations run on start.</li>
+              </ul>
             </div>
             <dl class="stats">
               <div><dt>Requests per second</dt><dd>~30k<small>on 4 cores</small></dd></div>
@@ -424,6 +551,7 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
               <div><dt>Moving parts</dt><dd>1<small>binary, no CGO</small></dd></div>
               <div><dt>State</dt><dd>1<small>folder to back up</small></dd></div>
               <div><dt>Built for</dt><dd>5,000<small>people per VM</small></dd></div>
+              <div><dt>Setup</dt><dd>~1 min<small>from first start to your admin account</small></dd></div>
             </dl>
           </div>
         </div>
@@ -542,6 +670,63 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
           }, 1600);
         });
       }
+      // Tour tabs: arrow keys, Home and End move between tabs.
+      const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-tabs] [role="tab"]')];
+      const pick = (t: HTMLButtonElement, focus = false) => {
+        for (const x of tabs) {
+          const on = x === t;
+          x.setAttribute('aria-selected', String(on));
+          x.tabIndex = on ? 0 : -1;
+          const panel = document.getElementById(x.getAttribute('aria-controls') || '');
+          if (panel) panel.hidden = !on;
+        }
+        if (focus) t.focus();
+        t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      };
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => pick(t));
+        t.addEventListener('keydown', (e) => {
+          const n = tabs.length;
+          const j = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i - 1 + n) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+          if (j < 0) return;
+          e.preventDefault();
+          pick(tabs[j], true);
+        });
+      });
+
+      // Hero recording: plays only without reduced motion, pauses off screen, and has a pause button.
+      const vid = document.querySelector<HTMLVideoElement>('[data-walk]');
+      const btn = document.querySelector<HTMLButtonElement>('[data-walk-toggle]');
+      if (vid && btn) {
+        const label = btn.querySelector('[data-walk-label]');
+        let wanted = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const sync = () => {
+          const playing = !vid.paused;
+          btn.dataset.state = playing ? 'playing' : 'paused';
+          if (label) label.textContent = playing ? 'Pause' : 'Play';
+          btn.setAttribute('aria-label', playing ? 'Pause the recording' : 'Play the recording');
+        };
+        const play = () => {
+          vid.preload = 'auto';
+          vid.play().catch(() => sync());
+        };
+        vid.addEventListener('play', sync);
+        vid.addEventListener('pause', sync);
+        btn.hidden = false;
+        sync();
+        btn.addEventListener('click', () => {
+          wanted = vid.paused;
+          if (wanted) play();
+          else vid.pause();
+        });
+        if ('IntersectionObserver' in window) {
+          new IntersectionObserver(([e]) => {
+            if (e.isIntersecting && wanted) play();
+            else if (!e.isIntersecting && !vid.paused) vid.pause();
+          }, { threshold: 0.25 }).observe(vid);
+        } else if (wanted) play();
+      }
+
       // Theme toggle (shared with the docs via Starlight's storage key).
       const root = document.documentElement;
       document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
