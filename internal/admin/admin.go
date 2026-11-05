@@ -32,6 +32,7 @@ func initAdmin(a *core.App) error {
 	})
 	registerStats(a)
 	registerPolicy(a)
+	registerVersion(a)
 	registerAudit(a)
 	registerBackup(a)
 	startSinks(a)

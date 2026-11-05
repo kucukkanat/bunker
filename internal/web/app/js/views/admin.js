@@ -44,7 +44,13 @@ async function overview(el, ctx) {
     [s.aiCalls ?? s.ai?.calls, 'AI requests this month'],
   ].filter(([v]) => v != null);
   const recent = (sites?.sites || []).slice(0, 5);
+  const upd = h('div');
+  maybe('/api/v1/admin/version').then((v) => {
+    if (!v?.updateAvailable || !ctx.alive()) return;
+    clear(upd, h('div.notice', { style: { marginBottom: '16px' } }, icon('sparkle', 18), h('div', h('b', 'Bunker ' + v.latest + ' is available. '), 'You have ' + v.current + '. ' + v.how + ' ', h('a', { href: v.url, target: '_blank', rel: 'noopener' }, 'What’s new'))));
+  }).catch(() => {});
   clear(el,
+    upd,
     h('div.stats', tiles.map(([v, l]) => h('div.stat', h('b', n(v)), h('span', l)))),
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '24px' } },
       h('div.card.pad', h('h3', 'Recently changed sites'), h('div', { style: { marginTop: '10px' } }, recent.length ? recent.map((x) => h('div.person', siteIcon(x, 'sm'), h('div.n', h('b', x.title), h('span', (x.owner?.name || '') + ' · ' + relTime(x.updatedAt))), h('a.btn.sm.ghost', { href: '/s/' + x.slug + '/', target: '_blank', rel: 'noopener' }, 'Open'))) : h('p.small.muted', 'No sites yet.'))),
