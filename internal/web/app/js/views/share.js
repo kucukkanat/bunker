@@ -100,7 +100,7 @@ export function openShare(ws, onChange) {
             toast(label + ' no longer has access.', { action: { label: 'Undo', run: async () => { const d2 = await post(sp(ws.slug, '/members'), { type: x.type, id: x.id, name: x.name, role: x.role }); members = d2.members; drawPeople(); } } });
           } }, icon('x', 16)));
       }),
-      !members.length && h('p.small.muted', { style: { padding: '6px 0' } }, 'Only you can open this site right now.'));
+      !members.length && h('p.small.muted', { style: { padding: '6px 0' } }, ws.site.public ? 'You haven’t added anyone, but anyone with the public link can view it.' : orgView ? 'You haven’t added anyone, but everyone in the organization can view it.' : 'Only you can open this site right now.'));
   }
 
   function drawOrg() {
@@ -109,10 +109,10 @@ export function openShare(ws, onChange) {
     const pubRow = (state.me?.policy?.publicLinks || pub) && h('div.org-row' + (pub ? '.public' : ''), { style: { marginTop: '10px' } },
       h('span.ic', icon(pub ? 'globe' : 'lock', 18)),
       h('div', { style: { flex: '1' } }, h('b', 'Anyone with the link (no sign-in)'),
-        h('div.small' + (pub ? '.warn-text' : '.muted'), !owner ? 'Only the owner can change this.' : pub ? 'Anyone on the internet who has the link can view this site. They can’t sign in or change data.' : 'For things you’d put on a public web page. Off by default.')),
+        h('div.small' + (pub ? '.warn-text' : '.muted'), !owner ? 'Only the owner can change this.' : pub ? 'Anyone on the internet who has the link can view this site. They see the page only: its data, files and AI need a Bunker account.' : 'For things you’d put on a public web page. Off by default.')),
       toggle({ checked: pub, disabled: !owner || (!pub && !state.me?.policy?.publicLinks), label: 'Anyone with the link can view, without signing in', onchange: async (v, el) => {
-        if (v && !(await confirmDialog({ title: 'Make “' + s.title + '” public?', message: 'Anyone on the internet who has the link can view this site, without signing in. They can’t sign in or change data. You can turn this off any time.', confirm: 'Make it public' }))) { el.checked = false; return; }
-        try { await patch(sp(ws.slug), { public: v }); ws.site.public = v; drawOrg(); toast(v ? 'Anyone with the link can view it now.' : 'The public link is off. Only people with access can open it.', { type: 'ok' }); }
+        if (v && !(await confirmDialog({ title: 'Make “' + s.title + '” public?', message: 'Anyone on the internet who has the link can view this site, without signing in. They see the page only: data people saved in it (entries, votes, files) stays private. You can turn this off any time.', confirm: 'Make it public' }))) { el.checked = false; return; }
+        try { await patch(sp(ws.slug), { public: v }); ws.site.public = v; drawOrg(); drawPeople(); toast(v ? 'Anyone with the link can view it now.' : 'The public link is off. Only people with access can open it.', { type: 'ok' }); }
         catch (e) { el.checked = !v; if (e.status === 403) toast('Your admin has turned off public links.', { type: 'error' }); }
       } }));
     clear(orgSlot, h('div.org-row',
@@ -120,7 +120,7 @@ export function openShare(ws, onChange) {
       h('div', { style: { flex: '1' } }, h('b', 'Everyone in the organization can view'),
         h('div.small.muted', owner ? (orgView ? 'Anyone who signs in to Bunker can open it.' : orgOff ? 'Your admin has turned off organization-wide sharing.' : 'Turn on for things like a team directory or handbook.') : 'Only the owner can change this.')),
       toggle({ checked: orgView, disabled: !owner || (!orgView && orgOff), label: 'Everyone in the organization can view', onchange: async (v, el) => {
-        try { await patch(sp(ws.slug), { orgView: v }); orgView = v; ws.site.orgView = v; drawOrg(); toast(v ? 'Everyone in your organization can view it now.' : 'Only people you’ve added can open it now.', { type: 'ok' }); }
+        try { await patch(sp(ws.slug), { orgView: v }); orgView = v; ws.site.orgView = v; drawOrg(); drawPeople(); toast(v ? 'Everyone in your organization can view it now.' : 'Only people you’ve added can open it now.', { type: 'ok' }); }
         catch { el.checked = !v; }
       } })), pubRow);
   }

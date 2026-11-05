@@ -18,7 +18,7 @@ import (
 
 type shellData struct {
 	Title, Slug, Src, Base, Role, Icon, User string
-	Draft, Badge                             bool
+	Draft, Badge, Guest                      bool
 	Version, Live, SiteID                    int64
 }
 
@@ -26,7 +26,7 @@ func (d shellData) values() map[string]any {
 	return map[string]any{
 		"Title": d.Title, "Slug": d.Slug, "Src": d.Src, "Base": d.Base, "Role": d.Role,
 		"Draft": d.Draft, "Version": d.Version, "Live": d.Live, "Icon": d.Icon,
-		"Badge": d.Badge, "User": d.User, "SiteID": d.SiteID, "Sandbox": SandboxFlags,
+		"Badge": d.Badge, "User": d.User, "SiteID": d.SiteID, "Sandbox": SandboxFlags, "Guest": d.Guest,
 	}
 }
 
@@ -48,7 +48,7 @@ var (
 )
 
 func compileShell() {
-	fields := []string{"Title", "Slug", "Src", "Base", "Role", "Icon", "User", "Draft", "Badge", "Version", "Live", "SiteID"}
+	fields := []string{"Title", "Slug", "Src", "Base", "Role", "Icon", "User", "Draft", "Badge", "Version", "Live", "SiteID", "Guest"}
 	vals := map[string]any{"Sandbox": SandboxFlags}
 	for i, f := range fields {
 		vals[f] = "zqx" + strconv.Itoa(i) + "qxz"
@@ -116,6 +116,8 @@ func renderShell(w io.Writer, d shellData) {
 			v = d.User
 		case "Draft":
 			v = strconv.FormatBool(d.Draft)
+		case "Guest":
+			v = strconv.FormatBool(d.Guest)
 		case "Badge":
 			v = strconv.FormatBool(d.Badge)
 		case "Version":

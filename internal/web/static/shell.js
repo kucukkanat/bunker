@@ -14,6 +14,11 @@
   var isDraft = cfg.draft === 'true';
   var role = cfg.role || 'viewer';
   var canEdit = role === 'editor' || role === 'owner' || role === 'admin';
+  // A visitor on a public link, not signed in: the page can be viewed, but
+  // its data, files and AI need an account, so answer those here instead of
+  // sending requests the server will refuse.
+  var guest = cfg.guest === 'true';
+  var GUEST_ME = { id: 0, name: 'Guest', email: '', groups: [], role: 'guest', canEdit: false, guest: true };
   var frameBase = frame.getAttribute('data-base') || '';
   var METHODS = { GET: 1, POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
   var CHANNEL = /^(deploy|(db|room|presence):[A-Za-z0-9][A-Za-z0-9_.-]{0,63})$/;
@@ -173,6 +178,12 @@
   async function handleApi(p, d, retried) {
     var id = d.id;
     var method = String(d.method || 'GET').toUpperCase();
+    if (guest) {
+      var path = String(d.path || '').split('?')[0];
+      if (method === 'GET' && path === '/me') return reply(p, { id: id, ok: true, status: 200, data: GUEST_ME });
+      if (method === 'GET' && path === '/kv') return reply(p, { id: id, ok: true, status: 200, data: { items: [], keys: [] } });
+      return reply(p, { id: id, ok: false, status: 401, error: { code: 'unauthorized', message: 'This is a public page: you can look, but saving or loading its data needs a Bunker account.' } });
+    }
     var url = apiURL(d.path);
     if (!METHODS[method] || !url) {
       return reply(p, { id: id, ok: false, status: 400, error: { code: 'forbidden', message: 'Pages can only call their own site\'s API.' } });
@@ -263,6 +274,7 @@
     esTimer = setTimeout(openES, 40);
   }
   function openES(force) {
+    if (guest) return; // live updates need an account
     var chans = Array.from(subs.keys()).filter(function (c) { return c !== 'deploy'; }).sort().slice(0, 31);
     chans.unshift('deploy'); // always on: powers the "new version" notice
     var key = chans.join(',');
@@ -426,10 +438,10 @@
     var links = [];
     if (canEdit) links.push(el('a', { href: '/sites/' + encodeURIComponent(SLUG), text: 'Edit app' }));
     if (canEdit) links.push(el('a', { href: '/sites/' + encodeURIComponent(SLUG) + '?share=1', text: 'Share' }));
-    links.push(el('a', { href: '/', text: 'Back to Bunker' }));
+    links.push(guest ? el('a', { href: '/auth/login', text: 'Sign in to Bunker' }) : el('a', { href: '/', text: 'Back to Bunker' }));
     var head = el('div', { class: 'bk-panel-head' }, [
       cfg.icon ? el('span', { class: 'bk-panel-icon', 'aria-hidden': 'true', text: cfg.icon }) : null,
-      el('div', {}, [el('strong', { text: cfg.title || SLUG }), el('small', { text: (isDraft ? 'Draft · ' : version ? 'Version ' + version + ' · ' : '') + (cfg.user ? 'Signed in as ' + cfg.user : '') })])
+      el('div', {}, [el('strong', { text: cfg.title || SLUG }), el('small', { text: (isDraft ? 'Draft · ' : version ? 'Version ' + version + ' · ' : '') + (guest ? 'Public page · not signed in' : cfg.user ? 'Signed in as ' + cfg.user : '') })])
     ]);
     var panel = el('div', { id: panelId, class: 'bk-panel', hidden: '' }, [head, el('nav', { 'aria-label': 'Bunker' }, links)]);
     var badge = el('div', { class: 'bk-badge' }, [panel, btn]);

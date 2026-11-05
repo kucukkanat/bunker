@@ -40,6 +40,7 @@ Every visitor must be signed in, unless the owner turns on a public link (below)
 For personal projects and things you want to show the world, an owner can make a site **public**: anyone with the link can open it, with no account and no sign-in. This is **off until an admin allows it** in *Admin → Sharing* (`publicLinks` in the [policy](/bunker/docs/admin/policy/)).
 
 - Visitors see the published version only. They can't sign in through the site, use its data, files, AI or notifications, and they can't see drafts or other sites.
+- For them `bunker.me()` returns `{ id: 0, name: "Guest", guest: true, canEdit: false }` and every other call fails with `unauthorized`, so check `me.guest` if your page should say "sign in to take part". The built-in templates show such a note and an empty page instead of other people's entries.
 - The page is still sandboxed exactly like for signed-in viewers.
 - Views are counted as an anonymous total per hour (no personal data).
 - Turn it off per site in the Share dialog, or for everyone at once by switching the policy off: every public link closes immediately.

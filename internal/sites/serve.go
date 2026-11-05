@@ -283,7 +283,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	renderShell(w, shellData{
 		Title: s.Title, Slug: s.Slug, Src: src, Base: base, Role: role.String(),
 		Draft: draft, Version: ver, Live: s.Version, Icon: s.Icon,
-		Badge: !s.Settings.HideBadge || role >= core.RoleEditor, User: u.Name, SiteID: s.ID,
+		Badge: !s.Settings.HideBadge || role >= core.RoleEditor, User: u.Name, SiteID: s.ID, Guest: u.ID == 0,
 	})
 }
 
@@ -296,7 +296,7 @@ var shellTmpl = template.Must(template.New("shell").Parse(`<!doctype html>
 <iframe id="bk-frame" title="{{.Title}}" src="{{.Src}}"
  sandbox="{{.Sandbox}}"
  allow="clipboard-write; fullscreen" data-base="{{.Base}}"></iframe>
-<div id="bk-shell" data-site="{{.Slug}}" data-site-id="{{.SiteID}}" data-role="{{.Role}}" data-version="{{.Version}}" data-live="{{.Live}}" data-draft="{{.Draft}}" data-badge="{{.Badge}}" data-title="{{.Title}}" data-icon="{{.Icon}}" data-user="{{.User}}"></div>
+<div id="bk-shell" data-site="{{.Slug}}" data-site-id="{{.SiteID}}" data-role="{{.Role}}" data-version="{{.Version}}" data-live="{{.Live}}" data-draft="{{.Draft}}" data-badge="{{.Badge}}" data-title="{{.Title}}" data-icon="{{.Icon}}" data-user="{{.User}}" data-guest="{{.Guest}}"></div>
 <script src="/_/shell.js"></script>
 </body></html>`))
 
