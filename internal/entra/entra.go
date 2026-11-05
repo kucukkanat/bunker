@@ -11,7 +11,6 @@ package entra
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -93,7 +92,7 @@ func authorize(r *http.Request, code string) error {
 	if loopback(r) {
 		return nil
 	}
-	if subtle.ConstantTimeCompare([]byte(strings.ToUpper(strings.TrimSpace(code))), []byte(strings.ToUpper(auth.SetupCode()))) != 1 {
+	if !auth.SetupCodeMatches(code) {
 		app.Audit(r.Context(), "setup.denied", 0, "entra.auto", nil)
 		return core.Forbidden("that setup code isn't right: check the server log")
 	}

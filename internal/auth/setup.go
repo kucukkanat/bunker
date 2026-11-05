@@ -26,6 +26,30 @@ func SetupCode() string {
 	return code
 }
 
+// SetupCodeMatches reports whether got is the setup code. Both sides are
+// compared uppercased with only letters and digits kept, so the dash the setup
+// form inserts and the casing don't matter, and codes set through
+// BUNKER_SETUP_CODE (often longer, from a platform's secret generator) work too.
+func SetupCodeMatches(got string) bool {
+	want := normalizeCode(SetupCode())
+	if want == "" { // a code made only of symbols: compare it as typed
+		return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(got)), []byte(SetupCode())) == 1
+	}
+	return subtle.ConstantTimeCompare([]byte(normalizeCode(got)), []byte(want)) == 1
+}
+
+func normalizeCode(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r - 'a' + 'A'
+		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		}
+		return -1
+	}, s)
+}
+
 func initSetup(a *core.App) {
 	if !a.Cfg.Dev && !Configured() {
 		code := SetupCode()
@@ -88,7 +112,7 @@ func initSetup(a *core.App) {
 				return nil, core.Forbidden("already configured; sign in as an admin to change it")
 			}
 			// On the machine itself (localhost) the code isn't needed.
-			if !isAdmin && !isLoopback(r) && subtle.ConstantTimeCompare([]byte(strings.ToUpper(strings.TrimSpace(in.Code))), []byte(strings.ToUpper(SetupCode()))) != 1 {
+			if !isAdmin && !isLoopback(r) && !SetupCodeMatches(in.Code) {
 				a.Audit(r.Context(), "setup.denied", 0, "", nil)
 				return nil, core.Forbidden("that setup code isn't right: check the server log")
 			}

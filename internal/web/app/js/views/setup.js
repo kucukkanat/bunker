@@ -43,8 +43,8 @@ const field = (label, input, hint) => {
   return h('label.field', h('span.label', label), input, hint && h('span.hint', { id: hid }, hint));
 };
 function codeField(ref) {
-  const inp = h('input.input.mono', { placeholder: 'XXXX-XXXX', maxlength: 9, autocomplete: 'off', spellcheck: 'false', required: true, 'aria-label': 'Setup code', style: { letterSpacing: '.12em', textTransform: 'uppercase', maxWidth: '220px' } });
-  inp.addEventListener('input', () => { let v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (v.length > 4) v = v.slice(0, 4) + '-' + v.slice(4, 8); inp.value = v; });
+  const inp = h('input.input.mono', { placeholder: 'XXXX-XXXX', maxlength: 128, autocomplete: 'off', spellcheck: 'false', required: true, 'aria-label': 'Setup code', style: { letterSpacing: '.12em', textTransform: 'uppercase', maxWidth: '360px' } });
+  inp.addEventListener('input', () => { let v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (v.length > 4 && v.length <= 8) v = v.slice(0, 4) + '-' + v.slice(4); inp.value = v; });
   ref.value = () => inp.value;
   return h('div.stack-sm', h('div.field', h('span.label', 'Setup code'), inp),
     h('div.notice', icon('info', 18), h('div', 'This proves you installed Bunker. Find it in the server log (look for “Bunker is ready to set up”) or in ', h('code', 'setup-code.txt'), ' in Bunker’s data folder. You won’t need it when you open this page on the server itself.')));
