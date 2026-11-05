@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Server functions
+- **A backend next to your pages.** Drop `api/<name>.js`, `.mjs` or `.ts` with an `export default` and call it from a page with `bunker.fn('<name>', input)`. Nested folders work (`api/orders/refund.ts` → `orders/refund`); files starting with `_` are shared modules. Relative imports and TypeScript are bundled at publish with the embedded esbuild; no npm, no build step.
+- **Sandboxed per call.** Each run gets a fresh QuickJS (quickjs-ng 0.17.0) instance compiled to WebAssembly, run by wazero in Bunker's own process. Pure Go, no containers. Defaults: 64 MB memory, 30 s per call, 120 s per trigger, 1 MB input and output, 1,000 host calls, 4 runs at once per app.
+- **The viewer's rights by default.** Functions use the same page-safe operations and collection rules as the page. `config.elevated: true` runs as the app's owner.
+- **Triggers:** `config.schedule` (cron, UTC), `config.onWrite` (after adds, sets, updates and deletes in listed collections), and inbound webhooks that target a function (its return value is the response).
+- **Secrets:** per-app, write-only, encrypted at rest, read with `bunker.secrets.get(NAME)`.
+- **Outbound `fetch`** under an admin policy: `internet` (public hosts only, private addresses refused; the default), `allowlist` or `off`.
+- **Dashboard:** a Functions tab with test runs against the draft or live code, the last 200 runs with logs, live logs and secrets. CLI: `bunker fn`, `bunker fn call`, `bunker fn logs`, `bunker secrets`. MCP tools for all of it.
+- **Admin:** Admin → Functions to turn them off, change limits and the outbound policy, and block a person (every app they own) or one app, with a reason the person sees. `BUNKER_FUNCTIONS_*` variables pin these settings. New audit events `functions.*`.
+
+### Changed
+- **`api/*.js`, `api/*.mjs` and `api/*.ts` files with `export default` are now server functions and are no longer served to browsers** (they return 404), and neither is anything under `api/_*`. Other files in `api/`, such as `api/data.json`, are served as before. If an app loaded such a file as a browser script, move it out of `api/`.
+
 ## v0.1.0 (2026-11-05): first release
 
 Your own private app cloud: drop a file or describe an app, get a private, shareable, sandboxed web app. One Go binary, one data folder.

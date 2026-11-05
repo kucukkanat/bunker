@@ -114,6 +114,21 @@ Admins can also change sharing, sizes, apps per person and allowed groups at run
 | `BUNKER_AI_MAX_REQUEST_TOKENS` | `16000` | Largest page request |
 | `BUNKER_AI_LOG_CONTENT` | `false` | Keep prompts and answers in the audit log |
 
+## Server functions
+
+See [Server functions](/bunker/docs/admin/server-functions/). All of these can also be set in *Admin → Functions*; a variable here pins the value.
+
+| Variable | Default | |
+|---|---|---|
+| `BUNKER_FUNCTIONS_ENABLED` | `true` | `false` turns server functions off for everyone. Apps still load |
+| `BUNKER_FUNCTIONS_MEMORY_MB` | `64` | Memory per run |
+| `BUNKER_FUNCTIONS_TIMEOUT_MS` | `30000` | Time per call |
+| `BUNKER_FUNCTIONS_TRIGGER_TIMEOUT_MS` | `120000` | Time per schedule, write trigger or webhook run |
+| `BUNKER_FUNCTIONS_SITE_CONCURRENCY` | `4` | Runs at once per app |
+| `BUNKER_FUNCTIONS_GLOBAL_CONCURRENCY` | `max(4, 2 × CPUs)` | Runs at once on the server |
+| `BUNKER_FUNCTIONS_OUTBOUND` | `internet` | `internet` (public hosts only), `allowlist` or `off` |
+| `BUNKER_FUNCTIONS_ALLOWLIST` | | Hosts for `allowlist`, comma separated (`api.stripe.com,*.example.com`) |
+
 ## Microsoft 365
 
 See [Microsoft 365 data](/bunker/docs/admin/m365/). All of these can also be set in *Admin → Microsoft 365*.

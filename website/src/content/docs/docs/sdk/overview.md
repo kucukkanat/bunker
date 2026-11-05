@@ -44,6 +44,8 @@ Apps run in a sandbox with no cookies, no network and no keys. **`window.bunker`
 | [`bunker.m365`](/bunker/docs/sdk/m365/) | SharePoint lists, Excel ranges, OneDrive files and Graph reads, as the viewer |
 | [`bunker.connections`](/bunker/docs/sdk/connections/) | Admin-defined company APIs, keys kept on the server |
 | [`notify`, `toast`, `download`, `open`](/bunker/docs/sdk/ui/) | Notifications and small helpers |
+| [`bunker.fn()`](/bunker/docs/sdk/server/#calling-a-function-from-a-page-bunkerfn) | Call one of the app's [server functions](/bunker/docs/build/server-functions/) |
+| [Server SDK](/bunker/docs/sdk/server/) | The `bunker` object inside server functions: the same calls plus secrets and `fetch` |
 | [Sandbox limits](/bunker/docs/sdk/limits/) | What pages can't do, and what to do instead |
 
 `bunker.site` holds `{ slug, id, title, role, version, draft, icon }` for the current app.
@@ -60,6 +62,7 @@ Every method returns a Promise. Failures throw a `BunkerError` (also `window.Bun
 | `quota_exceeded` | A daily or rate limit was hit |
 | `consent_required` | Microsoft 365 needs the viewer's consent |
 | `unavailable` | The feature isn't set up (for example no AI provider), or the page was opened outside Bunker |
+| `functions_off`, `busy`, `timeout`, `function_error` | From [`bunker.fn`](/bunker/docs/build/server-functions/#errors) |
 
 ```js
 try { await orders.add(data); }
@@ -74,8 +77,10 @@ When the page loads, the SDK asks the Bunker shell around it for a private `Mess
 - forwards calls only to the app's own API (`/api/v1/sites/<app>/...`),
 - adds the viewer's session, the CSRF header and `X-Bunker-Page: 1`.
 
-Bunker only lets **page-safe** operations through that bridge: data, files, storage, AI, Microsoft 365, rooms, events, notify, connections and `me`. A page can never deploy, share, change data rules or settings, or touch another app, even if its code tries.
+Bunker only lets **page-safe** operations through that bridge: data, files, storage, AI, Microsoft 365, rooms, events, notify, connections, function calls and `me`. A page can never deploy, share, change data rules or settings, or touch another app, even if its code tries.
 
 Live updates (database changes, rooms, presence, new versions) arrive over **one** server-sent events stream per tab, owned by the shell.
+
+[Server functions](/bunker/docs/build/server-functions/) use the same page-safe operations from the server, with the caller's rights unless the function is marked elevated.
 
 Every SDK call is an ordinary operation in `GET /api/v1/ops` marked `pageSafe`, so scripts and the [CLI](/bunker/docs/cli/reference/) can call the same endpoints with a token.

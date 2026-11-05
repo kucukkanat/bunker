@@ -31,6 +31,7 @@ Indexed by time, app, actor and event, so filtering stays fast on big logs.
 | AI | `ai.call` (person, app, model, tokens; prompts only if `logContent` is on), `ai.create`, `builder.reset` |
 | Tokens and agents | `token.create`, `token.revoke`, `oauth.authorize`, `oauth.refresh_reuse` (a reused refresh token: the whole token family is revoked) |
 | Microsoft 365 | `m365.call` (person, app, Graph path, status, time) |
+| Server functions | `functions.deployed` (names, elevated, schedules, write triggers), `functions.secret.set`, `functions.secret.delete`, `functions.settings`, `functions.block`, `functions.unblock`, `functions.outbound.refused`. See [Server functions](/bunker/docs/admin/server-functions/#audit-events) |
 | Connections | `connection.call` (person, app, connection, method, path, status, bytes, time), `connection.rate_limited` |
 | Setup | `setup.entra.start`, `setup.entra.failed` |
 | Operations | `admin.audit.export`, `admin.backup`, `admin.backup.failed` |

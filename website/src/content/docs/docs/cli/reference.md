@@ -52,6 +52,19 @@ bunker deploy --draft
 
 `[site]` can be left out inside a folder that has a `bunker.json`.
 
+### Server functions
+
+See [Server functions](/bunker/docs/build/server-functions/#cli). All take `--site/-s`, or use the folder's `bunker.json`.
+
+| Command | |
+|---|---|
+| `bunker fn [ls]` | List the app's functions with their triggers, elevated flag and any bundling error |
+| `bunker fn call <name> [json\|@file\|-]` | Call a function and print what it returns. `--draft` runs the draft code |
+| `bunker fn logs [name]` | Recent runs with status, time, trigger and logs. `--follow/-f` streams live logs; `--limit n` |
+| `bunker secrets [ls]` | List the app's secret names (values can't be read back) |
+| `bunker secrets set <NAME> [value]` | Store or replace a secret. Without a value it's read from the terminal or stdin, so it stays out of your shell history |
+| `bunker secrets rm <NAME>` | Delete a secret |
+
 ### Agents and automation
 
 | Command | |
@@ -101,6 +114,7 @@ bunker api files.write --site team-lunch --path about.html --content @about.html
 bunker api sites.update team-lunch --data '{"settings":{"spa":true}}'
 bunker api db.rule --site team-lunch --coll orders --rule private
 bunker api drafts.publish --site team-lunch
+bunker api fn.call --site team-lunch --name hello --data '{"input":{"color":"green"}}'
 ```
 
 Numbers and booleans are converted using the parameter's type. `@file` reads a file, `@-` reads stdin, and for upload parameters `@folder` sends a whole folder.
