@@ -34,7 +34,7 @@ function passwordCard() {
       toast('Password changed. Use the new one next time you sign in.', { type: 'ok' });
     });
   } },
-    h('h3', 'Password'),
+    h('h2.h3', 'Password'),
     h('p.small.muted', 'For signing in with your email. If you use your company account, you don’t need one.'),
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' } },
       f('Current password', cur), f('New password', nw, 'At least 10 characters.'), f('New password again', nw2)),
@@ -47,7 +47,7 @@ function profile(el) {
   const mailSlot = h('div');
   maybe('/api/v1/me/email-notifications').then((m) => {
     if (!m?.available) return;
-    mailSlot.replaceWith(h('div.card.pad', { style: { marginTop: '16px' } }, h('h3', 'Email'),
+    mailSlot.replaceWith(h('div.card.pad', { style: { marginTop: '16px' } }, h('h2.h3', 'Email'),
       h('div.setting', h('div', h('b', 'Email me notifications'), h('span.d', 'Shares, access requests and messages from apps also arrive at ' + me.email + '.')),
         toggle({ checked: !!m.enabled, label: 'Email me notifications', onchange: async (x, t) => {
           try { await put('/api/v1/me/email-notifications', { enabled: x }, { quiet: true }); toast(x ? 'You’ll get notifications by email.' : 'No more notification emails.', { type: 'ok', timeout: 2500 }); }
@@ -60,13 +60,13 @@ function profile(el) {
       h('div', h('h2', me.name || me.email), h('p.muted', me.email), h('div.row.wrap', { style: { marginTop: '8px' } },
         me.isAdmin && h('span.badge.ok', icon('shield', 12), 'Admin'), me.dev && h('span.pill-dev', 'Dev mode'))))),
     h('div.card.pad', { style: { marginTop: '16px' } },
-      h('h3', 'Groups'),
+      h('h2.h3', 'Groups'),
       h('p.small.muted', { style: { margin: '4px 0 12px' } }, 'Sites shared with these groups show up for you automatically. Groups come from your company sign-in.'),
       me.groups.length ? h('div.chips', me.groups.map((g) => h('span.chip', icon('users', 14), g.name || g.id))) : h('p.small.faint', 'You’re not in any groups yet.')),
     pwSlot,
     mailSlot,
     h('div.card.pad', { style: { marginTop: '16px' } },
-      h('h3', 'Sign out'),
+      h('h2.h3', 'Sign out'),
       h('div.setting', h('div', h('b', 'This browser'), h('span.d', 'You’ll need to sign in again here.')), h('button.btn', { onclick: () => signOut() }, icon('logout', 16), 'Sign out')),
       h('div.setting', h('div', h('b', 'Everywhere'), h('span.d', 'Signs you out on every computer and phone. Access tokens keep working until you revoke them.')),
         h('button.btn.danger', { onclick: async () => { if (await confirmDialog({ title: 'Sign out everywhere?', message: 'Every browser where you’re signed in will need to sign in again, including this one.', confirm: 'Sign out everywhere', danger: true })) signOut(true); } }, 'Sign out everywhere'))));
@@ -94,11 +94,11 @@ async function tokens(el, ctx) {
         load();
       });
     } },
-      h('h3', 'New token'),
+      h('h2.h3', 'New token'),
       h('div.row.wrap', { style: { alignItems: 'flex-start' } }, h('div', { style: { flex: '1 1 240px' } }, name), days),
       h('div', scopeBox('read', 'See', 'Read your sites and their files.'), scopeBox('write', 'Change', 'Create, edit and publish sites.'), state.me.isAdmin && scopeBox('admin', 'Administer', 'Change Bunker’s settings. Only for admin scripts.')),
       h('div.row', h('span.spacer'), create), once),
-    h('h3', { style: { margin: '28px 0 12px' } }, 'Your tokens'),
+    h('h2.h3', { style: { margin: '28px 0 12px' } }, 'Your tokens'),
     listEl);
   async function load() {
     const d = await get('/api/v1/tokens').catch(() => null);
@@ -131,7 +131,7 @@ Rules for pages:
 - To save data, use the built-in SDK (window.bunker): bunker.db.collection('name').add({...}), .list(), .subscribe(cb); bunker.me() for the viewer's name and email; bunker.files for uploads; bunker.ai.chat() for AI.
 - Every publish creates a version, so it's safe to iterate. Save drafts first and show me the preview link.
 Full guide: ${o}/llms.txt`;
-  const card = (ic, title, text, ...kids) => h('div.card.pad.stack', { style: { marginBottom: '16px' } }, h('div.row', h('span.site-icon.sm', icon(ic, 16)), h('h3', title)), text && h('p.muted.small', text), kids);
+  const card = (ic, title, text, ...kids) => h('div.card.pad.stack', { style: { marginBottom: '16px' } }, h('div.row', h('span.site-icon.sm', icon(ic, 16)), h('h2.h3', title)), text && h('p.muted.small', text), kids);
   clear(el,
     card('terminal', 'Command line', 'Deploy a folder from your computer. The first command opens your browser so you can approve the sign-in.',
       codeBlock(`bunker login ${o}\nbunker deploy ./my-site`)),

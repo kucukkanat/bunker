@@ -53,8 +53,8 @@ async function overview(el, ctx) {
     upd,
     h('div.stats', tiles.map(([v, l]) => h('div.stat', h('b', n(v)), h('span', l)))),
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '24px' } },
-      h('div.card.pad', h('h3', 'Recently changed sites'), h('div', { style: { marginTop: '10px' } }, recent.length ? recent.map((x) => h('div.person', siteIcon(x, 'sm'), h('div.n', h('b', x.title), h('span', (x.owner?.name || '') + ' · ' + relTime(x.updatedAt))), h('a.btn.sm.ghost', { href: '/s/' + x.slug + '/', target: '_blank', rel: 'noopener' }, 'Open'))) : h('p.small.muted', 'No sites yet.'))),
-      h('div.card.pad', h('h3', 'Quick links'), h('div.stack-sm', { style: { marginTop: '10px' } },
+      h('div.card.pad', h('h2.h3', 'Recently changed sites'), h('div', { style: { marginTop: '10px' } }, recent.length ? recent.map((x) => h('div.person', siteIcon(x, 'sm'), h('div.n', h('b', x.title), h('span', (x.owner?.name || '') + ' · ' + relTime(x.updatedAt))), h('a.btn.sm.ghost', { href: '/s/' + x.slug + '/', target: '_blank', rel: 'noopener' }, 'Open'))) : h('p.small.muted', 'No sites yet.'))),
+      h('div.card.pad', h('h2.h3', 'Quick links'), h('div.stack-sm', { style: { marginTop: '10px' } },
         [['sign-in', 'key', 'Change how people sign in'], ['ai', 'sparkle', 'Set up the AI builder'], ['people', 'users', 'Manage admins and accounts'], ['audit', 'history', 'Review the audit log']].map(([id, ic, l]) =>
           h('a.row', { href: '/admin/' + id, style: { textDecoration: 'none', padding: '6px 0' } }, icon(ic, 16), l))))));
 }
@@ -97,7 +97,7 @@ async function people(el, ctx) {
     if (!methods?.local) return;
     const d = await maybe('/api/v1/admin/invites').catch(() => null);
     const inv = (d?.invites || []).filter((x) => x.kind !== 'reset');
-    clear(invitesEl, inv.length > 0 && h('div', { style: { marginBottom: '20px' } }, h('h3', { style: { marginBottom: '8px' } }, 'Waiting to join'),
+    clear(invitesEl, inv.length > 0 && h('div', { style: { marginBottom: '20px' } }, h('h2.h3', { style: { marginBottom: '8px' } }, 'Waiting to join'),
       h('div.list', inv.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('mail', 16)),
         h('div.n', h('b', x.name || x.email), h('span', x.email + ' · invited ' + relTime(x.createdAt) + ' · link works for ' + plural(Math.max(1, Math.round((x.expiresAt - Date.now() / 1000) / 86400)), 'more day'))),
         x.isAdmin && h('span.badge.ok', 'Admin'),
@@ -210,7 +210,7 @@ async function signin(el, ctx) {
       st.secretExpires && [h('dt', 'Client secret valid until'), h('dd', expiry(st.secretExpires))]),
     local,
     h('hr.divider'),
-    h('h3', sso ? 'Change company sign-in' : 'Set up company sign-in'),
+    h('h2.h3', sso ? 'Change company sign-in' : 'Set up company sign-in'),
     h('p.small.muted', 'Let people use their Microsoft, Google or other work account. Bunker tests the settings before saving, so a typo won’t lock anyone out.'),
     h('label.field', h('span.label', 'Provider'), pick),
     formSlot));
@@ -342,7 +342,7 @@ async function ai(el, ctx) {
     pinned.size > 0 && h('p.small.muted', 'Some settings are fixed by the server’s environment and can’t be changed here: ' + [...pinned].join(', ') + '.'),
     fieldWrap('Provider', sel), fKey, fEndpoint, fVersion, models, limits,
     h('div.row.wrap', test, h('span.spacer'), save), result),
-    h('div.card.pad', { style: { marginTop: '16px' } }, h('h3', 'Usage in the last 30 days'), usageEl));
+    h('div.card.pad', { style: { marginTop: '16px' } }, h('h2.h3', 'Usage in the last 30 days'), usageEl));
   shape();
   const u = await maybe('/api/v1/admin/ai/usage?days=30').catch(() => null);
   if (!ctx.alive()) return;
@@ -393,7 +393,7 @@ async function connections(el, ctx) {
         toast('Connection added.', { type: 'ok' });
         connections(el, ctx);
       });
-    } }, h('h3', 'New connection'),
+    } }, h('h2.h3', 'New connection'),
       h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' } },
         h('label.field', h('span.label', 'Name'), name), h('label.field', h('span.label', 'Base URL'), base), h('label.field', h('span.label', 'Secret header (optional)'), hdr), h('label.field', h('span.label', 'Description'), desc)),
       h('div.row', h('span.spacer'), add)));

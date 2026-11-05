@@ -79,7 +79,7 @@ export function openShare(ws, onChange) {
 
   function drawPeople() {
     const me = state.me;
-    clear(people, h('h3', 'People with access'),
+    clear(people, h('h2.h3', 'People with access'),
       ownerP && h('div.person', avatar(ownerP.name || ownerP.email), h('div.n', h('b', ownerP.name + (ownerP.id === me.id && !/\byou\b/i.test(ownerP.name) ? ' (you)' : '')), h('span', ownerP.email)), h('span.badge.ok', 'Owner')),
       members.map((x) => {
         const label = x.name || x.id;
@@ -129,7 +129,7 @@ export function openShare(ws, onChange) {
     const d = await maybe(sp(ws.slug, '/access-requests')).catch(() => null);
     const list = d?.requests || [];
     if (!list.length) return clear(reqs);
-    clear(reqs, h('div.people', { style: { marginTop: 0, marginBottom: '16px' } }, h('h3', list.length === 1 ? '1 person is asking for access' : list.length + ' people are asking for access'),
+    clear(reqs, h('div.people', { style: { marginTop: 0, marginBottom: '16px' } }, h('h2.h3', list.length === 1 ? '1 person is asking for access' : list.length + ' people are asking for access'),
       list.map((r) => {
         const role = h('select.mini', { 'aria-label': 'Access for ' + (r.name || r.email) }, h('option', { value: 'viewer', selected: r.role !== 'editor' }, 'Can view'), h('option', { value: 'editor', selected: r.role === 'editor' }, 'Can edit'));
         const decide = async (approve, btn) => busy(btn, async () => {

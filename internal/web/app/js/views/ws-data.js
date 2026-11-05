@@ -156,7 +156,7 @@ async function hooks(el, ws, reload = () => hooks(el, ws)) {
   if (!ws.alive() || !d) return null;
   const items = d.hooks || [];
   const add = h('button.btn.sm', { onclick: () => create(ws, reload) }, icon('plus', 14), 'New webhook');
-  clear(el, h('div.row', h('h3', 'Webhooks'), h('span.spacer'), add),
+  clear(el, h('div.row', h('h2.h3', 'Webhooks'), h('span.spacer'), add),
     h('p.small.muted', 'Send data in from Power Automate, Zapier or a script. Each webhook adds what it receives to a collection.'),
     items.length > 0 && h('div.list', items.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('plug', 16)),
       h('div.n', h('b', x.name), h('span', 'Into “' + x.collection + '” · ' + (x.calls ? plural(x.calls, 'call') + ', last ' + relTime(x.lastUsedAt) : 'not used yet') + ' · ' + x.prefix + '…')),

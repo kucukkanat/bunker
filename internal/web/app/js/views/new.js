@@ -51,7 +51,7 @@ export async function useTemplate(tpl, btn) {
 export function templateCard(t, i) {
   const btn = h('button.btn.primary.sm', { onclick: () => useTemplate(t, btn) }, 'Use this template');
   return h('div.tpl-card', { style: { animationDelay: i * 40 + 'ms' } },
-    h('div.row', siteIcon(t), h('div', { style: { minWidth: 0 } }, h('h3', t.title), h('div.faint.tiny', 'by ' + (t.owner?.name || 'a coworker')))),
+    h('div.row', siteIcon(t), h('div', { style: { minWidth: 0 } }, h('h2.h3', t.title), h('div.faint.tiny', 'by ' + (t.owner?.name || 'a coworker')))),
     h('p.desc', t.description || 'A starting point you can change however you like.'),
     h('div.row', btn, t.version > 0 && h('a.btn.ghost.sm', { href: '/s/' + t.slug + '/', target: '_blank', rel: 'noopener' }, icon('eye', 16), 'Preview')));
 }

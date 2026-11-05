@@ -38,7 +38,7 @@ export default async function build(panel, ws) {
     return el;
   };
   const intro = () => h('div.chat-intro',
-    h('h3', 'What should we change?'),
+    h('h2.h3', 'What should we change?'),
     h('p.muted.small', 'Tell the builder what you want in plain words. It edits the draft and the preview updates on the right. You can always go back to an earlier version.'));
 
   // Render an event stream into the log.

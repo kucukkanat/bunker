@@ -327,7 +327,7 @@ export async function busy(btn, fn) {
 }
 
 export function empty({ title, text, actions, art = true, iconName }) {
-  return h('div.empty', art && (iconName ? h('div.art', icon(iconName, 40)) : archArt(76)), h('h3', title), text && h('p', text), actions && h('div.row.wrap', actions));
+  return h('div.empty', art && (iconName ? h('div.art', icon(iconName, 40)) : archArt(76)), h('h2.h3', title), text && h('p', text), actions && h('div.row.wrap', actions));
 }
 export function skeletons(n = 4, cls = '') { return Array.from({ length: n }, (_, i) => h('div.skel' + cls, { style: { animationDelay: i * 80 + 'ms' } })); }
 

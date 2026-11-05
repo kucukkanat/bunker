@@ -651,3 +651,8 @@ details > summary { list-style-position: inside; }
 @media (max-width: 1100px) { .hero.ai-off { grid-template-columns: 1fr; } }
 [tabindex="-1"]:focus { outline: none; }
 .dialog .code { white-space: pre-wrap; word-break: break-all; }
+
+/* Section headings styled as h3 but ranked h2 (heading order). */
+h2.h3 { font-size: 1.08rem; }
+.empty h2.h3 { font-size: 1.15rem; }
+.hooks h2.h3 { font-size: 1rem; }
