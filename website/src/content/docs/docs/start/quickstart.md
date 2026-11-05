@@ -39,7 +39,7 @@ curl -X POST http://localhost:8080/api/v1/setup -H 'Content-Type: application/js
 :::tip[Just kicking the tyres?]
 `bunker dev` skips sign-in entirely: everyone who opens it is a local admin. Use it on your own laptop only.
 
-**Just want to look around?** `bunker demo` is `bunker dev` pre-filled with example apps (a live kanban board, requests with approvals, a poll, a spreadsheet turned into a table app, a Markdown handbook), four teammates and their data. It keeps its data in `./bunker-demo-data`, separate from a real install.
+**Just want to look around?** `bunker demo` is `bunker dev` pre-filled with example apps (a live kanban board, requests with approvals, a poll, a spreadsheet turned into a table app, a Markdown handbook, a lunch order page and a kudos wall a teammate shared with you), four teammates and their data. Sign in as a teammate with `/auth/dev?as=maya@example.com` to see it from their side. It keeps its data in `./bunker-demo-data`, separate from a real install.
 :::
 
 ## 3. Make something
