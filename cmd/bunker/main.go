@@ -9,12 +9,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/kucukkanat/bunker/internal/cli"
 	"github.com/kucukkanat/bunker/internal/core"
 	"github.com/kucukkanat/bunker/internal/server"
 )
 
-// Client is the CLI entry point, installed by internal/cli via modules.go.
-var Client func(args []string) int
+// Client is the CLI entry point (internal/cli).
+var Client func(args []string) int = cli.Run
 
 func main() {
 	args := os.Args[1:]
