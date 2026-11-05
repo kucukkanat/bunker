@@ -33,7 +33,20 @@ curl -X POST https://bunker.example.com/api/v1/sites/q3-budget/members \
 
 The owner can turn on **Everyone can view** (`orgView: true` in `sites.update`). Everyone who can sign in to your Bunker can then open it. Admins can turn this option off for the whole server (`sharing.org_wide = false`).
 
-There is no public link. Every visitor must be signed in.
+Every visitor must be signed in, unless the owner turns on a public link (below).
+
+## Public links (anyone with the link)
+
+For personal projects and things you want to show the world, an owner can make a site **public**: anyone with the link can open it, with no account and no sign-in. This is **off until an admin allows it** in *Admin → Sharing* (`publicLinks` in the [policy](/bunker/docs/admin/policy/)).
+
+- Visitors see the published version only. They can't sign in through the site, use its data, files, AI or notifications, and they can't see drafts or other sites.
+- The page is still sandboxed exactly like for signed-in viewers.
+- Views are counted as an anonymous total per hour (no personal data).
+- Turn it off per site in the Share dialog, or for everyone at once by switching the policy off: every public link closes immediately.
+
+```sh
+bunker api sites.update portfolio --public true
+```
 
 ## Access requests
 

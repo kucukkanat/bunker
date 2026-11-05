@@ -19,6 +19,7 @@ bunker api admin.policy.update --data '{"orgWideSharing": false, "siteMaxMB": 25
 |---|---|---|
 | `orgWideSharing` | `sharing.org_wide` | `true` / `false` |
 | `editorsCanShare` | `sharing.editors_can_share` | `true` / `false` |
+| `publicLinks` | `sharing.public_links` | `false` (default) / `true`: owners may make sites viewable by anyone with the link, without signing in. Turning it off closes every public link. |
 | `maxSitesPerUser` | `max_sites_per_user` | 0 to 100,000 (`0` = no limit) |
 | `siteMaxMB` | `site_max_mb` | 1 to 10,240 |
 | `uploadMaxMB` | `upload_max_mb` | 1 to 10,240 |
