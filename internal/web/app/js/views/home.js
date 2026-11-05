@@ -75,7 +75,11 @@ export default async function home(root, ctx) {
   aiStatus().then((s) => {
     if (!ctx.alive() || aiReady(s)) return;
     aiNote.classList.remove('hidden');
-    aiNote.replaceChildren(icon('info', 16), s === null ? 'The AI builder is coming soon. Upload files or start from a template meanwhile.' : 'The AI builder isn’t switched on yet. Ask your Bunker admin to turn it on.');
+    if (state.me?.isAdmin && s !== null) {
+      aiNote.replaceChildren(icon('info', 16), h('span', 'The AI builder needs an API key. ', h('a', { href: '/admin/ai' }, 'Set it up in Admin → AI'), ' (Claude, OpenAI, Azure or a local model).'));
+    } else {
+      aiNote.replaceChildren(icon('info', 16), s === null ? 'The AI builder is coming soon. Upload files or start from a template meanwhile.' : 'The AI builder isn’t switched on yet. Ask your Bunker admin to turn it on.');
+    }
     buildBtn.disabled = true;
     describeCard.parentNode?.classList.add('ai-off');
   });

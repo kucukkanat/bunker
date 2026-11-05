@@ -92,7 +92,7 @@ export default async function newSite(root, ctx) {
   aiStatus().then((s) => {
     if (aiReady(s) || !ctx.alive()) return;
     aiNote.classList.remove('hidden');
-    aiNote.textContent = s === null ? 'The AI builder is coming soon.' : 'The AI builder isn’t switched on yet. Ask your Bunker admin.';
+    aiNote.textContent = s === null ? 'The AI builder is coming soon.' : (state.me?.isAdmin ? 'The AI builder needs an API key: add one in Admin → AI.' : 'The AI builder isn’t switched on yet. Ask your Bunker admin.');
     go.disabled = true;
   });
   const d = await get('/api/v1/sites?filter=templates').catch(() => ({ sites: [] }));
