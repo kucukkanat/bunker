@@ -140,7 +140,7 @@ func registerOps(a *core.App) {
 					return nil, core.BadRequest("title must be 1–120 characters")
 				}
 			}
-			if in.OrgView != nil && *in.OrgView && a.Setting("sharing.org_wide") == "false" {
+			if in.OrgView != nil && *in.OrgView && !a.OrgWideSharing() {
 				return nil, core.Forbidden("your admin has turned off organization-wide sharing")
 			}
 			if in.Public != nil && *in.Public && !PublicLinksAllowed() {
@@ -173,7 +173,7 @@ func registerOps(a *core.App) {
 				if role < core.RoleOwner {
 					return nil, core.Forbidden("only the owner can change who can view")
 				}
-				if *in.OrgView && a.Setting("sharing.org_wide") == "false" {
+				if *in.OrgView && !a.OrgWideSharing() {
 					return nil, core.Forbidden("your admin has turned off organization-wide sharing")
 				}
 				a.DB.ExecContext(ctx, `UPDATE sites SET org_view=? WHERE id=?`, b2i(*in.OrgView), s.ID)

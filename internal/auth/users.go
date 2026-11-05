@@ -26,7 +26,7 @@ func registerUsers(a *core.App) {
 		Fn: func(r *http.Request) (any, error) {
 			u := core.MustUser(r)
 			return map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "isAdmin": u.IsAdmin, "groups": nonNil(u.Groups), "dev": a.Cfg.Dev, "viaToken": u.ViaToken,
-				"policy": map[string]any{"publicLinks": a.Setting("sharing.public_links") == "true", "orgWideSharing": a.Setting("sharing.org_wide") != "false"}}, nil
+				"policy": map[string]any{"publicLinks": a.Setting("sharing.public_links") == "true", "orgWideSharing": a.OrgWideSharing()}}, nil
 		}})
 	a.Handle(core.Op{Name: "me.logout_everywhere", Method: "POST", Path: "/api/v1/me/logout-everywhere", Summary: "Sign out of every browser session", Destructive: true,
 		Fn: func(r *http.Request) (any, error) {
