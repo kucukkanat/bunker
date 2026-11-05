@@ -63,6 +63,9 @@ type deployResult struct {
 	Created  bool   `json:"created,omitempty"`
 	Server   string `json:"server"`
 	Ms       int64  `json:"ms"`
+	// Functions are the server functions (api/*.js) the server found,
+	// when it reports them. Older servers don't.
+	Functions []fnInfo `json:"functions,omitempty"`
 }
 
 func cmdDeploy(x *App, a *Args) error {
@@ -230,7 +233,8 @@ func cmdDeploy(x *App, a *Args) error {
 		var out struct {
 			Version int64  `json:"version"`
 			URL     string `json:"url"`
-			Draft   bool   `json:"draft"`
+			Draft     bool     `json:"draft"`
+			Functions []fnInfo `json:"functions"`
 		}
 		body := map[string]any{"files": m, "message": a.Str("message"), "publish": !a.Bool("draft"), "source": "cli"}
 		if err := c.Call(ctx, "POST", "/api/v1/sites/"+pathEsc(site)+"/commit", nil, body, &out); err != nil {
@@ -244,7 +248,7 @@ func cmdDeploy(x *App, a *Args) error {
 			}
 			return err
 		}
-		res.Version, res.Draft = out.Version, out.Draft
+		res.Version, res.Draft, res.Functions = out.Version, out.Draft, out.Functions
 		res.URL = absURL(c.Server, firstNonEmpty(out.URL, siteURL(c.Server, site)))
 	}
 	sp.end()
@@ -277,6 +281,7 @@ func (x *App) finishDeploy(a *Args, res *deployResult) error {
 	x.ok("%s %s %s %s", verb, x.errSt.bold(res.Site), x.errSt.dim(what),
 		x.errSt.dim(fmt.Sprintf("(%s, %d uploaded, %s, %.1fs)", plural(res.Files, "file"), res.Uploaded, humanBytes(res.Bytes), float64(res.Ms)/1000)))
 	fmt.Fprintln(x.Stdout, x.outSt.url(res.URL))
+	x.printDeployedFunctions(res)
 	if isTTY(x.Stdout) && copyToClipboard(res.URL) {
 		x.info("Link copied to the clipboard")
 	}
@@ -426,7 +431,8 @@ func (x *App) postUpload(ctx context.Context, c *Client, body io.Reader, ct, sit
 		Title   string `json:"title"`
 		Version int64  `json:"version"`
 		URL     string `json:"url"`
-		Draft   bool   `json:"draft"`
+		Draft     bool     `json:"draft"`
+		Functions []fnInfo `json:"functions"`
 	}
 	resp, err := c.Raw(ctx, "POST", p, q, body, ct)
 	if err != nil {
@@ -445,7 +451,7 @@ func (x *App) postUpload(ctx context.Context, c *Client, body io.Reader, ct, sit
 			x.warn("New sites are published right away; --draft applies from the next deploy.")
 		}
 	}
-	res.Version, res.Draft = out.Version, out.Draft
+	res.Version, res.Draft, res.Functions = out.Version, out.Draft, out.Functions
 	res.URL = absURL(c.Server, firstNonEmpty(out.URL, siteURL(c.Server, res.Site)))
 	return nil
 }
@@ -498,4 +504,40 @@ func (x *App) deploySingle(a *Args, proj *Project, name string, data []byte, sta
 		x.info("To update this app next time: bunker deploy %s --site %s", firstNonEmpty(a.Arg(0), name), res.Site)
 	}
 	return nil
+}
+
+// printDeployedFunctions lists the server functions in a deploy, on
+// stderr so stdout stays the URL.
+func (x *App) printDeployedFunctions(res *deployResult) {
+	if len(res.Functions) == 0 {
+		return
+	}
+	x.info("%s:", plural(len(res.Functions), "server function"))
+	broken := false
+	for _, f := range res.Functions {
+		line := "  " + x.errSt.bold(f.Name)
+		// Deploy replies list name and path; triggers only when the
+		// server includes them (see `bunker fn ls` for the full picture).
+		var notes []string
+		if f.Path != "" {
+			notes = append(notes, f.Path)
+		}
+		if f.Elevated {
+			notes = append(notes, "runs as the owner")
+		}
+		if f.Schedule != "" || len(f.OnWrite) > 0 {
+			notes = append(notes, f.triggers())
+		}
+		if len(notes) > 0 {
+			line += " " + x.errSt.dim("("+strings.Join(notes, "; ")+")")
+		}
+		if f.Error != "" {
+			broken = true
+			line += " " + x.errSt.red(f.Error)
+		}
+		fmt.Fprintln(x.Stderr, line)
+	}
+	if broken {
+		x.warn("Some functions have errors and won't run until they're fixed.")
+	}
 }

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact us</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:760px}
+.sent{text-align:center;padding:30px 12px}.sent .ico{font-size:2.2rem;display:block;margin-bottom:8px}
+.msg{padding:14px 0;border-bottom:1px solid var(--line)}.msg:last-child{border:0}
+.msg p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg .meta{font-size:.85rem;color:var(--muted)}
+.count{font-size:.8rem;color:var(--muted);text-align:right}
+#error{color:var(--bad-t);margin:0 0 12px}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Contact us</h1><p>Questions, requests or feedback. We usually answer within a day.</p></div>
+  </div>
+
+  <div class="card" id="formCard">
+    <form id="form" novalidate>
+      <div class="grid g2">
+        <div class="field"><label for="name">Your name</label><input type="text" id="name" autocomplete="name" maxlength="120"></div>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email" required maxlength="200"></div>
+      </div>
+      <div class="field"><label for="topic">Topic</label>
+        <select id="topic"><option>Question</option><option>Request</option><option>Feedback</option><option>Something is broken</option></select></div>
+      <div class="field"><label for="message">Message</label><textarea id="message" required maxlength="4000" rows="6"></textarea>
+        <div class="count" id="count" aria-live="polite">0 / 4000</div></div>
+      <p id="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit" id="send">Send message</button>
+      <p class="hint">Your message is checked and saved on the server, then the team is notified. Only the team can read it.</p>
+    </form>
+  </div>
+  <div class="card sent" id="sent" hidden>
+    <span class="ico" aria-hidden="true">✉️</span>
+    <h2>Thanks, your message is on its way</h2>
+    <p class="muted">We’ll reply to <b id="sentTo"></b>.</p>
+    <button class="btn" id="again">Send another</button>
+  </div>
+
+  <section id="inbox" hidden style="margin-top:28px">
+    <div class="row"><h2 style="margin:0">Inbox</h2><span class="pill" id="newCount"></span><span class="spacer"></span>
+      <div class="seg" role="group" aria-label="Show"><button type="button" data-show="new" aria-pressed="true">New</button><button type="button" data-show="all" aria-pressed="false">All</button></div></div>
+    <p class="hint">Only editors see this. Set a NOTIFY_WEBHOOK secret in the app’s Functions settings to also post new messages to a chat channel.</p>
+    <div class="card"><div id="list"></div></div>
+  </section>
+</div>
+<script>
+/*BK:JS*/
+var $ = function (id) { return document.getElementById(id); };
+var messages = BK.col('messages'), me = {}, M = [], show = 'new', sending = false;
+
+// Demo mode (outside Bunker) checks the form in the page instead of on the server.
+function demoContact(input) {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.email || '')) return Promise.reject(new Error('Please enter a valid email address.'));
+  if ((input.message || '').trim().length < 10) return Promise.reject(new Error('Please write a little more (at least 10 characters).'));
+  return messages.add(Object.assign({ status: 'new' }, input));
+}
+
+function showError(text) { $('error').textContent = text || ''; $('error').hidden = !text; }
+$('message').addEventListener('input', function () { $('count').textContent = $('message').value.length + ' / 4000'; });
+$('form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  if (sending) return;
+  var input = { name: $('name').value.trim(), email: $('email').value.trim(), topic: $('topic').value, message: $('message').value };
+  sending = true; $('send').disabled = true; showError('');
+  BK.fn('contact', input, demoContact).then(function () {
+    $('sentTo').textContent = input.email;
+    $('formCard').hidden = true; $('sent').hidden = false;
+    $('message').value = ''; $('count').textContent = '0 / 4000';
+  }).catch(function (e) {
+    var code = e && e.code;
+    showError(code === 'functions_off' ? 'Sending is switched off on this Bunker right now. Please try again later, or contact the team another way.'
+      : code === 'busy' || code === 'timeout' ? 'We couldn’t send that just now. Please try again in a moment.'
+      : (e && e.message) || 'Something went wrong. Please try again.');
+  }).then(function () { sending = false; $('send').disabled = false; });
+});
+$('again').addEventListener('click', function () { $('sent').hidden = true; $('formCard').hidden = false; $('message').focus(); });
+
+// ---- inbox for editors ----
+function render() {
+  var e = BK.esc, n = M.filter(function (m) { return m.status !== 'done'; }).length;
+  $('newCount').textContent = n + ' new';
+  var list = M.filter(function (m) { return show === 'all' || m.status !== 'done'; })
+    .sort(function (a, b) { return BK.ms(b._created) - BK.ms(a._created); });
+  $('list').innerHTML = list.length ? list.map(function (m) {
+    var done = m.status === 'done';
+    return '<div class="msg"><div class="row"><b>' + e(m.name || m.email) + '</b><span class="badge' + (done ? ' ok' : ' mid') + '">' + (done ? 'Done' : 'New') + '</span><span class="badge">' + e(m.topic) + '</span><span class="spacer"></span>' +
+      '<button class="btn small" data-toggle="' + e(m._id) + '">' + (done ? 'Reopen' : 'Mark done') + '</button></div>' +
+      '<div class="meta">' + e(m.email) + (m.fromEmail && m.fromEmail !== m.email ? ' · signed in as ' + e(m.fromEmail) : '') + ' · ' + e(BK.when(m._created)) + '</div>' +
+      '<p>' + e(m.message) + '</p></div>';
+  }).join('') : '<div class="empty"><b>' + (show === 'all' ? 'No messages yet' : 'All caught up') + '</b>New messages show up here as they arrive.</div>';
+}
+function load() { return messages.all().then(function (l) { M = l; render(); }).catch(BK.err); }
+document.addEventListener('click', function (ev) {
+  var t = ev.target.closest('[data-toggle]'), s = ev.target.closest('[data-show]');
+  if (s) {
+    show = s.dataset.show;
+    document.querySelectorAll('[data-show]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === s)); });
+    render();
+  }
+  if (t) {
+    var m = M.filter(function (x) { return x._id === t.dataset.toggle; })[0];
+    if (m) messages.update(m._id, { status: m.status === 'done' ? 'new' : 'done' }).then(load, BK.err);
+  }
+});
+
+BK.me().then(function (u) {
+  me = u; BK.banner();
+  if (u.name) $('name').value = u.name;
+  if (u.email) $('email').value = u.email;
+  if (BK.canEdit(u)) { $('inbox').hidden = false; load(); messages.subscribe(load); }
+});
+</script>
+</body>
+</html>

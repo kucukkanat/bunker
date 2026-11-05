@@ -29,6 +29,7 @@ func registerDocs(a *core.App) {
 				"deploy":       DeployGuide(base),
 				"sandbox":      SandboxRules,
 				"sdk":          SDKReference,
+				"functions":    ServerFunctions,
 				"markdown":     AgentGuide(base, a.Ops(), true),
 				"mcp":          base + "/mcp",
 				"ops":          base + "/api/v1/ops",

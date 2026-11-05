@@ -68,6 +68,12 @@ var BK = (function () {
     // inGroup(name): is the viewer in this group? (false in demo mode)
     inGroup: function (g) { return real && sdk.me.inGroup ? Promise.resolve(sdk.me.inGroup(g)).catch(function () { return false; }) : Promise.resolve(false); },
     col: function (n) { return real ? realCol(n) : demoCol(n); },
+    // fn(name, input, demo): call the server function api/<name>.js; in demo
+    // mode (or on an older Bunker without functions) demo(input) runs instead.
+    fn: function (name, input, demo) {
+      if (real && typeof sdk.fn === 'function') return Promise.resolve(sdk.fn(name, input));
+      return demo ? Promise.resolve().then(function () { return demo(input); }) : Promise.reject(new Error('This needs Bunker server functions.'));
+    },
     toast: toast,
     err: function (e) { toast(errText(e)); console.warn(e); },
     // Returns the assistant's text, or null when AI isn't set up.

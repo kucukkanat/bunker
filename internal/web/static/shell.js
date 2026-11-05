@@ -170,7 +170,7 @@
 
   function errorOf(status, data) {
     var e = data && data.error;
-    if (e && typeof e === 'object') return { code: e.code || 'error', message: e.message || 'Something went wrong', consentUrl: e.consentUrl || e.url, scopes: e.scopes };
+    if (e && typeof e === 'object') return { code: e.code || 'error', message: e.message || 'Something went wrong', consentUrl: e.consentUrl || e.url, scopes: e.scopes, stack: typeof e.stack === 'string' ? e.stack.slice(0, 8000) : undefined };
     var code = status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : status === 404 ? 'not_found' : status === 413 ? 'too_large' : status === 429 ? 'quota_exceeded' : status >= 500 ? 'unavailable' : 'error';
     return { code: code, message: status === 401 ? 'Your Bunker session ended. Reload the page to sign in again.' : 'The request failed (' + status + ').' };
   }
@@ -216,7 +216,7 @@
       if (err.code === 'consent_required' && !retried) {
         if (await consentPrompt(err.scopes || '', err.consentUrl)) return handleApi(p, d, true);
       }
-      return reply(p, { id: id, ok: false, status: res.status, error: { code: err.code, message: err.message } });
+      return reply(p, { id: id, ok: false, status: res.status, error: err.stack ? { code: err.code, message: err.message, stack: err.stack } : { code: err.code, message: err.message } });
     } catch (e) {
       var aborted = e && e.name === 'AbortError';
       return reply(p, { id: id, ok: false, status: 0, error: { code: 'unavailable', message: aborted ? 'The request took too long or was cancelled.' : 'Bunker can\'t be reached. Check your connection and try again.' } });

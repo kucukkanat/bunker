@@ -93,9 +93,9 @@ func baseTools() []*tool {
 		},
 		{
 			Name: "get_sdk_docs", Title: "Bunker SDK and deploy docs",
-			Description: "Read this before writing a Bunker page: the sandbox rules, the window.bunker SDK (db, files, ai, storage, me, m365), and how to deploy.",
+			Description: "Read this before writing a Bunker page: the sandbox rules, the window.bunker SDK (db, files, ai, storage, me, m365), server functions (api/*.js with secrets, fetch, schedules and triggers), and how to deploy.",
 			InputSchema: obj(map[string]any{
-				"topic": map[string]any{"type": "string", "enum": []string{"all", "sdk", "sandbox", "deploy", "ops"}, "description": "Which part (default all)"},
+				"topic": map[string]any{"type": "string", "enum": []string{"all", "sdk", "sandbox", "functions", "deploy", "ops"}, "description": "Which part (default all)"},
 			}),
 			Annotations: ann("Bunker SDK and deploy docs", true, false, true),
 			fn: func(ctx context.Context, s *Server, a map[string]any) (*toolResult, error) {
@@ -106,6 +106,8 @@ func baseTools() []*tool {
 					return textResult(SDKReference), nil
 				case "sandbox":
 					return textResult(SandboxRules), nil
+				case "functions":
+					return textResult(ServerFunctions), nil
 				case "deploy":
 					return textResult(DeployGuide(base)), nil
 				case "ops":
@@ -115,7 +117,7 @@ func baseTools() []*tool {
 					}
 					return textResult(OpsList(ops, true)), nil
 				}
-				return textResult("# Bunker\n\n" + Intro + "\n\n" + SandboxRules + "\n\n" + SDKReference + "\n\n" + DeployGuide(base)), nil
+				return textResult("# Bunker\n\n" + Intro + "\n\n" + SandboxRules + "\n\n" + SDKReference + "\n\n" + ServerFunctions + "\n\n" + DeployGuide(base)), nil
 			},
 		},
 		{
@@ -242,6 +244,7 @@ var docResources = []resource{
 	{URI: "bunker://docs/agent-guide", Name: "agent-guide", Title: "Bunker guide for agents", Description: "Authentication, deploying, sandbox rules, SDK and every API operation", MimeType: "text/markdown"},
 	{URI: "bunker://docs/sdk", Name: "sdk", Title: "window.bunker SDK reference", MimeType: "text/markdown"},
 	{URI: "bunker://docs/sandbox", Name: "sandbox", Title: "Sandbox rules for pages", MimeType: "text/markdown"},
+	{URI: "bunker://docs/functions", Name: "functions", Title: "Server functions (api/*.js)", MimeType: "text/markdown"},
 }
 
 func resourceTemplates() []map[string]any {
@@ -293,6 +296,8 @@ func (s *Server) readResource(ctx context.Context, uri string) (any, error) {
 		return one("text/markdown", SDKReference), nil
 	case "bunker://docs/sandbox":
 		return one("text/markdown", SandboxRules), nil
+	case "bunker://docs/functions":
+		return one("text/markdown", ServerFunctions), nil
 	}
 	if strings.HasPrefix(uri, uiPrefix) {
 		return s.readApp(ctx, uri)
@@ -402,9 +407,10 @@ Steps:
 1. Plan the screens and the data (bunker.db collections, their rules, any file uploads or AI calls).
 2. Write a polished, accessible, mobile-friendly page. Keep it self-contained: inline CSS and JS, no CDN scripts, no fetch() to outside URLs.
 3. Store shared data with bunker.db (live updates with subscribe), per-person settings with bunker.storage, and greet the viewer with bunker.me().
-4. Publish, then give me the URL. Offer to share it (sharing_add) with people or groups.
+4. Only if the app needs a secret, an outside API, rights the viewer doesn't have, a schedule or a trigger on writes, add a server function in api/<name>.js and call it with bunker.fn. Ask me to add any secrets (secrets_set or ` + "`bunker secrets set`" + `); never put keys in files.
+5. Publish, then give me the URL. Offer to share it (sharing_add) with people or groups.
 
-` + SandboxRules + "\n\n" + SDKReference
+` + SandboxRules + "\n\n" + SDKReference + "\n\n" + ServerFunctions
 	return map[string]any{
 		"description": "Build a Bunker app",
 		"messages":    []map[string]any{{"role": "user", "content": map[string]any{"type": "text", "text": text}}},
