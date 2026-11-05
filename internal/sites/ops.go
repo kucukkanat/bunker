@@ -405,12 +405,14 @@ func listSites(r *http.Request) (any, error) {
 				ph += ",?,?"
 				groupIDs = append(groupIDs, g.ID, g.Name)
 			}
-			groupClause := "0"
+			groupClause := ""
 			if ph != "" {
-				groupClause = `m.ptype='group' AND m.pid IN (` + ph[1:] + `)`
+				groupClause = ` OR (ptype='group' AND pid IN (` + ph[1:] + `))`
 			}
-			rows, err = app.DB.QueryContext(ctx, `SELECT DISTINCT `+cols+` FROM sites s LEFT JOIN site_members m ON m.site_id=s.id
-WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR (m.ptype='user' AND m.pid=?) OR (`+groupClause+`)) ORDER BY s.updated_at DESC LIMIT 2000`, groupIDs...)
+			// A subquery on site_members(ptype, pid) instead of a join plus
+			// DISTINCT over every column (which sorted all candidate rows).
+			rows, err = app.DB.QueryContext(ctx, `SELECT `+cols+` FROM sites s
+WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR s.id IN (SELECT site_id FROM site_members WHERE (ptype='user' AND pid=?)`+groupClause+`)) ORDER BY s.updated_at DESC LIMIT 2000`, groupIDs...)
 		}
 	}
 	if err != nil {
@@ -436,10 +438,10 @@ WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR (m.ptype='user' 
 		}
 		srows.Close()
 	}
-	owners := map[int64]*Person{}
 	out := []*SiteRecord{}
 	var systemID int64 = -1
 	app.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE subject LIKE 'system:%' LIMIT 1`).Scan(&systemID)
+	primeRoles(ctx, u, list)
 	for _, s := range list {
 		// Built-in templates live under Templates, not in everyone's site list.
 		if s.Template && s.OwnerID == systemID && filter != "templates" && filter != "everything" {
@@ -482,13 +484,41 @@ WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR (m.ptype='user' 
 			}
 			s.Extra = map[string]any{"visitedAt": stars[s.ID][1]}
 		}
-		if owners[s.OwnerID] == nil {
-			owners[s.OwnerID] = person(ctx, s.OwnerID)
-		}
-		s.Owner = owners[s.OwnerID]
 		out = append(out, s)
 	}
+	owners := people(ctx, out)
+	for _, s := range out {
+		s.Owner = owners[s.OwnerID]
+	}
 	return map[string]any{"sites": out}, nil
+}
+
+// people loads the owners of list in one query (nil for missing users).
+func people(ctx context.Context, list []*SiteRecord) map[int64]*Person {
+	out := map[int64]*Person{}
+	var ids []any
+	for _, s := range list {
+		if _, ok := out[s.OwnerID]; !ok {
+			out[s.OwnerID] = nil
+			ids = append(ids, s.OwnerID)
+		}
+	}
+	for len(ids) > 0 {
+		n := min(len(ids), 500)
+		rows, err := app.DB.QueryContext(ctx, `SELECT id,name,email FROM users WHERE id IN (?`+strings.Repeat(",?", n-1)+`)`, ids[:n]...)
+		if err != nil {
+			break
+		}
+		for rows.Next() {
+			p := &Person{}
+			if rows.Scan(&p.ID, &p.Name, &p.Email) == nil {
+				out[p.ID] = p
+			}
+		}
+		rows.Close()
+		ids = ids[n:]
+	}
+	return out
 }
 
 var (

@@ -84,6 +84,10 @@ type App struct {
 
 	pubMu  sync.RWMutex
 	public []string // path prefixes that skip authentication
+
+	setMu    sync.RWMutex
+	setCache map[string]string // stored settings (see Setting)
+	setGen   uint64
 }
 
 // On registers a hook listener (e.g. "site.deleted").

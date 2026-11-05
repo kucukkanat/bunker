@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kucukkanat/bunker/internal/core"
@@ -136,9 +137,14 @@ func initSites(a *core.App) error {
 	mcMu.Lock()
 	mCache = map[string]Manifest{}
 	mcMu.Unlock()
-	rawMu.Lock()
-	rawCache = map[string]rawEntry{}
-	rawMu.Unlock()
+	rawCache.reset()
+	rawTemplates.reset()
+	ticketUsers.reset()
+	a.On("user.changed", func(_ context.Context, p any) {
+		if id, ok := p.(int64); ok {
+			ticketUsers.drop(id)
+		}
+	})
 	a.Sites = resolver{}
 	a.On("sites.changed", func(context.Context, any) { invalidateAll() })
 	registerOps(a)
@@ -265,6 +271,9 @@ var (
 	scMu      sync.Mutex
 	siteCache = map[string]siteCacheEntry{}
 	roleCache = map[string]roleEntry{}
+	// cacheGen counts invalidations, so a lookup that raced with one
+	// doesn't put a stale record back into the cache.
+	cacheGen atomic.Uint64
 )
 
 type roleEntry struct {
@@ -278,6 +287,7 @@ func Invalidate(slug string) {
 	defer scMu.Unlock()
 	delete(siteCache, slug)
 	roleCache = map[string]roleEntry{}
+	cacheGen.Add(1)
 }
 
 func invalidateAll() {
@@ -285,7 +295,17 @@ func invalidateAll() {
 	defer scMu.Unlock()
 	siteCache = map[string]siteCacheEntry{}
 	roleCache = map[string]roleEntry{}
+	cacheGen.Add(1)
 }
+
+// CacheGeneration changes whenever site or role caches are invalidated
+// (updates, shares, deploys): a caller holding a resolved role may keep
+// using it while the generation is unchanged.
+func CacheGeneration() uint64 { return cacheGen.Load() }
+
+// Generation lets other modules (live streams) see cache invalidations
+// through the core.SiteResolver they hold.
+func (resolver) Generation() uint64 { return cacheGen.Load() }
 
 const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at,archived_at,archived_days,public`
 
@@ -299,7 +319,9 @@ func scanSite(row interface{ Scan(...any) error }) (*SiteRecord, error) {
 	}
 	s.Public = pub == 1 && PublicLinksAllowed()
 	s.OrgView, s.Template = org == 1, tpl == 1
-	json.Unmarshal([]byte(settings), &s.Settings)
+	if settings != "{}" && settings != "" {
+		json.Unmarshal([]byte(settings), &s.Settings)
+	}
 	if del.Valid {
 		s.DeletedAt = &del.Int64
 	}
@@ -317,6 +339,7 @@ func GetBySlug(ctx context.Context, slug string) (*SiteRecord, error) {
 		scMu.Unlock()
 		return e.s, nil
 	}
+	gen := cacheGen.Load()
 	scMu.Unlock()
 	s, err := scanSite(app.DB.QueryRowContext(ctx, `SELECT `+siteCols+` FROM sites WHERE slug=? AND deleted_at IS NULL`, slug))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -329,7 +352,9 @@ func GetBySlug(ctx context.Context, slug string) (*SiteRecord, error) {
 	if len(siteCache) > 20000 {
 		siteCache = map[string]siteCacheEntry{}
 	}
-	siteCache[slug] = siteCacheEntry{s: s, exp: time.Now().Add(20 * time.Second)}
+	if gen == cacheGen.Load() {
+		siteCache[slug] = siteCacheEntry{s: s, exp: time.Now().Add(20 * time.Second)}
+	}
 	scMu.Unlock()
 	return s, nil
 }
@@ -367,31 +392,102 @@ func RoleOf(ctx context.Context, u *core.User, s *SiteRecord) core.Role {
 		scMu.Unlock()
 		return e.r
 	}
+	gen := cacheGen.Load()
 	scMu.Unlock()
-	role := core.RoleNone
-	if s.OrgView {
-		role = core.RoleViewer
-	}
+	role := baseRole(s)
 	rows, err := app.DB.QueryContext(ctx, `SELECT ptype,pid,role FROM site_members WHERE site_id=?`, s.ID)
 	if err == nil {
 		for rows.Next() {
 			var pt, pid string
 			var r int
 			rows.Scan(&pt, &pid, &r)
-			match := (pt == "user" && strings.EqualFold(pid, u.Email)) || (pt == "group" && u.InGroup(pid))
-			if match && core.Role(r) > role {
-				role = core.Role(r)
-			}
+			role = memberRole(u, role, pt, pid, r)
 		}
 		rows.Close()
 	}
+	putRole(key, role, gen)
+	return role
+}
+
+func baseRole(s *SiteRecord) core.Role {
+	if s.OrgView {
+		return core.RoleViewer
+	}
+	return core.RoleNone
+}
+
+// memberRole raises role when the site_members row (pt, pid, r) is u.
+func memberRole(u *core.User, role core.Role, pt, pid string, r int) core.Role {
+	match := (pt == "user" && strings.EqualFold(pid, u.Email)) || (pt == "group" && u.InGroup(pid))
+	if match && core.Role(r) > role {
+		return core.Role(r)
+	}
+	return role
+}
+
+func putRole(key string, role core.Role, gen uint64) {
 	scMu.Lock()
 	if len(roleCache) > 100000 {
 		roleCache = map[string]roleEntry{}
 	}
-	roleCache[key] = roleEntry{r: role, exp: time.Now().Add(15 * time.Second)}
+	if gen == cacheGen.Load() {
+		roleCache[key] = roleEntry{r: role, exp: time.Now().Add(15 * time.Second)}
+	}
 	scMu.Unlock()
-	return role
+}
+
+// primeRoles fills the role cache for u on every site in list that needs
+// a site_members lookup, with one query per 500 sites instead of one per
+// site (used by lists).
+func primeRoles(ctx context.Context, u *core.User, list []*SiteRecord) {
+	if u == nil || u.ID == 0 || u.IsAdmin {
+		return
+	}
+	now := time.Now()
+	need := map[int64]*SiteRecord{}
+	var ids []any
+	scMu.Lock()
+	for _, s := range list {
+		if s.OwnerID == u.ID || need[s.ID] != nil {
+			continue
+		}
+		if e, ok := roleCache[itoa64(s.ID)+":"+itoa64(u.ID)]; ok && now.Before(e.exp) {
+			continue
+		}
+		need[s.ID] = s
+		ids = append(ids, s.ID)
+	}
+	gen := cacheGen.Load()
+	scMu.Unlock()
+	for len(ids) > 0 {
+		n := min(len(ids), 500)
+		chunk := ids[:n]
+		ids = ids[n:]
+		roles := map[int64]core.Role{}
+		for _, id := range chunk {
+			roles[id.(int64)] = baseRole(need[id.(int64)])
+		}
+		rows, err := app.DB.QueryContext(ctx, `SELECT site_id,ptype,pid,role FROM site_members WHERE site_id IN (?`+strings.Repeat(",?", n-1)+`)`, chunk...)
+		if err != nil {
+			return // RoleOf falls back to per-site lookups
+		}
+		for rows.Next() {
+			var sid int64
+			var pt, pid string
+			var r int
+			if rows.Scan(&sid, &pt, &pid, &r) == nil {
+				roles[sid] = memberRole(u, roles[sid], pt, pid, r)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return
+		}
+		for sid, role := range roles {
+			putRole(itoa64(sid)+":"+itoa64(u.ID), role, gen)
+		}
+	}
 }
 
 func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
