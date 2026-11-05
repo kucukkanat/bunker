@@ -180,5 +180,6 @@ Pages can't load scripts from the internet. Bunker ships popular libraries and s
 | papaparse | 5.7.0 | `Papa` |
 | sortablejs | 1.15.7 | `Sortable` |
 | canvas-confetti | 1.9.4 | `confetti` |
+| leaflet | 1.9.4 | `L` (no map tiles offline: use `L.CRS.Simple` with your own image, e.g. a floor plan) |
 
 Web fonts from Google Fonts and similar can't load in the sandbox. Bundle font files with your app, or use system fonts.

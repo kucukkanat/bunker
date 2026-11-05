@@ -19,6 +19,8 @@ func TestResolve(t *testing.T) {
 		"https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css": "/_/lib/bootstrap/bootstrap.min.css",
 		"//code.jquery.com/jquery-3.7.1.min.js":                                   "/_/lib/jquery/jquery.min.js",
 		"https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4":                     "/_/lib/tailwindcss/browser.js",
+		"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css":                        "/_/lib/leaflet/leaflet.css",
+		"https://cdn.jsdelivr.net/npm/leaflet@1/dist/leaflet.js":                  "/_/lib/leaflet/leaflet.js",
 		"https://example.com/x.js":                                                "",
 		"https://cdn.jsdelivr.net/npm/left-pad":                                   "",
 	}

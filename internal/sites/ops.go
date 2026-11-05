@@ -280,13 +280,10 @@ func registerOps(a *core.App) {
 			if a.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?) AND disabled=0`, in.To).Scan(&toID) != nil {
 				return nil, core.NotFound(in.To + " hasn't signed in to Bunker yet")
 			}
-			res, err := a.DB.ExecContext(r.Context(), `UPDATE sites SET owner_id=?, updated_at=? WHERE owner_id=?`, toID, core.Now(), fromID)
+			n, err := TransferAll(r.Context(), fromID, toID)
 			if err != nil {
 				return nil, err
 			}
-			n, _ := res.RowsAffected()
-			invalidateAll()
-			a.Audit(r.Context(), "admin.transfer_sites", 0, in.From+" -> "+in.To, map[string]any{"count": n})
 			return map[string]any{"ok": true, "moved": n}, nil
 		}})
 
@@ -382,7 +379,7 @@ func listSites(r *http.Request) (any, error) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	var rows *sql.Rows
 	var err error
-	cols := `s.id,s.slug,s.title,s.description,s.icon,s.owner_id,s.kind,s.org_view,s.live_version,s.is_template,s.settings,s.created_at,s.updated_at,s.deleted_at`
+	cols := `s.id,s.slug,s.title,s.description,s.icon,s.owner_id,s.kind,s.org_view,s.live_version,s.is_template,s.settings,s.created_at,s.updated_at,s.deleted_at,s.archived_at,s.archived_days`
 	switch filter {
 	case "trash":
 		rows, err = app.DB.QueryContext(ctx, `SELECT `+cols+` FROM sites s WHERE s.deleted_at IS NOT NULL AND (s.owner_id=? OR ?=1) ORDER BY s.deleted_at DESC`, u.ID, b2i(u.IsAdmin))

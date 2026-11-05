@@ -66,6 +66,7 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `BUNKER_SITE_MAX_MB` | `100` | Largest app (all files of one version) |
 | `BUNKER_MAX_SITES_PER_USER` | `500` | Apps per person |
 | `BUNKER_TRASH_DAYS` | `30` | Days before trashed apps are purged |
+| `BUNKER_ARCHIVE_AFTER_DAYS` | `0` (off) | Archive apps nobody has opened or changed for this many days. Owners get a notification 7 days ahead; editors can restore an archived app with one click |
 | `BUNKER_ALLOW_SECRETS` | `false` | Turn off secret scanning of uploads |
 | `BUNKER_NO_TEMPLATES` | `false` | Don't create the [built-in templates](/bunker/docs/build/templates/#built-in-templates) |
 

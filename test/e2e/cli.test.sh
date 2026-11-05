@@ -30,7 +30,7 @@ echo "Building…"
 (cd "$ROOT" && CGO_ENABLED=0 go build -o "$BIN" ./cmd/bunker)
 
 echo "Starting bunker dev on $URL"
-BUNKER_DATA_DIR="$WORK/data" BUNKER_LISTEN="127.0.0.1:$PORT" BUNKER_URL="$URL" "$BIN" dev >"$WORK/server.log" 2>&1 &
+BUNKER_DATA_DIR="$WORK/data" BUNKER_LISTEN="127.0.0.1:$PORT" BUNKER_URL="$URL" BUNKER_ADMINS="you@localhost" "$BIN" dev >"$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 100); do curl -fsS "$URL/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
 curl -fsS "$URL/healthz" >/dev/null || die "server did not start"
@@ -161,10 +161,10 @@ MCP_OUT="$(printf '%s\n' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"create_site_from_html","arguments":{"title":"MCP Page","html":"<h1>from mcp</h1>"}}}' \
   '{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"bunker://docs/sdk"}}' \
   | B mcp 2>/dev/null)"
-echo "$MCP_OUT" | grep -q '"protocolVersion":"2025-06-18"' || die "mcp initialize: $MCP_OUT"
-echo "$MCP_OUT" | grep -q '"name":"sites_list"' || die "mcp tools/list"
-echo "$MCP_OUT" | grep -q 'mcp-page' || die "mcp tools/call create_site_from_html"
-echo "$MCP_OUT" | grep -q 'bunker.db' || die "mcp resources/read"
+grep -q '"protocolVersion":"2025-06-18"' <<<"$MCP_OUT" || die "mcp initialize: $MCP_OUT"
+grep -q '"name":"sites_list"' <<<"$MCP_OUT" || die "mcp tools/list"
+grep -q 'mcp-page' <<<"$MCP_OUT" || die "mcp tools/call create_site_from_html"
+grep -q 'bunker.db' <<<"$MCP_OUT" || die "mcp resources/read"
 [ "$(echo "$MCP_OUT" | wc -l)" -eq 4 ] || die "mcp should answer 4 requests (not the notification)"
 ok "bunker mcp (initialize, tools/list, tools/call, resources/read)"
 
@@ -178,6 +178,22 @@ curl -fsS "$URL/.well-known/oauth-authorization-server" | grep -q code_challenge
 curl -fsS "$URL/.well-known/oauth-protected-resource/mcp" | grep -q authorization_servers || die "PRM"
 curl -fsS "$URL/llms.txt" | grep -q "bunker deploy" || die "llms.txt"
 ok "remote /mcp, OAuth metadata, llms.txt"
+
+# Backup from the running server, then an offline restore into a new folder.
+ADMIN_TOKEN="$(curl -fsS -X POST "$URL/api/v1/tokens" -H 'X-Bunker: 1' -H 'Content-Type: application/json' -d '{"name":"e2e-admin","scopes":["read","write","admin"]}' | jget token)"
+out="$(BUNKER_SERVER="$URL" BUNKER_TOKEN="$ADMIN_TOKEN" B backup "$WORK/b.tar.gz" 2>&1)" || die "backup failed: $out"; need "$out" "Saved a backup" "backup"
+tar -tzf "$WORK/b.tar.gz" >"$WORK/b.list" && grep -qx 'bunker.db' "$WORK/b.list" || die "backup has no bunker.db"
+out="$(BUNKER_DATA_DIR="$WORK/restored" BUNKER_LISTEN="127.0.0.1:$PORT" B restore "$WORK/b.tar.gz" --yes 2>&1 || true)"
+need "$out" "Stop it first" "restore refuses while a server runs"
+RPORT="$((PORT+1))"
+out="$(BUNKER_DATA_DIR="$WORK/restored" BUNKER_LISTEN="127.0.0.1:$RPORT" B restore "$WORK/b.tar.gz" --yes 2>&1)"; need "$out" "Restored" "restore"
+out="$(BUNKER_DATA_DIR="$WORK/restored" BUNKER_LISTEN="127.0.0.1:$RPORT" B restore "$WORK/b.tar.gz" --yes 2>&1)"; need "$out" "pre-restore" "restore over existing data keeps the old db"
+BUNKER_DATA_DIR="$WORK/restored" BUNKER_LISTEN="127.0.0.1:$RPORT" BUNKER_URL="http://127.0.0.1:$RPORT" "$BIN" dev >"$WORK/restored.log" 2>&1 &
+RPID=$!
+for _ in $(seq 1 100); do curl -fsS "http://127.0.0.1:$RPORT/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
+curl -fsS "http://127.0.0.1:$RPORT/api/v1/sites/$SLUG" | grep -q "\"slug\":\"$SLUG\"" || { kill $RPID; die "restored server lacks $SLUG"; }
+kill $RPID; wait $RPID 2>/dev/null || true
+ok "backup (running server) and restore (offline)"
 
 out="$(B logout 2>&1)"; need "$out" "revoked" "logout revokes"
 if B whoami >/dev/null 2>&1; then die "whoami should fail after logout"; fi

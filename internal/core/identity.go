@@ -196,3 +196,13 @@ func (a *App) SiteFor(r *http.Request, min Role) (*Site, Role, error) {
 	}
 	return s, role, nil
 }
+
+// UserDisabled is the payload of the "user.disabled" hook, emitted by the
+// auth module when an admin disables an account. When TransferTo is set,
+// the sites module moves every site the person owns to that user and
+// reports how many in Moved (hooks run synchronously).
+type UserDisabled struct {
+	UserID     int64
+	TransferTo int64
+	Moved      int64
+}
