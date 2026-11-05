@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -99,26 +100,51 @@ func (a *App) Migrate(ctx context.Context) error {
 
 // Setting returns a runtime setting. Environment variables
 // (BUNKER_<KEY>, with dots replaced by underscores) take precedence so
-// infrastructure-as-code deployments can pin values.
+// infrastructure-as-code deployments can pin values. Stored values are
+// cached in memory: SetSetting is the only writer.
 func (a *App) Setting(key string) string {
-	envKey := strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
-	if v := Env(envKey, ""); v != "" {
+	if v := Env(settingEnvKey(key), ""); v != "" {
 		return v
 	}
-	var v string
-	_ = a.DB.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	a.setMu.RLock()
+	v, ok := a.setCache[key]
+	gen := a.setGen
+	a.setMu.RUnlock()
+	if ok {
+		return v
+	}
+	err := a.DB.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return ""
+	}
+	a.setMu.Lock()
+	// Don't cache a value read while SetSetting was changing it.
+	if a.setGen == gen {
+		if a.setCache == nil || len(a.setCache) > 10000 {
+			a.setCache = map[string]string{}
+		}
+		a.setCache[key] = v
+	}
+	a.setMu.Unlock()
 	return v
 }
 
+var settingKeyReplacer = strings.NewReplacer(".", "_", "-", "_")
+
+func settingEnvKey(key string) string { return strings.ToUpper(settingKeyReplacer.Replace(key)) }
+
 // SettingFromEnv reports whether a setting is pinned by the environment.
 func (a *App) SettingFromEnv(key string) bool {
-	envKey := strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
-	return Env(envKey, "") != ""
+	return Env(settingEnvKey(key), "") != ""
 }
 
 // SetSetting stores a runtime setting.
 func (a *App) SetSetting(ctx context.Context, key, value string) error {
 	_, err := a.DB.ExecContext(ctx, `INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`, key, value, time.Now().Unix())
+	a.setMu.Lock()
+	a.setGen++
+	delete(a.setCache, key)
+	a.setMu.Unlock()
 	return err
 }
 
