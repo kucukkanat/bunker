@@ -738,6 +738,25 @@ func issue(ctx context.Context, uid int64, clientID, clientName, scopes, resourc
 	}, nil
 }
 
+// sweepOAuth removes expired refresh tokens and the expired access tokens
+// no live refresh token points at. (auth.SweepExpired skips OAuth access
+// tokens: a refresh must still find the expired row, since a missing row
+// means the person revoked the app in Settings.)
+func sweepOAuth(ctx context.Context) {
+	now := core.Now()
+	app.DB.ExecContext(ctx, `DELETE FROM oauth_refresh WHERE expires_at < ?`, now)
+	app.DB.ExecContext(ctx, `DELETE FROM oauth_codes WHERE expires_at < ?`, now)
+	app.DB.ExecContext(ctx, `DELETE FROM tokens WHERE client LIKE 'mcp:%' AND expires_at IS NOT NULL AND expires_at < ? AND id NOT IN (SELECT token_id FROM oauth_refresh)`, now)
+}
+
+func sweepOAuthLoop() {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for range t.C {
+		sweepOAuth(context.Background())
+	}
+}
+
 func revokeFamily(ctx context.Context, family string, uid int64) {
 	app.DB.ExecContext(ctx, `DELETE FROM tokens WHERE id IN (SELECT token_id FROM oauth_refresh WHERE family=?)`, family)
 	app.DB.ExecContext(ctx, `DELETE FROM oauth_refresh WHERE family=?`, family)
