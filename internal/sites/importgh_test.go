@@ -48,10 +48,10 @@ func TestGitHubImport(t *testing.T) {
 	k := testkit.New(t)
 	ada := k.As("ada@corp.com", "")
 	res := ada.Must("POST", "/api/v1/import/github", map[string]any{"url": "https://github.com/acme/demo/tree/main/web"})
-	if res["slug"] != "web" {
+	if res["slug"] != "demo-web" || res["title"] != "Demo Web" { // named after its <title>
 		t.Fatalf("import: %v", res)
 	}
-	got := string(ada.Do("GET", "/api/v1/sites/web/files/index.html", nil).Body)
+	got := string(ada.Do("GET", "/api/v1/sites/demo-web/files/index.html", nil).Body)
 	if !strings.Contains(got, "From GitHub") {
 		t.Errorf("content: %s", got)
 	}

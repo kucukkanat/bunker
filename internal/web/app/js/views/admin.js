@@ -43,7 +43,7 @@ async function overview(el, ctx) {
     [s.versions, 'versions kept'],
     [s.aiCalls ?? s.ai?.calls, 'AI requests this month'],
   ].filter(([v]) => v != null);
-  const recent = (sites?.sites || []).slice(0, 5);
+  const recent = (sites?.sites || []).filter((x) => !x.isTemplate || x.owner?.email !== 'templates@bunker.local').slice(0, 5);
   const upd = h('div');
   maybe('/api/v1/admin/version').then((v) => {
     if (!v?.updateAvailable || !ctx.alive()) return;

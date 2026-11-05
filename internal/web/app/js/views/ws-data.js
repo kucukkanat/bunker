@@ -11,11 +11,29 @@ const RULES = [
 ];
 const SYS = ['_id', '_author', '_authorName', '_created', '_updated'];
 
-export default async function data(panel, ws) {
+// live keeps the Data tab up to date: new entries (from the site, another
+// person or a webhook) show up without a reload.
+let liveES = null;
+function live(panel, wrap, ws, names, onChange) {
+  liveES?.close();
+  liveES = null;
+  const chans = [...new Set(names)].filter((n) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(n)).slice(0, 30).map((n) => 'db:' + n);
+  if (!chans.length || typeof EventSource === 'undefined') return;
+  let t = null;
+  const es = new EventSource(sp(ws.slug, '/events?ch=' + enc(chans.join(','))));
+  liveES = es;
+  es.onmessage = () => {
+    if (!ws.alive() || !panel.contains(wrap)) { es.close(); return; }
+    clearTimeout(t);
+    t = setTimeout(() => { if (!wrap.querySelector('td input')) onChange(); }, 400);
+  };
+}
+
+export default async function data(panel, ws, keep) {
   const wrap = h('div.data-wrap', skeletons(3, '.line'));
   const hooksEl = h('section.hooks', { 'aria-label': 'Webhooks' });
   clear(panel, wrap, hooksEl);
-  hooks(hooksEl, ws);
+  const hookList = hooks(hooksEl, ws, () => data(panel, ws, keep));
   let colls;
   try {
     colls = list(await get(sp(ws.slug, '/db'), { quiet: true }), 'collections', 'items');
@@ -29,12 +47,14 @@ export default async function data(panel, ws) {
     return;
   }
   if (!ws.alive()) return;
+  colls = colls.map((c) => (typeof c === 'string' ? { name: c } : c));
+  const hookColls = ((await hookList.catch(() => null)) || []).map((x) => x.collection);
+  let cur = colls.some((c) => c.name === keep) ? keep : colls[0]?.name;
+  live(panel, wrap, ws, [...colls.map((c) => c.name), ...hookColls], () => data(panel, ws, cur));
   if (!colls.length) {
     clear(wrap, empty({ title: 'No data yet', text: 'When people use this site to save things, like form entries or sign-ups, the entries appear here. You can edit them and export to a spreadsheet.', art: false, iconName: 'db' }));
     return;
   }
-  colls = colls.map((c) => (typeof c === 'string' ? { name: c } : c));
-  let cur = colls[0].name;
   const tabs = h('div.coll-tabs', { role: 'group', 'aria-label': 'Collections' });
   const tools = h('div.row.wrap');
   const table = h('div');
@@ -131,11 +151,11 @@ function fmt(v) {
 }
 
 // Webhooks: a secret URL that adds the JSON it receives to a collection.
-async function hooks(el, ws) {
+async function hooks(el, ws, reload = () => hooks(el, ws)) {
   const d = await maybe(sp(ws.slug, '/hooks')).catch(() => null);
-  if (!ws.alive() || !d) return;
+  if (!ws.alive() || !d) return null;
   const items = d.hooks || [];
-  const add = h('button.btn.sm', { onclick: () => create(ws, () => hooks(el, ws)) }, icon('plus', 14), 'New webhook');
+  const add = h('button.btn.sm', { onclick: () => create(ws, reload) }, icon('plus', 14), 'New webhook');
   clear(el, h('div.row', h('h3', 'Webhooks'), h('span.spacer'), add),
     h('p.small.muted', 'Send data in from Power Automate, Zapier or a script. Each webhook adds what it receives to a collection.'),
     items.length > 0 && h('div.list', items.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('plug', 16)),
@@ -144,8 +164,9 @@ async function hooks(el, ws) {
         if (!(await confirmDialog({ title: 'Delete “' + x.name + '”?', message: 'Its URL stops working right away. Data it already sent stays.', confirm: 'Delete webhook', danger: true }))) return;
         await del(sp(ws.slug, '/hooks/' + x.id));
         toast('Webhook deleted.');
-        hooks(el, ws);
+        reload();
       } }, icon('trash', 16))))));
+  return items;
 }
 
 function create(ws, done) {

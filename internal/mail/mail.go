@@ -229,7 +229,7 @@ func build(from string, m Message) ([]byte, error) {
 	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nMessage-ID: <%s@bunker>\r\nAuto-Submitted: auto-generated\r\nContent-Type: multipart/alternative; boundary=%q\r\n\r\n",
 		from, m.To, mime.QEncoding.Encode("utf-8", m.Subject), time.Now().Format(time.RFC1123Z), core.RandomToken(12), mw.Boundary())
 	text := m.Text
-	if m.ButtonURL != "" {
+	if strings.HasPrefix(m.ButtonURL, "https://") || strings.HasPrefix(m.ButtonURL, "http://") {
 		text += "\n\n" + m.ButtonText + ": " + m.ButtonURL
 	}
 	text += "\n\n-- \nSent by Bunker. You can turn off email notifications in Bunker → Settings.\n"

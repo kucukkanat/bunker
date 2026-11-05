@@ -101,3 +101,96 @@ Found while doing it: dates in Data rows showed "Invalid Date" (ISO strings) —
   re-inviting would drop the groups, which the list doesn't return).
 - Generated pages and templates fall back to Georgia (the sandbox can't load
   the brand fonts).
+
+# Round 2 (November 2026): features added since round 1
+
+Walked through for real in Chromium (Playwright) against fresh servers:
+`bunker demo`, `bunker dev`, and a non-dev server set up from `/setup`.
+Fakes: a 40-line asyncio SMTP server, a `http.server` answering
+`/v1/models` on 11434 (Ollama). Fixed unless marked **open**.
+
+## `bunker demo`
+
+| Issue | Fix |
+|---|---|
+| The offsite poll said "4 votes" but every option showed 0: the seeded votes ("Lisbon", "Berlin") weren't options of the template. | Votes use the template's options (Mountain lodge 2, Lake cabins 1, City hotel 1). |
+| "Lunch on Friday" had no orders and wasn't shared, so teammates' data never showed there. | Shared with Team; Maya, Tom and Léa have ordered. |
+| Every demo site was "Owner": the "Shared with me" part of Home never appeared. | Maya owns a **Kudos wall** shared with you and the team, with three kudos. |
+| Terminal said only "running in dev mode". | "Bunker demo is running with example apps, teammates and data", plus the data folder. |
+| `/auth/dev?as=maya@example.com` (no `name`) renamed Maya to "maya" and dropped her Team group, so kudos showed "from bob" etc. | Switching to an existing person keeps their name and groups unless new ones are given. |
+
+Kanban, requests (owner sees "To approve 3"), Q3 budget table, handbook: all fine.
+
+## Templates (owner, then a second person at 390px)
+
+All 16 open without console errors as owner and as a viewer, no horizontal
+scroll at 390px. Viewer interactions checked: inventory "Add a few
+examples" (open rule), OKR "Add an example", room booking (owner adds rooms,
+viewer sees the grid), kudos posted by the viewer shows for the owner.
+Templates page subtitle said "from your coworkers" above 16 cards "by
+Bunker": now "by Bunker and your coworkers".
+
+## GitHub import
+
+Pasting `…/tree/master/brand` on Home works (toast → Import → site).
+
+| Issue | Fix |
+|---|---|
+| Site was named "brand" (folder name, lowercase) though the README says "Bunker brand kit". | Name comes from the start page's `<title>` / README heading, else the capitalized folder or repo name. Test updated. |
+| Pasting the link into the search box (the obvious text field on Home) did nothing. | A GitHub link pasted there offers the import too; folder links say "this GitHub folder". |
+
+## Public links
+
+Admin → Sharing toggle, Share dialog switch with confirm, "Public" pills: fine.
+
+| Issue | Fix |
+|---|---|
+| **A public site that uses data (e.g. a poll) was blank for visitors**: `bunker.me()` failed with 401, so the page never rendered; the shell kept retrying `/events` and `/kv` (5 × 401 per load). | The shell knows the visitor is a guest: `bunker.me()` returns `{id:0, name:"Guest", guest:true}`, storage starts empty, live updates aren't opened, other calls fail at once with "This is a public page: you can look, but saving or loading its data needs a Bunker account." Templates show "You're viewing a public page. Sign in to Bunker to take part…" and render empty. Badge panel says "Public page · not signed in" and offers "Sign in to Bunker". |
+| Share dialog still said "Only you can open this site right now." after turning the public link (or org-wide view) on. | Says anyone with the public link / everyone in the organization can view it. |
+| "They can't sign in or change data" undersold it: they can't *see* data either. | "They see the page only: its data, files and AI need a Bunker account." Docs (sharing.md) describe the guest `me()`. |
+
+Existing installs keep their copies of built-in templates (never overwritten),
+so the template banner only reaches new installs; the shell part applies everywhere.
+
+## Webhooks
+
+Create → URL once with copy + curl example → JSON and form posts both 201.
+
+| Issue | Fix |
+|---|---|
+| **Rows didn't appear until a reload** (docs promise live updates). | Data tab subscribes to its collections and to webhook target collections, and refreshes (keeping the selected collection, not while a cell is being edited). |
+
+## Email
+
+Admin → Email with `smtp://127.0.0.1:PORT`: "Email is on", test email arrives
+("Bunker email works", text + HTML).
+
+| Issue | Fix |
+|---|---|
+| **Invite email had no usable link** when the server didn't know its address (reached by IP, no `BUNKER_URL`; the learned URL ignores IPs): text said `Join Bunker: /auth/invite?token=…`, HTML had no button. Same for reset links. | Invite/reset emails use the address the admin is using; emails never print a relative link. Unit test added. Docs explain which address links use and that a password-less local relay works without STARTTLS. |
+| **Open**: invite emails end with "You can turn off email notifications in Settings" to someone who has no account yet. | — |
+
+## AI: "Found on this machine"
+
+Fake Ollama detected: "Use Ollama on this machine (llama3.2:3b)" → AI on,
+endpoint and models filled, Home's "needs an API key" note gone. Fine.
+**Open** (minor): it picks the first model; a coder model would suit the builder better.
+
+## Admin overview
+
+"Recently changed sites" was full of built-in templates on a new install; they're left out now.
+Update notice: not testable from outside (`LatestReleaseURL` is a test-only variable), skipped.
+
+## First run (non-dev, 390px, dark)
+
+| Issue | Fix |
+|---|---|
+| Setup step 1: the two sign-in choice cards stuck out of their card (page 395px wide). | Grid column `minmax(0,1fr)`, text can shrink. |
+| Welcome page: "Make my first site" + "Go to Home" overflowed the card. | Buttons wrap; padding scales on small screens; it greets by first name like the modal. |
+| New site → Upload said "A single HTML file, a folder, or a .zip." | Lists spreadsheets, Markdown, images, PDFs as Home does. |
+
+Docs checked against behavior: webhooks, admin/email, sharing (public links),
+drop-anything (GitHub import), quickstart (demo), templates (rules are
+changed in the Data tab, not "settings"); wording fixed where it differed.
+
+Suites: `go test ./internal/...`, `ui.test.mjs` (23), `sdk.test.mjs` (69), `cli.test.sh` (21) all pass.

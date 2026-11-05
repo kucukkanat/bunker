@@ -60,7 +60,7 @@ export default async function newSite(root, ctx) {
   const prompt = h('textarea.input', { rows: 3, placeholder: 'Describe the app you want, in plain words…', 'aria-label': 'Describe the app you want' });
   const go = h('button.btn.primary', { type: 'submit' }, icon('sparkle', 16), 'Build it');
   const bar = h('div.progress.hidden', h('i'));
-  const upMsg = h('p.small.muted', 'A single HTML file, a folder, or a .zip.');
+  const upMsg = h('p.small.muted', 'An HTML file, a folder, a .zip, a spreadsheet, Markdown, images or a PDF.');
   const pk = pickers((items) => dropCreate(items, upUi));
   const upUi = {
     start(m) { upMsg.textContent = m; bar.classList.remove('hidden'); },

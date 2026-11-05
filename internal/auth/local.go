@@ -305,7 +305,7 @@ func registerLocal(a *core.App) {
 			a.Audit(r.Context(), "auth.invite", 0, in.Email, map[string]any{"admin": in.IsAdmin})
 			by := core.MustUser(r).Name
 			emailed := mail.Send(mail.Message{To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
-				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in " + inviteDays(in.Days) + ".", ButtonText: "Join Bunker", ButtonURL: link})
+				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in " + inviteDays(in.Days) + ".", ButtonText: "Join Bunker", ButtonURL: absLink(r, link)})
 			note := "Send this link to them. It works once."
 			if emailed {
 				note = "We emailed them the link. You can also send it yourself; it works once."
@@ -348,7 +348,7 @@ func registerLocal(a *core.App) {
 			}
 			a.Audit(r.Context(), "auth.reset_link", 0, email, nil)
 			emailed := mail.Send(mail.Message{To: email, Subject: "Choose a new Bunker password",
-				Text: "Your Bunker admin made a link for you to choose a new password.\n\nIt works once and expires in 2 days. If you didn't ask for this, you can ignore this email.", ButtonText: "Choose a new password", ButtonURL: link})
+				Text: "Your Bunker admin made a link for you to choose a new password.\n\nIt works once and expires in 2 days. If you didn't ask for this, you can ignore this email.", ButtonText: "Choose a new password", ButtonURL: absLink(r, link)})
 			return map[string]any{"link": link, "emailed": emailed}, nil
 		}})
 	a.Handle(core.Op{Name: "auth.local.update", Method: "PUT", Path: "/api/v1/admin/auth/local", Summary: "Turn built-in accounts (email + password) on or off", Access: core.AccessAdmin,
@@ -697,4 +697,22 @@ func pageFoot(w http.ResponseWriter) { fmt.Fprint(w, `</body></html>`) }
 
 func urlQuery(s string) string {
 	return strings.NewReplacer("%", "%25", "&", "%26", "?", "%3F", "#", "%23", " ", "%20", "+", "%2B").Replace(s)
+}
+
+// absLink makes a link the server returned as a path (because it doesn't
+// know its own address yet, e.g. it's reached by IP) into a full address
+// for an email, using the address the signed-in admin is using right now.
+func absLink(r *http.Request, link string) string {
+	if !strings.HasPrefix(link, "/") || strings.HasPrefix(link, "//") {
+		return link
+	}
+	host := r.Host
+	if host == "" || strings.ContainsAny(host, "/\\ @") {
+		return link
+	}
+	scheme := "http"
+	if r.TLS != nil || (app != nil && app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + host + link
 }

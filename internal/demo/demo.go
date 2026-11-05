@@ -109,7 +109,7 @@ func seed(a *core.App) {
 	if s := me.do("POST", "/api/v1/sites", map[string]any{"title": "Team offsite vote", "template": "template-poll", "icon": "🗳️"}); s != nil {
 		share("team-offsite-vote", "viewer")
 		for i, p := range team {
-			people[p.email].do("POST", "/api/v1/sites/team-offsite-vote/db/votes", map[string]any{"option": []string{"Lisbon", "Mountains", "Lisbon", "Berlin"}[i]})
+			people[p.email].do("POST", "/api/v1/sites/team-offsite-vote/db/votes", map[string]any{"option": []string{"Mountain lodge", "Lake cabins", "Mountain lodge", "City hotel + workshop space"}[i]})
 		}
 	}
 	// 4. A spreadsheet that becomes a table app.
@@ -124,6 +124,24 @@ func seed(a *core.App) {
 	share("team-handbook", "viewer")
 	// 6. A hand-written page.
 	me.do("POST", "/api/v1/drop", map[string]any{"title": "Lunch on Friday", "files": map[string]string{"index.html": lunchHTML}})
+	share("lunch-on-friday", "viewer")
+	for i, p := range team[:3] {
+		people[p.email].do("POST", "/api/v1/sites/lunch-on-friday/db/orders", map[string]any{"meal": []string{"Curry", "Salad bowl", "Curry"}[i]})
+	}
+	// 7. A site a teammate made and shared with everyone, so Home shows
+	// "Shared with you" too.
+	maya := people["maya@example.com"]
+	if s := maya.do("POST", "/api/v1/sites", map[string]any{"title": "Kudos wall", "template": "template-kudos", "icon": "🙌"}); s != nil {
+		maya.do("POST", "/api/v1/sites/kudos-wall/members", map[string]any{"type": "user", "id": "you@localhost", "role": "editor"})
+		maya.do("POST", "/api/v1/sites/kudos-wall/members", map[string]any{"type": "group", "id": "Team", "name": "Team", "role": "viewer"})
+		for _, k := range []struct{ who, to, value, msg string }{
+			{"maya@example.com", "Léa Martin", "Above and beyond", "The new logo files are gorgeous, and two days early!"},
+			{"tom@example.com", "Sam Rivera", "Team player", "Thanks for covering the customer call on Tuesday."},
+			{"lea@example.com", "Tom Becker", "Brilliant idea", "Splitting the pricing page into two steps was a great call."},
+		} {
+			people[k.who].do("POST", "/api/v1/sites/kudos-wall/db/kudos", map[string]any{"to": k.to, "value": k.value, "message": k.msg})
+		}
+	}
 	a.Log.Info("demo content ready", "url", base)
 }
 

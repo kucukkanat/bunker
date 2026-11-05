@@ -4,7 +4,7 @@
 var BK = (function () {
   var sdk = window.bunker;
   var real = !!(sdk && sdk.db && typeof sdk.db.collection === 'function');
-  var mem = {}, subs = {}, seq = 0;
+  var mem = {}, subs = {}, seq = 0, guest = false;
   function list(x) { return Array.isArray(x) ? x : (x && (x.docs || x.items || x.data || x.results)) || []; }
   function emit(n) { (subs[n] || []).forEach(function (f) { try { f({ type: 'change' }); } catch (e) {} }); }
   function demoCol(n) {
@@ -22,9 +22,10 @@ var BK = (function () {
   function realCol(n) {
     var c = sdk.db.collection(n);
     return {
-      list: function (opts) { return Promise.resolve(c.list(opts)).then(list); },
+      // A public-link visitor (not signed in) can't read data: show the page empty.
+      list: function (opts) { return Promise.resolve(c.list(opts)).then(list, noData); },
       // all(): every document (pages through big collections).
-      all: function (opts) { return c.all ? Promise.resolve(c.all(opts)) : Promise.resolve(c.list(opts)).then(list); },
+      all: function (opts) { return (c.all ? Promise.resolve(c.all(opts)) : Promise.resolve(c.list(opts)).then(list)).catch(noData); },
       get: function (id) { return c.get(id); },
       add: function (d) { return c.add(d); },
       update: function (id, p) { return c.update(id, p); },
@@ -32,6 +33,7 @@ var BK = (function () {
       subscribe: function (f) { try { return c.subscribe(f); } catch (e) { return function () {}; } }
     };
   }
+  function noData(e) { if (guest) return []; throw e; }
   function toast(t) {
     if (real && sdk.toast) { try { sdk.toast(t); return; } catch (e) {} }
     var el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = t;
@@ -40,7 +42,7 @@ var BK = (function () {
   function errText(e) { return (e && (e.message || (e.error && e.error.message))) || String(e || 'Something went wrong'); }
   return {
     demo: !real,
-    me: function () { return real ? Promise.resolve(sdk.me()).then(function (u) { return u || {}; }) : Promise.resolve({ id: 0, name: 'You (demo)', email: 'you@example.com', groups: [], role: 'owner', canEdit: true }); },
+    me: function () { return real ? Promise.resolve(sdk.me()).then(function (u) { guest = !!(u && u.guest); return u || {}; }) : Promise.resolve({ id: 0, name: 'You (demo)', email: 'you@example.com', groups: [], role: 'owner', canEdit: true }); },
     // canEdit(me): may this person manage the app (editors and owners)?
     canEdit: function (u) { return !!(u && (u.canEdit || /^(editor|owner|admin)$/.test(u.role || ''))); },
     // ms(t): a document timestamp (ISO string or unix seconds) in milliseconds.
@@ -85,6 +87,6 @@ var BK = (function () {
     initials: function (name) { return String(name || '?').replace(/\([^)]*\)/g, '').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(function (s) { return s[0].toUpperCase(); }).join(''); },
     esc: function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); },
     when: function (t) { if (!t) return ''; var d = new Date(typeof t === 'number' && t < 1e12 ? t * 1000 : t); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); },
-    banner: function () { if (real) return; var b = document.createElement('div'); b.className = 'demo'; b.textContent = 'Demo mode: open this page in Bunker to save data and share it with your team.'; var w = document.querySelector('.wrap'); if (w) w.prepend(b); }
+    banner: function () { if (real && !guest) return; var b = document.createElement('div'); b.className = 'demo'; b.textContent = guest ? 'You’re viewing a public page. Sign in to Bunker to take part and see what others added.' : 'Demo mode: open this page in Bunker to save data and share it with your team.'; var w = document.querySelector('.wrap'); if (w) w.prepend(b); }
   };
 })();

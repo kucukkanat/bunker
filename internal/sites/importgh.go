@@ -125,11 +125,16 @@ func registerImport(a *core.App) {
 			}
 			title := in.Title
 			if title == "" {
+				// The page's own title or README heading, else the
+				// repository or folder name.
+				title = contentTitle(files)
+			}
+			if title == "" {
 				title = repo
 				if dir != "" {
 					title = dir[strings.LastIndex(dir, "/")+1:]
 				}
-				title = strings.ReplaceAll(strings.ReplaceAll(title, "-", " "), "_", " ")
+				title = niceTitle(title)
 			}
 			s, err := CreateSite(r.Context(), u, title, "", "From github.com/"+owner+"/"+repo, "")
 			if err != nil {

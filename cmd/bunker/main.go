@@ -73,7 +73,9 @@ func serve(dev bool) int {
 		log.Error("startup failed", "err", err)
 		return 1
 	}
-	if dev {
+	if dev && core.EnvBool("DEMO", false) {
+		fmt.Fprintf(os.Stderr, "\n  Bunker demo is running with example apps, teammates and data.\n  You're signed in as a local admin; the data folder is %s.\n  Open %s\n\n", cfg.DataDir, cfg.URL)
+	} else if dev {
 		fmt.Fprintf(os.Stderr, "\n  Bunker is running in dev mode (you're signed in as a local admin).\n  Open %s\n\n", cfg.URL)
 	}
 	// On a laptop, take people straight to the setup page (or the app in dev).

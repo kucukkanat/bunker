@@ -400,11 +400,23 @@ func handleDev(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	email := strings.ToLower(firstNonEmpty(q.Get("as"), "you@localhost"))
-	name := firstNonEmpty(q.Get("name"), strings.Split(email, "@")[0])
+	name := q.Get("name")
 	var groups []core.Group
 	for _, g := range splitList(q.Get("groups")) {
 		groups = append(groups, core.Group{ID: g, Name: g})
 	}
+	// Switching back to someone who already exists (e.g. a `bunker demo`
+	// teammate) keeps their name and groups unless new ones are given.
+	var oldName, oldGroups string
+	if app.DB.QueryRowContext(r.Context(), `SELECT name, groups_json FROM users WHERE subject=?`, "dev:"+email).Scan(&oldName, &oldGroups) == nil {
+		if name == "" {
+			name = oldName
+		}
+		if !q.Has("groups") {
+			json.Unmarshal([]byte(oldGroups), &groups)
+		}
+	}
+	name = firstNonEmpty(name, strings.Split(email, "@")[0])
 	u, err := upsertUser(r.Context(), "dev:"+email, email, name, groups)
 	if err != nil {
 		core.Err(w, err)

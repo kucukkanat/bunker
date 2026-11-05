@@ -31,7 +31,7 @@ curl -X POST https://bunker.example.com/hooks/bkh_... \
 curl -X POST https://bunker.example.com/hooks/bkh_... -d 'name=Barbara&team=Design'
 ```
 
-The answer is `201 {"ok":true,"added":1,"ids":["..."]}`.
+The answer is `201 {"ok":true,"added":1,"ids":["..."]}`. The records show up in **Data** right away, without a reload, with the webhook's creator under "Added by".
 
 ## Rules and limits
 

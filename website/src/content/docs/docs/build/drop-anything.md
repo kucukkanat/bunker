@@ -186,7 +186,7 @@ Web fonts from Google Fonts and similar can't load in the sandbox. Bundle font f
 
 ## Import from GitHub
 
-Paste a link to a **public** GitHub repository on the Home page (anywhere, not in a text box) and click **Import**. A folder works too: `https://github.com/owner/repo/tree/main/docs`. The files go through the same pipeline as a drop, so a repo with a `dist/` or `build/` folder, a Markdown handbook or a folder of CSVs all become apps.
+Paste a link to a **public** GitHub repository on the Home page (anywhere on the page, or in the search box) and click **Import**. The site is named after its start page's `<title>` or README heading, else the folder or repository name. A folder works too: `https://github.com/owner/repo/tree/main/docs`. The files go through the same pipeline as a drop, so a repo with a `dist/` or `build/` folder, a Markdown handbook or a folder of CSVs all become apps.
 
 ```sh
 bunker api sites.import_github --url https://github.com/owner/repo/tree/main/site

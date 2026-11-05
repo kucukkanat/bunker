@@ -506,7 +506,8 @@ select.mini { height: 32px; padding: 0 28px 0 10px; border-radius: 8px; border: 
 @media (prefers-color-scheme: dark) { .steps-bar div.done::before, .steps-bar div.on::before { background: var(--moss); } }
 .steps-bar div.on { color: var(--heading); }
 .code-input { font: 600 1.6rem var(--mono); letter-spacing: .18em; text-align: center; text-transform: uppercase; height: 60px; }
-.providers { display: grid; gap: 10px; }
+.providers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.provider > div { min-width: 0; }
 .provider { display: flex; gap: 14px; align-items: center; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; background: var(--surface); text-align: left; transition: border-color .15s, box-shadow .15s; width: 100%; }
 .provider:hover { border-color: var(--moss); }
 .provider[aria-pressed=true] { border-color: var(--forest-700); box-shadow: 0 0 0 3px color-mix(in srgb, var(--moss) 22%, transparent); }

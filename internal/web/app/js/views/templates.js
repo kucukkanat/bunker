@@ -5,7 +5,7 @@ import { templateCard, createBlank } from './new.js';
 export default async function templates(root, ctx) {
   const grid = h('div.grid', skeletons(6));
   clear(root, h('div.page',
-    h('div.page-head', h('div', h('h1', 'Templates'), h('p.sub', 'Ready-made sites from your coworkers. Using one makes your own copy, so you can change anything.')),
+    h('div.page-head', h('div', h('h1', 'Templates'), h('p.sub', 'Ready-made sites to start from, by Bunker and your coworkers. Using one makes your own copy, so you can change anything.')),
       h('span.spacer'), h('button.btn', { onclick: () => createBlank() }, icon('plus', 16), 'Blank site')),
     grid));
   const d = await get('/api/v1/sites?filter=templates').catch(() => null);
