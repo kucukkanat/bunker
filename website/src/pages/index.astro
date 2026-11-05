@@ -14,6 +14,7 @@ const description =
 const curl =
   'curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sudo BUNKER_URL=https://bunker.example.com sh';
 const docker = 'docker run -p 8080:8080 -v bunker:/data ghcr.io/kucukkanat/bunker';
+const goinstall = 'go install github.com/kucukkanat/bunker/cmd/bunker@latest && bunker demo';
 const fly = 'fly launch --from https://github.com/kucukkanat/bunker --copy-config';
 
 const deployButtons = [
@@ -422,6 +423,13 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
               <div class="cmd-box">
                 <code><span class="pr" aria-hidden="true">$</span>{docker}</code>
                 <button type="button" class="copy" data-copy={docker} aria-label="Copy the docker command">Copy</button>
+              </div>
+            </div>
+            <div class="cmd">
+              <p class="cmd-label">On your laptop <span>example apps, teammates and data in seconds</span></p>
+              <div class="cmd-box">
+                <code><span class="pr" aria-hidden="true">$</span>{goinstall}</code>
+                <button type="button" class="copy" data-copy={goinstall} aria-label="Copy the go install command">Copy</button>
               </div>
             </div>
           </div>
