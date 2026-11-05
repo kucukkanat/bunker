@@ -66,8 +66,9 @@ type notebook struct {
 }
 
 func renderNotebooks(files map[string][]byte, ps []string) (string, error) {
+	bud := newMDBudget()
 	if len(ps) == 1 {
-		h, err := notebookPage(ps[0], files[ps[0]], 0)
+		h, err := notebookPage(ps[0], files[ps[0]], 0, bud)
 		if err != nil {
 			return "", err
 		}
@@ -80,7 +81,7 @@ func renderNotebooks(files map[string][]byte, ps []string) (string, error) {
 	b.WriteString(`<main class="cards">`)
 	for _, p := range ps {
 		out := strings.TrimSuffix(p, path.Ext(p)) + ".html"
-		h, err := notebookPage(p, files[p], strings.Count(out, "/"))
+		h, err := notebookPage(p, files[p], strings.Count(out, "/"), bud)
 		if err != nil {
 			return "", err
 		}
@@ -96,7 +97,7 @@ func renderNotebooks(files map[string][]byte, ps []string) (string, error) {
 var nbH1 = regexp.MustCompile(`(?m)^#\s+(.+)$`)
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
-func notebookPage(p string, data []byte, depth int) ([]byte, error) {
+func notebookPage(p string, data []byte, depth int, bud *mdBudget) ([]byte, error) {
 	var nb notebook
 	if err := json.Unmarshal(data, &nb); err != nil {
 		return nil, core.BadRequest(path.Base(p) + " isn't a valid Jupyter notebook")
@@ -112,7 +113,7 @@ func notebookPage(p string, data []byte, depth int) ([]byte, error) {
 		switch c.CellType {
 		case "markdown":
 			var hb bytes.Buffer
-			_ = md.Convert([]byte(src), &hb)
+			bud.convert([]byte(src), &hb)
 			if title == "" {
 				if m := nbH1.FindStringSubmatch(src); m != nil {
 					title = strings.TrimSpace(m[1])
@@ -128,7 +129,7 @@ func notebookPage(p string, data []byte, depth int) ([]byte, error) {
 			if len(c.Outputs) > 0 {
 				b.WriteString(`<div class="outs"><div class="prompt out"></div><div>`)
 				for _, o := range c.Outputs {
-					b.WriteString(renderOutput(o))
+					b.WriteString(renderOutput(o, bud))
 				}
 				b.WriteString(`</div></div>`)
 			}
@@ -147,7 +148,7 @@ func notebookPage(p string, data []byte, depth int) ([]byte, error) {
 	return page{Title: title, Depth: depth, Body: body, JS: []string{"notebook.js"}}.render(), nil
 }
 
-func renderOutput(o nbOutput) string {
+func renderOutput(o nbOutput, bud *mdBudget) string {
 	switch o.OutputType {
 	case "stream":
 		cls := ""
@@ -186,7 +187,7 @@ func renderOutput(o nbOutput) string {
 		}
 		if v, ok := d["text/markdown"]; ok {
 			var hb bytes.Buffer
-			_ = md.Convert([]byte(v.String()), &hb)
+			bud.convert([]byte(v.String()), &hb)
 			return `<div class="output prose">` + hb.String() + `</div>`
 		}
 		if v, ok := d["text/latex"]; ok {
