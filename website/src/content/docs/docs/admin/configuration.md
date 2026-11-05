@@ -17,7 +17,7 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `PORT` | | Set by PaaS platforms; Bunker listens on it |
 | `BUNKER_DATA_DIR` | `/data` if it exists, else `./bunker-data` | Database, files, keys, certificates. **Back this up** |
 | `BUNKER_CONTENT_URL` | | Serve app content from a [separate origin](/bunker/docs/deploy/content-domain/) |
-| `BUNKER_TRUST_PROXY` | `true` when TLS is off or `PORT` is set | Read client IPs from `X-Forwarded-For` |
+| `BUNKER_TRUST_PROXY` | `true` when TLS is off or `PORT` is set | Read client IPs from `X-Forwarded-For`. Even when on, forwarding headers are only believed from loopback/private-network peers unless `BUNKER_TRUST_PROXY=true` is set explicitly |
 | `BUNKER_SECRET_KEY` | generated into `secret.key` | Key for encrypting secrets and signing content tickets (any string; hashed to 256 bits) |
 | `BUNKER_SETUP_CODE` | generated | Fixed first-run setup code |
 | `BUNKER_DEV` | `false` | Single-user dev mode, no sign-in (`bunker dev` sets it). Never in production |
@@ -63,6 +63,9 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `BUNKER_SHARING_EDITORS_CAN_SHARE` | `true` | Editors may share |
 | `BUNKER_UPLOAD_MAX_MB` | `100` | Largest upload (deploys and `bunker.files`) |
 | `BUNKER_UPLOAD_CONCURRENCY` | `4` | Uploads parsed in memory at once |
+| `BUNKER_SMTP_URL` | (off) | SMTP server for emailing invites, resets and notifications: `smtp://user:pass@host:587` or `smtps://...:465`. See [Email](/bunker/docs/admin/email/) |
+| `BUNKER_SMTP_FROM` | (from the SMTP user) | From address, e.g. `Bunker <bunker@corp.com>` |
+| `BUNKER_NO_BROWSER` | `false` | Don't open the setup page in a browser on first run on a desktop |
 | `BUNKER_SITE_MAX_MB` | `100` | Largest app (all files of one version) |
 | `BUNKER_MAX_SITES_PER_USER` | `500` | Apps per person |
 | `BUNKER_TRASH_DAYS` | `30` | Days before trashed apps are purged |
