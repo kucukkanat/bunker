@@ -39,7 +39,8 @@ COPY --from=build /out/bunker /usr/local/bin/bunker
 COPY --from=build --chown=${BUNKER_RUN_UID}:${BUNKER_RUN_UID} /out/data /data
 USER ${BUNKER_RUN_UID}:${BUNKER_RUN_UID}
 ENV BUNKER_DATA_DIR=/data
-VOLUME /data
+# No VOLUME instruction: Railway rejects Dockerfiles that declare one. Mount a
+# volume at /data yourself (docker run -v, compose, or the platform's disk).
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["/usr/local/bin/bunker", "healthcheck"]
