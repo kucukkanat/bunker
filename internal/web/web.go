@@ -24,9 +24,25 @@ func init() {
 }
 
 type asset struct {
-	b    []byte
-	etag string
-	ct   string
+	b, br, gz []byte
+	etag      string
+	ct        string
+}
+
+// serve writes an asset, picking a precompressed variant when accepted.
+func (as *asset) serve(w http.ResponseWriter, r *http.Request, mod time.Time) {
+	h := w.Header()
+	h.Add("Vary", "Accept-Encoding")
+	body := as.b
+	ae := r.Header.Get("Accept-Encoding")
+	if as.br != nil && strings.Contains(ae, "br") {
+		body = as.br
+		h.Set("Content-Encoding", "br")
+	} else if as.gz != nil && strings.Contains(ae, "gzip") {
+		body = as.gz
+		h.Set("Content-Encoding", "gzip")
+	}
+	http.ServeContent(w, r, "", mod, bytes.NewReader(body))
 }
 
 var assets = map[string]*asset{}
@@ -38,7 +54,11 @@ func load(prefix string) {
 		}
 		b, _ := files.ReadFile(p)
 		sum := sha256.Sum256(b)
-		assets[p] = &asset{b: b, etag: `"` + hex.EncodeToString(sum[:8]) + `"`, ct: contentType(p)}
+		as := &asset{b: b, etag: `"` + hex.EncodeToString(sum[:8]) + `"`, ct: contentType(p)}
+		if len(b) > 1024 && compressibleType(as.ct) {
+			as.br, as.gz = core.CompressBrotli(b), core.CompressGzip(b)
+		}
+		assets[p] = as
 		return nil
 	})
 }
@@ -61,6 +81,10 @@ func contentType(p string) string {
 		return "font/woff2"
 	}
 	return "application/octet-stream"
+}
+
+func compressibleType(ct string) bool {
+	return strings.HasPrefix(ct, "text/") || strings.Contains(ct, "javascript") || strings.Contains(ct, "json") || strings.Contains(ct, "svg")
 }
 
 // AppCSP is the policy for Bunker's own pages.
@@ -93,7 +117,7 @@ func initWeb(a *core.App) error {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		http.ServeContent(w, r, "", start, bytes.NewReader(as.b))
+		as.serve(w, r, start)
 	})
 	// Dashboard SPA routes.
 	appIndex := func(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +155,7 @@ func initWeb(a *core.App) error {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		w.Write(as.b)
+		as.serve(w, r, start)
 	})
 	a.Public("/app/")
 	a.Mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {

@@ -553,7 +553,8 @@ func copyTemplate(ctx context.Context, u *core.User, tplSlug string, dst *SiteRe
 	if err != nil {
 		return err
 	}
-	if !tpl.Template && RoleOf(ctx, u, tpl) < core.RoleViewer {
+	// Built-in templates are org-visible; user templates need view access.
+	if RoleOf(ctx, u, tpl) < core.RoleViewer {
 		return core.NotFound("template not found")
 	}
 	if tpl.Version == 0 {
