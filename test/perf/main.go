@@ -38,6 +38,7 @@ type harness struct {
 	seed     *seedData
 	duration time.Duration
 	conc     int
+	startup  time.Duration
 }
 
 func main() {
@@ -82,7 +83,7 @@ func main() {
 	}
 	check(h.start(*bin))
 	defer h.stop()
-	fmt.Printf("bunker perf: %d CPU, GOMAXPROCS %d, %s, server pid %d, data %s\n", runtime.NumCPU(), runtime.GOMAXPROCS(0), runtime.Version(), h.cmd.Process.Pid, dir)
+	fmt.Printf("bunker perf: %d CPU, GOMAXPROCS %d, %s, server pid %d ready in %s, data %s\n", runtime.NumCPU(), runtime.GOMAXPROCS(0), runtime.Version(), h.cmd.Process.Pid, h.startup.Round(time.Millisecond), dir)
 	rssStart := h.rss()
 
 	t0 := time.Now()
@@ -161,6 +162,7 @@ func (h *harness) start(bin string) error {
 		"BUNKER_LISTEN=127.0.0.1:"+port, "BUNKER_URL="+h.base, "BUNKER_LOG_FORMAT=text")
 	h.cmd.Stdout = os.Stderr
 	h.cmd.Stderr = os.Stderr
+	t0 := time.Now()
 	if err := h.cmd.Start(); err != nil {
 		return err
 	}
@@ -169,6 +171,7 @@ func (h *harness) start(bin string) error {
 		if res, err := http.Get(h.base + "/healthz"); err == nil {
 			res.Body.Close()
 			if res.StatusCode == 200 {
+				h.startup = time.Since(t0)
 				return nil
 			}
 		}
