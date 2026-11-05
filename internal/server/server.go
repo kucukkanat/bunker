@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -59,6 +60,7 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 	// Startup work (migrations, asset compression, template seeding) leaves
 	// garbage behind; hand that memory back to the OS before serving.
 	debug.FreeOSMemory()
+	applyMemoryLimit(log)
 	a.Handle(core.Op{Name: "system.health", Method: "GET", Path: "/healthz", Summary: "Health check", Access: core.AccessPublic, Hidden: true,
 		Fn: func(r *http.Request) (any, error) {
 			if err := a.DB.PingContext(r.Context()); err != nil {
@@ -323,4 +325,42 @@ func learnURL(a *core.App, r *http.Request) {
 	a.Cfg.URL = scheme + "://" + host
 	a.SetSetting(context.Background(), "server.url", a.Cfg.URL)
 	a.Log.Info("learned public URL from first request; set BUNKER_URL to override", "url", a.Cfg.URL)
+}
+
+// applyMemoryLimit sets a soft memory limit for the Go runtime from
+// BUNKER_MEMORY_LIMIT (e.g. "400MiB", "1GB", or bytes), unless GOMEMLIMIT
+// is set. Near the limit the GC runs more often instead of letting the
+// heap grow, which suits small VMs. Off by default.
+func applyMemoryLimit(log *slog.Logger) {
+	v := core.Env("MEMORY_LIMIT", "")
+	if v == "" || os.Getenv("GOMEMLIMIT") != "" {
+		return
+	}
+	n, ok := parseBytes(v)
+	if !ok || n <= 0 {
+		log.Warn("ignoring BUNKER_MEMORY_LIMIT: use a size like 400MiB or 1GB", "value", v)
+		return
+	}
+	debug.SetMemoryLimit(n)
+	log.Info("memory limit set", "bytes", n)
+}
+
+func parseBytes(s string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	units := []struct {
+		suf string
+		mul int64
+	}{{"KiB", 1 << 10}, {"MiB", 1 << 20}, {"GiB", 1 << 30}, {"KB", 1e3}, {"MB", 1e6}, {"GB", 1e9}, {"K", 1 << 10}, {"M", 1 << 20}, {"G", 1 << 30}, {"B", 1}}
+	mul := int64(1)
+	for _, u := range units {
+		if len(s) > len(u.suf) && strings.EqualFold(s[len(s)-len(u.suf):], u.suf) {
+			s, mul = strings.TrimSpace(s[:len(s)-len(u.suf)]), u.mul
+			break
+		}
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 || n > (1<<62)/mul {
+		return 0, false
+	}
+	return n * mul, true
 }
