@@ -72,6 +72,10 @@ The Caddyfile sets `flush_interval -1` so live updates (server-sent events) aren
 
 ## Upgrading
 
+The simplest way: **Admin → Updates → Update**. Bunker downloads the release into the data volume and restarts in place; the container keeps running. See [Upgrade](/bunker/docs/admin/backups/#upgrade).
+
+To update the image itself:
+
 ```sh
 docker pull ghcr.io/kucukkanat/bunker
 docker rm -f bunker && docker run ...   # same command as before

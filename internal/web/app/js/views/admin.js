@@ -1,4 +1,4 @@
-// /admin: overview, people, sites, sign-in, AI, M365, connections, sharing, audit.
+// /admin: overview, people, sites, sign-in, AI, M365, connections, server functions, sharing, email, updates, audit.
 import { h, icon, clear, empty, avatar, toast, modal, copyBtn, confirmDialog, promptDialog, relTime, fullTime, bytes, busy, toggle, siteIcon, skeletons, debounce, plural, sparkline } from '../ui.js';
 import { get, put, post, patch, del, maybe, enc, list } from '../api.js';
 import { state } from '../state.js';
@@ -7,7 +7,7 @@ import { blockDialog, unblock, adminBlocks } from '../functions.js';
 
 const SECTIONS = [
   ['', 'Overview'], ['people', 'People'], ['sites', 'Sites'], ['sign-in', 'Sign-in'], ['ai', 'AI'],
-  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['functions', 'Server functions'], ['sharing', 'Sharing'], ['email', 'Email'], ['audit', 'Audit log'],
+  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['functions', 'Server functions'], ['sharing', 'Sharing'], ['email', 'Email'], ['updates', 'Updates'], ['audit', 'Audit log'],
 ];
 
 const notYet = (what) => empty({ title: what + ' isn’t installed yet', text: 'This part of Bunker is still being built. When your server is updated, its settings appear here.', art: false, iconName: 'info' });
@@ -24,7 +24,7 @@ export default async function admin(root, ctx) {
     h('nav.subnav', { 'aria-label': 'Admin sections' }, SECTIONS.map(([id, l]) => h('a', { href: '/admin' + (id ? '/' + id : ''), 'aria-current': id === sub ? 'page' : null }, l))),
     body));
   document.title = title + ' · Admin · Bunker';
-  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, functions: serverFunctions, sharing, email, audit }[sub];
+  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, functions: serverFunctions, sharing, email, updates, audit }[sub];
   if (!fn) return clear(body, empty({ title: 'Nothing here', text: 'Pick a section above.', art: false }));
   return fn(body, ctx);
 }
@@ -48,7 +48,9 @@ async function overview(el, ctx) {
   const upd = h('div');
   maybe('/api/v1/admin/version').then((v) => {
     if (!v?.updateAvailable || !ctx.alive()) return;
-    clear(upd, h('div.notice', { style: { marginBottom: '16px' } }, icon('sparkle', 18), h('div', h('b', 'Bunker ' + v.latest + ' is available. '), 'You have ' + v.current + '. ' + v.how + ' ', h('a', { href: v.url, target: '_blank', rel: 'noopener' }, 'What’s new'))));
+    clear(upd, h('div.notice', { style: { marginBottom: '16px' }, 'data-testid': 'update-notice' }, icon('sparkle', 18),
+      h('div', { style: { flex: 1 } }, h('b', 'Bunker ' + v.latest + ' is available. '), 'You have ' + v.current + '. ', v.canUpdate ? null : v.how + ' '),
+      h('a.btn.sm' + (v.canUpdate ? '.primary' : ''), { href: '/admin/updates' }, v.canUpdate ? 'Update now' : 'What’s new')));
   }).catch(() => {});
   clear(el,
     upd,
@@ -475,6 +477,142 @@ async function email(el, ctx) {
     h('label.field', h('span.label', 'SMTP server'), url, h('span.hint', d.pinned ? 'Set by the server’s environment (BUNKER_SMTP_URL).' : 'Use smtp:// for port 587 (STARTTLS) or smtps:// for port 465. Microsoft 365: smtp://you%40corp.com:password@smtp.office365.com:587. Leave empty to turn email off.')),
     h('label.field', h('span.label', 'From'), from),
     h('div.row', test, h('span.spacer'), save))));
+}
+
+// ---- updates ----
+
+// Release notes are Markdown; show headings, bullets and paragraphs as text.
+function releaseNotes(md) {
+  const out = [];
+  let ul = null;
+  for (const raw of String(md || '').split(/\r?\n/)) {
+    const line = raw.replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+    if (!line) { ul = null; continue; }
+    const head = /^#{1,6}\s+(.*)/.exec(line);
+    const item = /^[-*+]\s+(.*)/.exec(line);
+    if (head) { ul = null; out.push(h('h3.h4', { style: { margin: '14px 0 4px' } }, head[1])); }
+    else if (item) { if (!ul) out.push((ul = h('ul', { style: { margin: '4px 0', paddingLeft: '20px' } }))); ul.append(h('li', item[1])); }
+    else { ul = null; out.push(h('p', { style: { margin: '6px 0' } }, line)); }
+  }
+  return out;
+}
+
+// waitForVersion polls /healthz until the server answers with another version.
+async function waitForVersion(from, onTick) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < 180000) {
+    await new Promise((r) => setTimeout(r, 1000));
+    onTick?.(Math.round((Date.now() - t0) / 1000));
+    try {
+      const r = await fetch('/healthz', { cache: 'no-store' });
+      if (r.ok) { const v = (await r.json()).version; if (v && v !== from) return v; }
+    } catch { /* restarting */ }
+  }
+  return null;
+}
+
+async function updates(el, ctx) {
+  let d = await maybe('/api/v1/admin/update').catch(() => null);
+  if (!ctx.alive()) return;
+  if (!d) return clear(el, notYet('Updates'));
+  let timer = null;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  const poll = () => {
+    stop();
+    timer = setTimeout(async () => {
+      if (!ctx.alive()) return;
+      const n = await get('/api/v1/admin/update', { quiet: true }).catch(() => null);
+      if (n && ctx.alive()) { d = n; draw(); }
+    }, 1000);
+  };
+  const restarting = async (target) => {
+    const msg = h('span', 'Restarting Bunker…');
+    clear(jobEl, h('div.notice', { role: 'status', 'aria-live': 'polite' }, h('div.progress.indeterminate', { style: { width: '120px', marginTop: '6px' } }, h('i')), h('div', h('b', target ? 'Switching to ' + target + '. ' : ''), msg)));
+    const v = await waitForVersion(d.current, (s) => { if (s > 15) msg.textContent = 'Still restarting (' + s + ' s). Bunker starts again by itself.'; });
+    if (!ctx.alive()) return;
+    if (v) { toast('Bunker ' + v + ' is running.', { type: 'ok' }); setTimeout(() => location.reload(), 600); }
+    else clear(jobEl, h('div.notice.warn', icon('info', 18), h('div', h('b', 'Bunker hasn’t come back yet. '), 'Check the server’s logs. If the new version can’t start, Bunker goes back to the previous one after three tries.')));
+  };
+  const install = async (btn, version) => busy(btn, async () => {
+    const r = await post('/api/v1/admin/update', version ? { version } : {});
+    d.job = r.job;
+    draw();
+  });
+  const rollback = async (btn) => {
+    if (!(await confirmDialog({ title: 'Go back to ' + d.rollbackTo + '?', message: 'Bunker restarts on ' + d.rollbackTo + ' in a few seconds. Data and sign-ins are kept. Automatic updates skip ' + d.current + '.', confirm: 'Go back' }))) return;
+    await busy(btn, async () => {
+      const r = await post('/api/v1/admin/update/rollback', {});
+      d.job = r.job;
+      draw();
+    });
+  };
+  const jobEl = h('div');
+  let shownRestart = false;
+  function drawJob() {
+    const j = d.job || { state: 'idle' };
+    if (j.state === 'downloading') {
+      const pct = j.total ? Math.min(100, Math.round((j.done / j.total) * 100)) : 0;
+      clear(jobEl, h('div.notice', { role: 'status' }, icon('clock', 18), h('div', { style: { flex: 1 } }, h('b', 'Downloading ' + j.version + '… '), j.total ? bytes(j.done) + ' of ' + bytes(j.total) : '',
+        h('div.progress', { style: { marginTop: '8px' }, role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Download progress' }, h('i', { style: { width: pct + '%' } })))));
+      poll();
+    } else if (j.state === 'preparing') {
+      clear(jobEl, h('div.notice', { role: 'status' }, icon('shield', 18), h('div', { style: { flex: 1 } }, h('b', 'Checking ' + j.version + '. '), 'Verifying the checksum, test-running it and copying the database aside.',
+        h('div.progress.indeterminate', { style: { marginTop: '8px' } }, h('i')))));
+      poll();
+    } else if (j.state === 'restarting') {
+      stop();
+      if (!shownRestart) { shownRestart = true; restarting(j.version); }
+    } else if (j.state === 'failed') {
+      clear(jobEl, h('div.notice.warn', { role: 'alert' }, icon('info', 18), h('div', h('b', 'The update to ' + j.version + ' didn’t finish. '), j.error + ' Bunker is still running ' + d.current + '.')));
+    } else clear(jobEl);
+  }
+  const busyJob = () => ['downloading', 'preparing', 'restarting'].includes(d.job?.state);
+  function draw() {
+    if (!ctx.alive()) return stop();
+    const rel = d.release;
+    const checkBtn = h('button.btn.sm', { type: 'button', disabled: !d.checks || busyJob(), onclick: (e) => busy(e.currentTarget, async () => { d = await post('/api/v1/admin/update/check', {}); draw(); }) }, icon('refresh', 14), 'Check now');
+    const status = d.updateAvailable ? h('span.badge.warn', d.latest + ' available') : d.latest ? h('span.badge.ok', icon('check', 12), ' Up to date') : null;
+    const versionCard = h('div.card.pad', { 'data-testid': 'update-version' },
+      h('div.row.wrap', h('div', { style: { flex: 1 } }, h('h2.h3', 'Bunker ' + d.current, ' ', status),
+        h('p.small.muted', { style: { marginTop: '4px' } },
+          d.staged ? 'Updated from this page' + (d.installedAt ? ' ' + relTime(d.installedAt) : '') + (d.installedBy ? ' by ' + d.installedBy : '') + '. Installed with ' + d.installed + '. ' : '',
+          d.checks ? (d.checkedAt ? 'Checked ' + relTime(d.checkedAt) + '.' : '') : 'Update checks are off (BUNKER_UPDATE_CHECK=false).',
+          ' Running on ' + d.platform + '.')),
+        checkBtn),
+      d.checkError && h('p.small', { style: { color: 'var(--danger)', marginTop: '8px' } }, d.checkError),
+      d.rollbackTo && !busyJob() && h('div.row', { style: { marginTop: '12px' } }, h('span.small.muted', { style: { flex: 1 } }, 'Something wrong with this version?'),
+        h('button.btn.sm', { type: 'button', onclick: (e) => rollback(e.currentTarget) }, icon('history', 14), 'Go back to ' + d.rollbackTo)));
+    const failure = d.lastFailure && h('div.notice.warn', { style: { marginTop: '16px' } }, icon('info', 18), h('div',
+      /admin/.test(d.lastFailure.reason)
+        ? [h('b', 'You went back from ' + d.lastFailure.version + ' ' + relTime(d.lastFailure.at) + '. '), 'Automatic updates skip it; you can still install it here.']
+        : [h('b', d.lastFailure.version + ' couldn’t start ' + relTime(d.lastFailure.at) + ': '), d.lastFailure.reason + '. Bunker went back to ' + d.lastFailure.running + '.']));
+    const upd = h('button.btn.primary', { type: 'button', disabled: !d.canUpdate || busyJob(), 'data-testid': 'update-install', onclick: (e) => install(e.currentTarget, d.latest) }, icon('sparkle', 16), 'Update to ' + d.latest);
+    const releaseCard = rel && d.updateAvailable && h('div.card.pad', { style: { marginTop: '16px' } },
+      h('div.row.wrap', h('div', { style: { flex: 1 } }, h('h2.h3', rel.name || rel.tag), h('p.small.muted', (rel.published ? 'Released ' + relTime(rel.published) + ' · ' : ''), h('a', { href: rel.url, target: '_blank', rel: 'noopener' }, 'Release page'))), upd),
+      h('div.small', { style: { maxHeight: '320px', overflow: 'auto', marginTop: '10px', borderTop: '1px solid var(--line-soft)', paddingTop: '6px' } }, rel.notes ? releaseNotes(rel.notes) : h('p.muted', 'No release notes.')),
+      d.canUpdate
+        ? h('p.small.muted', { style: { marginTop: '12px' } }, 'Bunker downloads the release, checks its checksum, test-runs it and copies the database aside, then restarts. It’s back in a few seconds; data, sign-ins and open pages carry on. If the new version can’t start, Bunker goes back by itself.')
+        : h('div.notice', { style: { marginTop: '12px' } }, icon('info', 18), h('div', d.reason, ' ', h('span.muted', d.how))));
+    const noUpd = !d.canUpdate && !releaseCard && h('div.notice', { style: { marginTop: '16px' } }, icon('info', 18), h('div', d.reason));
+    const hours = h('select.input', { 'aria-label': 'Hour for automatic updates', style: { width: 'auto' }, disabled: d.auto.pinned || !d.canUpdate, onchange: async (e) => {
+      await put('/api/v1/admin/update/settings', { hour: +e.target.value });
+      d.auto.hour = +e.target.value;
+      toast('Saved.', { type: 'ok', timeout: 2000 });
+    } }, Array.from({ length: 24 }, (_, i) => {
+      const local = new Date(Date.UTC(2026, 0, 1, i)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return h('option', { value: i, selected: i === d.auto.hour }, String(i).padStart(2, '0') + ':00 UTC (' + local + ' your time)');
+    }));
+    const autoCard = h('div.card.pad', { style: { marginTop: '16px' } }, h('h2.h3', 'Automatic updates'),
+      h('div.setting', h('div', h('b', 'Install new versions automatically'), h('span.d', 'Stable releases only, once a day in the hour you pick. A version that fails to start, or that you went back from, is skipped.' + (d.auto.pinned ? ' Set by the server’s environment (BUNKER_UPDATE_AUTO, BUNKER_UPDATE_HOUR).' : ''))),
+        toggle({ checked: d.auto.enabled, label: 'Install new versions automatically', disabled: d.auto.pinned || !d.canUpdate, onchange: async (v, input) => {
+          try { await put('/api/v1/admin/update/settings', { auto: v }); d.auto.enabled = v; toast(v ? 'Bunker updates itself from now on.' : 'Automatic updates are off.', { type: 'ok', timeout: 2500 }); }
+          catch { input.checked = !v; }
+        } })),
+      h('div.setting', { style: { borderBottom: 0 } }, h('div', h('b', 'When'), h('span.d', 'Pick a quiet hour: Bunker is unavailable for a few seconds while it restarts.')), hours));
+    clear(el, versionCard, jobEl, failure, releaseCard, noUpd, autoCard);
+    drawJob();
+  }
+  draw();
 }
 
 async function audit(el, ctx) {

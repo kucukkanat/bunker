@@ -47,7 +47,7 @@ It downloads the right binary, checks its SHA-256 checksum, installs it as a har
 
 - Without `sudo`, it installs just the binary into `~/.local/bin`.
 - `... | sh -s -- --version v1.2.3` pins a version. `--no-service` skips the service.
-- Run it again to upgrade.
+- Upgrade from Admin → Updates (any install method), or run it again.
 
 Windows (PowerShell):
 

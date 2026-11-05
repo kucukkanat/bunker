@@ -12,6 +12,12 @@
 - **Dashboard:** a Functions tab with test runs against the draft or live code, the last 200 runs with logs, live logs and secrets. CLI: `bunker fn`, `bunker fn call`, `bunker fn logs`, `bunker secrets`. MCP tools for all of it.
 - **Admin:** Admin → Functions to turn them off, change limits and the outbound policy, and block a person (every app they own) or one app, with a reason the person sees. `BUNKER_FUNCTIONS_*` variables pin these settings. New audit events `functions.*`.
 
+### Updates from the admin page
+- **Admin → Updates:** see the version you run, the newest release and its notes, and press **Update**. Bunker downloads the build, checks its checksum, test-runs it, copies the database aside (`updates/` in the data folder) and restarts in place in a second or two. Works on the Linux installer, Docker, Compose, Render, Railway, Fly and Azure: the new binary goes in the data folder (`bin/`), never over the installed one, and a newer image or installer run still wins.
+- **A way back:** a version that doesn't start within three tries is dropped automatically; **Go back** returns to the previous version by hand.
+- **Automatic updates** (off by default): stable releases, once a day in an hour you pick. `BUNKER_UPDATE_AUTO`, `BUNKER_UPDATE_HOUR` and `BUNKER_UPDATE_SELF=false` pin or turn off these controls. Audit events `admin.update.*`.
+- **CLI:** `bunker update --remote` updates the server you're signed in to; `bunker update --version vX.Y.Z` installs a specific release.
+
 ### Changed
 - **`api/*.js`, `api/*.mjs`, `api/*.ts` and `api/*.mts` files with `export default` are now server functions and are no longer served to browsers** (they return 404), and in an app with functions neither are the `.js`/`.mjs`/`.ts`/`.mts` files under `api/_*`. Other files in `api/`, such as `api/data.json`, are served as before. If an app loaded such a file as a browser script, move it out of `api/`.
 

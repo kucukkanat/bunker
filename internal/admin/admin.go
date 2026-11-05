@@ -38,6 +38,7 @@ func initAdmin(a *core.App) error {
 	startSinks(a)
 	go retentionLoop(ctx, a)
 	go scheduleLoop(ctx, a)
+	go autoLoop(ctx)
 	return nil
 }
 

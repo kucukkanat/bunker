@@ -20,7 +20,7 @@ Bunker is built in the open. Pages for features that aren't finished carry a **P
 - **Data in:** inbound webhooks that add JSON or form posts to an app's collection (Power Automate, Zapier, scripts), or hand them to a server function.
 - **Server functions:** `api/<name>.js|ts` next to the pages, run per call in a fresh QuickJS-on-WebAssembly sandbox (pure Go, no containers, no build step); viewer or elevated rights; schedules, write triggers and webhook targets; write-only per-app secrets; outbound `fetch` under an admin policy; logs and test runs in the dashboard; `bunker fn` and `bunker secrets`; admin switch, limits and per-person and per-app blocks.
 - **Admin:** usage stats, sharing and size policy, moving someone's sites when they leave, idle-app archiving, Microsoft 365 settings (scope allowlist, per-app approval, SharePoint site list), connections.
-- **Operations:** single binary, SQLite, one-click deploys (Azure, Render, Railway, Fly, Docker, Linux installer), automatic HTTPS, Prometheus metrics, backup download, scheduled snapshots, `bunker backup` and `bunker restore`; on a desktop the first start opens the setup page in the browser.
+- **Operations:** single binary, SQLite, one-click deploys (Azure, Render, Railway, Fly, Docker, Linux installer), automatic HTTPS, Prometheus metrics, backup download, scheduled snapshots, `bunker backup` and `bunker restore`; one-click updates from Admin → Updates (checksum-verified, automatic fallback if a version won't start, optional automatic updates) and `bunker update --remote`; on a desktop the first start opens the setup page in the browser.
 
 ## Next
 

@@ -7,6 +7,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -141,3 +142,20 @@ type DirEntry struct {
 type Directory interface {
 	Search(ctx context.Context, u *User, q string) ([]DirEntry, error)
 }
+
+// ErrRestart is returned by the server loop when RequestRestart was called.
+var ErrRestart = errors.New("restart requested")
+
+var restartCh = make(chan struct{}, 1)
+
+// RequestRestart asks the server to shut down gracefully and start again
+// (used after an update is staged).
+func RequestRestart() {
+	select {
+	case restartCh <- struct{}{}:
+	default:
+	}
+}
+
+// Restarts delivers RequestRestart calls to the server loop.
+func Restarts() <-chan struct{} { return restartCh }

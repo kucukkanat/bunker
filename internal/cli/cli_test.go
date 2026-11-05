@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/selfupdate"
 	"github.com/kucukkanat/bunker/internal/server"
 
 	_ "github.com/kucukkanat/bunker/internal/auth"
@@ -217,11 +218,11 @@ func TestUpsertSection(t *testing.T) {
 
 func TestFindChecksum(t *testing.T) {
 	sums := "aaa  bunker_linux_amd64.tar.gz\nbbb *bunker_darwin_arm64.tar.gz\n"
-	if findChecksum(sums, "bunker_darwin_arm64.tar.gz") != "bbb" || findChecksum(sums, "x") != "" {
+	if selfupdate.FindChecksum(sums, "bunker_darwin_arm64.tar.gz") != "bbb" || selfupdate.FindChecksum(sums, "x") != "" {
 		t.Fatal("checksum lookup")
 	}
 	h := strings.Repeat("a", 64)
-	if findChecksum(h+"\n", "anything") != h {
+	if selfupdate.FindChecksum(h+"\n", "anything") != h {
 		t.Fatal("bare hash file")
 	}
 }

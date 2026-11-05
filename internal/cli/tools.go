@@ -1,16 +1,8 @@
 package cli
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bufio"
-	"bytes"
-	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/selfupdate"
 )
 
 func init() {
@@ -31,7 +24,7 @@ func init() {
 		&command{
 			Name: "update", Aliases: []string{"upgrade"}, Args: "", Group: groupAcct,
 			Summary: "Update bunker to the latest release (checksum verified)",
-			Flags:   []flagDoc{{Name: "check", Desc: "Only check whether an update is available"}, {Name: "force", Desc: "Reinstall even if up to date"}},
+			Flags:   []flagDoc{{Name: "check", Desc: "Only check whether an update is available"}, {Name: "force", Desc: "Reinstall even if up to date"}, {Name: "version", Arg: "TAG", Desc: "Install a specific release, like v0.2.0"}, {Name: "remote", Desc: "Update the Bunker server you are signed in to (admins), not this program"}},
 			Run:     cmdUpdate,
 		},
 		&command{
@@ -190,21 +183,19 @@ func (*quietErr) Error() string { return "" }
 // ---- update ----
 
 func cmdUpdate(x *App, a *Args) error {
-	repo := firstNonEmpty(x.Getenv("BUNKER_UPDATE_REPO"), "kucukkanat/bunker")
-	api := strings.TrimRight(firstNonEmpty(x.Getenv("BUNKER_UPDATE_API"), "https://api.github.com"), "/")
-	c := &Client{Server: api, HTTP: httpClient}
-	var rel struct {
-		Tag    string `json:"tag_name"`
-		Assets []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
+	if a.Bool("remote") {
+		return cmdUpdateServer(x, a)
 	}
+	src := selfupdate.DefaultSource()
+	src.Repo = firstNonEmpty(x.Getenv("BUNKER_UPDATE_REPO"), src.Repo)
+	if v := x.Getenv("BUNKER_UPDATE_API"); v != "" {
+		src.API = strings.TrimRight(v, "/")
+	}
+	src.Client, src.Agent = httpClient, userAgent
 	sp := x.spin("Checking for updates…")
-	err := c.Get(x.ctx, "/repos/"+repo+"/releases/latest", nil, &rel)
+	rel, err := src.Get(x.ctx, a.Str("version"))
 	sp.end()
-	var ae *APIError
-	if errors.As(err, &ae) && ae.Status == 404 {
+	if errors.Is(err, selfupdate.ErrNoRelease) {
 		return fmt.Errorf("no Bunker release has been published yet. Get the latest code with: go install github.com/kucukkanat/bunker/cmd/bunker@latest (or run the install.sh one-liner again)")
 	}
 	if err != nil {
@@ -220,60 +211,9 @@ func cmdUpdate(x *App, a *Args) error {
 			x.info("bunker %s is available (you have %s). Run bunker update", rel.Tag, core.Version)
 		})
 	}
-	archs := []string{runtime.GOARCH}
-	switch runtime.GOARCH {
-	case "amd64":
-		archs = append(archs, "x86_64", "x64")
-	case "arm64":
-		archs = append(archs, "aarch64")
-	}
-	osNames := []string{runtime.GOOS}
-	if runtime.GOOS == "darwin" {
-		osNames = append(osNames, "macos", "mac")
-	}
-	var asset, sums string
-	var assetName string
-	for _, as := range rel.Assets {
-		n := strings.ToLower(as.Name)
-		if strings.Contains(n, "checksum") || strings.Contains(n, "sha256sums") {
-			sums = as.URL
-			continue
-		}
-		if strings.HasSuffix(n, ".sha256") || strings.HasSuffix(n, ".sig") || strings.HasSuffix(n, ".pem") || strings.HasSuffix(n, ".sbom") || strings.HasSuffix(n, ".json") {
-			continue
-		}
-		if containsAny(n, osNames) && containsAny(n, archs) && asset == "" {
-			asset, assetName = as.URL, as.Name
-		}
-	}
-	if asset == "" {
-		return fmt.Errorf("release %s has no build for %s/%s", rel.Tag, runtime.GOOS, runtime.GOARCH)
-	}
-	for _, as := range rel.Assets {
-		if as.Name == assetName+".sha256" {
-			sums = as.URL
-		}
-	}
-	if sums == "" {
-		return fmt.Errorf("release %s has no checksums; not installing an unverified binary", rel.Tag)
-	}
-	sp = x.spin("Downloading " + assetName + "…")
-	data, err := download(x, asset, 300<<20)
-	if err != nil {
-		sp.end()
-		return err
-	}
-	sumData, err := download(x, sums, 1<<20)
+	sp = x.spin("Downloading " + rel.Tag + "…")
+	bin, err := src.Download(x.ctx, rel, nil)
 	sp.end()
-	if err != nil {
-		return err
-	}
-	want := findChecksum(string(sumData), assetName)
-	got := sha256.Sum256(data)
-	if want == "" || !strings.EqualFold(want, hex.EncodeToString(got[:])) {
-		return fmt.Errorf("checksum mismatch for %s; not installing", assetName)
-	}
-	bin, err := extractBinary(assetName, data)
 	if err != nil {
 		return err
 	}
@@ -299,94 +239,77 @@ func cmdUpdate(x *App, a *Args) error {
 	}
 	return x.result(map[string]any{"current": core.Version, "latest": rel.Tag, "updated": true, "path": exe}, func() {
 		x.ok("Updated bunker %s → %s", core.Version, rel.Tag)
+		x.info("A running server switches to it on its next restart (or update it from Admin → Updates)")
 	})
 }
 
-func containsAny(s string, subs []string) bool {
-	for _, x := range subs {
-		if strings.Contains(s, x) {
-			return true
-		}
-	}
-	return false
-}
-
-func download(x *App, u string, limit int64) ([]byte, error) {
-	req, _ := http.NewRequestWithContext(x.ctx, "GET", u, nil)
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := httpClient.Do(req)
+// cmdUpdateServer updates the signed-in server (Admin → Updates).
+func cmdUpdateServer(x *App, a *Args) error {
+	c, err := x.client("")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("download failed: %s", resp.Status)
+	type job struct {
+		State, Version, Error string
+		Done, Total           int64
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, limit))
-}
-
-// findChecksum reads "sha256  name" lines (or a bare hash).
-func findChecksum(text, name string) string {
-	sc := bufio.NewScanner(strings.NewReader(text))
-	var only string
-	n := 0
-	for sc.Scan() {
-		f := strings.Fields(sc.Text())
-		if len(f) == 0 {
-			continue
-		}
-		n++
-		only = f[0]
-		if len(f) >= 2 && strings.TrimPrefix(f[len(f)-1], "*") == name {
-			return f[0]
-		}
+	type status struct {
+		Current, Latest, Reason, CheckError string
+		UpdateAvailable, CanUpdate          bool
+		Job                                 job
 	}
-	if n == 1 && len(only) == 64 {
-		return only
+	var st status
+	sp := x.spin("Checking for updates…")
+	err = c.Call(x.ctx, "POST", "/api/v1/admin/update/check", nil, nil, &st)
+	sp.end()
+	if err != nil {
+		return err
 	}
-	return ""
-}
-
-func extractBinary(name string, data []byte) ([]byte, error) {
-	want := "bunker"
-	if runtime.GOOS == "windows" {
-		want = "bunker.exe"
+	if st.CheckError != "" {
+		return errors.New(st.CheckError)
 	}
-	n := strings.ToLower(name)
-	switch {
-	case strings.HasSuffix(n, ".tar.gz") || strings.HasSuffix(n, ".tgz"):
-		gz, err := gzip.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, err
-		}
-		tr := tar.NewReader(gz)
-		for {
-			h, err := tr.Next()
-			if err != nil {
-				return nil, fmt.Errorf("no %s inside %s", want, name)
+	want := a.Str("version")
+	if want == "" && !st.UpdateAvailable {
+		return x.result(map[string]any{"current": st.Current, "latest": st.Latest, "updated": false}, func() {
+			x.ok("The server runs %s, the latest version", st.Current)
+		})
+	}
+	target := firstNonEmpty(want, st.Latest)
+	if a.Bool("check") {
+		return x.result(map[string]any{"current": st.Current, "latest": st.Latest, "available": st.UpdateAvailable, "canUpdate": st.CanUpdate, "reason": st.Reason}, func() {
+			x.info("Bunker %s is available for the server (it runs %s). Run bunker update --remote", target, st.Current)
+			if !st.CanUpdate {
+				x.info("%s", st.Reason)
 			}
-			if filepath.Base(h.Name) == want && h.Typeflag == tar.TypeReg {
-				return io.ReadAll(io.LimitReader(tr, 300<<20))
-			}
-		}
-	case strings.HasSuffix(n, ".zip"):
-		zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			return nil, err
-		}
-		for _, f := range zr.File {
-			if filepath.Base(f.Name) == want {
-				rc, err := f.Open()
-				if err != nil {
-					return nil, err
-				}
-				defer rc.Close()
-				return io.ReadAll(io.LimitReader(rc, 300<<20))
-			}
-		}
-		return nil, fmt.Errorf("no %s inside %s", want, name)
+		})
 	}
-	return data, nil
+	if !st.CanUpdate {
+		return errors.New(st.Reason)
+	}
+	from := st.Current
+	if err := c.Call(x.ctx, "POST", "/api/v1/admin/update", nil, map[string]any{"version": want}, nil); err != nil {
+		return err
+	}
+	sp = x.spin("Updating the server to " + target + "…")
+	defer sp.end()
+	deadline := time.Now().Add(15 * time.Minute)
+	for time.Now().Before(deadline) {
+		time.Sleep(time.Second)
+		var h struct {
+			Version string `json:"version"`
+		}
+		if c.Get(x.ctx, "/healthz", nil, &h) == nil && h.Version != "" && h.Version != from {
+			sp.end()
+			return x.result(map[string]any{"from": from, "current": h.Version, "updated": true}, func() {
+				x.ok("The server runs %s now (was %s)", h.Version, from)
+			})
+		}
+		var s status
+		if c.Get(x.ctx, "/api/v1/admin/update", nil, &s) == nil && s.Job.State == "failed" {
+			return fmt.Errorf("the update didn't finish: %s", s.Job.Error)
+		}
+	}
+	return errors.New("the server hasn't come back yet; check its logs (it goes back to the previous version by itself if the new one can't start)")
 }
 
 // ---- completion ----

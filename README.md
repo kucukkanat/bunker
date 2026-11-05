@@ -53,7 +53,7 @@ Open the URL, create your admin account, and drop a file. Every option (Koyeb, C
 - **A real backend, built in.** `window.bunker` gives pages a database with access rules and live updates, file uploads, per-person storage, live rooms, AI and notifications, all with the viewer's own permissions. Plus Microsoft 365 data and admin-defined connections to internal APIs. When a page isn't enough, drop `api/<name>.js` or `.ts` next to it: [server functions](https://kucukkanat.github.io/bunker/docs/build/server-functions/) run per call in a WebAssembly sandbox, on demand, on a schedule, after writes or from webhooks, with secrets and outbound `fetch`. No build step, no containers.
 - **Built for agents.** A CLI (`bunker deploy`, `share`, `rollback`, `ai`, `api`), local and remote MCP (add `https://your-bunker/mcp` to Claude, Cursor or ChatGPT), `/llms.txt`, and every UI action in the API.
 - **Safe by design.** Opaque-origin sandbox, WebAssembly-isolated server functions with memory and time caps, signed content tickets, strict CSP plus `Connection-Allowlist`, no keys in pages, secret scanning, an audit log you can search, export and stream to your SIEM. [Threat model](https://kucukkanat.github.io/bunker/docs/security/threat-model/), including what remains.
-- **Tiny footprint.** One pure-Go binary with SQLite. Back up one folder, or let Bunker write scheduled snapshots.
+- **Tiny footprint.** One pure-Go binary with SQLite. Back up one folder, or let Bunker write scheduled snapshots. Update from the admin page in one click, with an automatic way back.
 
 ## Status
 

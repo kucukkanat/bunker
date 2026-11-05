@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"github.com/kucukkanat/bunker/internal/auth"
 	"github.com/kucukkanat/bunker/internal/cli"
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/selfupdate"
 	"github.com/kucukkanat/bunker/internal/server"
 )
 
@@ -68,6 +70,10 @@ func serve(dev bool) int {
 	}
 	log := slog.New(h)
 	cfg := core.LoadConfig()
+	if selfupdate.Released(core.Version) {
+		// Hands over to a newer release installed from Admin → Updates.
+		selfupdate.Boot(cfg.DataDir, core.Version, log)
+	}
 	a, err := server.New(cfg, log)
 	if err != nil {
 		log.Error("startup failed", "err", err)
@@ -85,7 +91,18 @@ func serve(dev bool) int {
 			openBrowser(u)
 		}()
 	}
-	if err := server.Run(a); err != nil {
+	if selfupdate.Running() {
+		// A staged release that serves for a while is a keeper.
+		t := time.AfterFunc(20*time.Second, func() { selfupdate.MarkHealthy(cfg.DataDir, core.Version) })
+		defer t.Stop()
+	}
+	err = server.Run(a)
+	if errors.Is(err, core.ErrRestart) {
+		err = selfupdate.Relaunch()
+		log.Error("couldn't restart in place; exiting so the service manager starts Bunker again", "err", err)
+		return 1
+	}
+	if err != nil {
 		log.Error("server error", "err", err)
 		return 1
 	}

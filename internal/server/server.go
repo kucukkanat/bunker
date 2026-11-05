@@ -279,12 +279,19 @@ func Run(a *core.App) error {
 		}
 		close(errc)
 	}()
+	restart := false
 	select {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
+	case <-core.Restarts():
+		restart = true
 	}
-	a.Log.Info("shutting down")
+	if restart {
+		a.Log.Info("restarting")
+	} else {
+		a.Log.Info("shutting down")
+	}
 	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a.Emit(sctx, "shutdown", nil)
@@ -294,6 +301,9 @@ func Run(a *core.App) error {
 	err := srv.Shutdown(sctx)
 	a.DB.Exec(`PRAGMA optimize`)
 	a.DB.Close()
+	if restart && err == nil {
+		return core.ErrRestart
+	}
 	return err
 }
 

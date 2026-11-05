@@ -155,7 +155,7 @@ try {
   const screens = [
     ['home', '/'], ['new', '/new'], ['templates', '/templates'], ['trash', '/trash'],
     ['settings', '/settings'], ['settings-tokens', '/settings/tokens'], ['settings-connect', '/settings/connect'],
-    ['admin', '/admin'], ['admin-people', '/admin/people'], ['admin-ai', '/admin/ai'], ['admin-sign-in', '/admin/sign-in'], ['admin-audit', '/admin/audit'], ['admin-functions', '/admin/functions'],
+    ['admin', '/admin'], ['admin-people', '/admin/people'], ['admin-ai', '/admin/ai'], ['admin-sign-in', '/admin/sign-in'], ['admin-audit', '/admin/audit'], ['admin-functions', '/admin/functions'], ['admin-updates', '/admin/updates'],
     ['welcome', '/welcome'], ['signed-out', '/auth/signed-out'], ['not-found', '/sites/nope-nothing-here'], ['spa-404', '/nothing/here'],
     ['device', '/device?code=' + (dev.userCode || 'ABCD-EFGH')],
     ...['build', 'files', 'data', 'functions', 'versions', 'settings'].map((t) => ['ws-' + t, `/sites/${s}?tab=${t}`]),

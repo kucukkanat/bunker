@@ -106,9 +106,31 @@ The `bunker-backup.json` file in the archive just describes the backup (format, 
 
 ## Upgrade
 
+### From the admin page
+
+**Admin → Updates** shows the version you run, the newest release and its notes. Press **Update to vX.Y.Z**. Bunker then:
+
+1. downloads the build for its platform from the GitHub release and checks it against the release's `checksums.txt`,
+2. test-runs it (`bunker version`) to make sure it starts on this machine,
+3. copies the database to `updates/before-<version>-<time>.db` in the data folder (the newest three are kept),
+4. puts the binary in `bin/` in the data folder and restarts in place.
+
+People are disconnected for a second or two; open pages reconnect by themselves. Database migrations run on start, as always. From the command line, `bunker update --remote` does the same for the server you're signed in to.
+
+This works the same on the Linux installer, Docker, Compose, Render, Railway, Fly and Azure: Bunker never rewrites its installed binary (which is often read-only), it only writes to the data folder. On start, the installed binary hands over to the one in `bin/` when that one is newer. Updating the usual way later (a new image, rerunning the installer) wins: Bunker notices the installed binary has caught up and removes the copy in `bin/`. On a host whose data folder doesn't survive restarts, an update from the admin page lasts until the next restart; update the image there instead.
+
+**If something goes wrong:**
+
+- A new version that doesn't start within three tries is dropped, and Bunker goes back to the previous one by itself. Admin → Updates says what happened.
+- **Go back to vX.Y.Z** on Admin → Updates switches back to the previous version and restarts. Versions only add to the database, so an older version runs fine on it. Automatic updates skip a version you went back from.
+
+**Automatic updates** (off by default) install new stable releases once a day in the hour you pick (UTC). Pin them with `BUNKER_UPDATE_AUTO` and `BUNKER_UPDATE_HOUR`. `BUNKER_UPDATE_SELF=false` hides the update button for servers you manage only through your own pipeline; `BUNKER_UPDATE_CHECK=false` stops Bunker from contacting GitHub at all. Updates are recorded in the audit log (`admin.update.*`). Windows servers and development builds can't update from the page: use `bunker update` and restart the service.
+
+### By hand
+
 1. Back up.
 2. Replace the binary or image:
-   - Linux installer: run the same `curl ... | sudo sh` again (or `bunker update`).
+   - Linux installer: run the same `curl ... | sudo sh` again (or `sudo bunker update`, then `sudo systemctl restart bunker`).
    - Docker: `docker pull ghcr.io/kucukkanat/bunker` and recreate the container.
    - Render, Railway, Fly: redeploy.
 3. Bunker migrates the database on start. `GET /healthz` returns `{"ok": true, "version": "..."}` when it's ready.

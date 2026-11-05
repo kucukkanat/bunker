@@ -39,7 +39,7 @@ Pass options after `sh -s --`:
 | | `BUNKER_URL`, `BUNKER_LISTEN`, `BUNKER_SETUP_CODE` | Written into `/etc/bunker/bunker.env` on first install |
 | | `BUNKER_DOWNLOAD_URL` | A mirror holding the release files and `checksums.txt` (air-gapped installs) |
 
-Without `sudo`, the installer puts just the binary in `~/.local/bin`. Run the same command again to **upgrade**; your settings file is kept.
+Without `sudo`, the installer puts just the binary in `~/.local/bin`. To **upgrade**, use Admin → Updates, or run the same command again; your settings file is kept.
 
 ## The settings file
 

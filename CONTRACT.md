@@ -111,3 +111,22 @@ Host protocol (JSON, one line each way over stdin/stdout; stderr = logs): reques
 **Audit:** `functions.deployed` (publish changed the function set; meta lists names + elevated/schedule/onWrite), `functions.secret.set|delete`, `functions.settings`, `functions.block|unblock`, `functions.outbound.refused` (policy refusals only; meta `{policy}`).
 
 **Go API for other modules:** `functions.Invoke(ctx, site *sites.SiteRecord, name string, input json.RawMessage, as *core.User, trigger map[string]any) (json.RawMessage, error)`. Data emits `a.Emit(ctx, "db.written", map[string]any{"siteId", "collection", "type": "added"|"updated"|"deleted", "id", "doc", "user"})` after single-document commits (not `_import`).
+
+## Self-update (internal/selfupdate, internal/admin)
+
+**Disk layout** (data folder, excluded from backups): `bin/bunker-<tag>` staged release binaries (the current one and its fallback; others pruned), `bin/state.json` `{current:{version,file,sha256}, previous?, attempts, healthy, installedAt, installedBy}`, `bin/failure.json` `{version, reason, at, running}` (last version that failed to start or was rolled back from), `updates/before-<version>-<UTC time>.db` (VACUUM INTO copy before each update, newest 3 kept).
+
+**Boot** (`cmd/bunker` `serve`/`dev`, release builds only): `selfupdate.Boot(dataDir, core.Version, log)` execs `bin/<current>` when its version is newer than the installed binary's and its SHA-256 matches, after counting the attempt; the staged process gets `BUNKER_SELFUPDATE_LAUNCHED=1`, `_ENTRY` (installed path), `_BUILTIN` (installed version). Installed binary as new or newer → staged files removed. `attempts >= 3` without `healthy` (set 20 s after a staged start) or a changed/missing file → fall back to `previous` (or the installed binary) and write `failure.json`. Never rewrites the installed binary. Windows: not supported (CLI `bunker update` only).
+
+**Restart:** `core.RequestRestart()` → `server.Run` shuts down gracefully and returns `core.ErrRestart` → `selfupdate.Relaunch()` execs the installed binary with the same args (so Boot runs again); if exec fails the process exits 1 for the service manager.
+
+**Ops** (all `AccessAdmin`):
+- `admin.update.status` `GET /api/v1/admin/update` → `{current, installed, staged, checks, canUpdate, reason?, platform, latest?, updateAvailable, release?:{tag,name,url,notes,published,prerelease}, checkedAt, checkError?, rollbackTo?, installedAt?, installedBy?, lastFailure?, job:{state:"idle"|"downloading"|"preparing"|"restarting"|"failed", version, done, total, error, started, by}, auto:{enabled, hour, pinned}, how}`. `admin.version` `GET /api/v1/admin/version` is the same without `release`.
+- `admin.update.check` `POST /api/v1/admin/update/check` → status, bypassing the 12 h cache.
+- `admin.update.install` `POST /api/v1/admin/update` `{version?}` → `{job}`; 409 when `!canUpdate`, a job is running, the tag is the running version or not newer than the installed one, or the release lacks this platform's build or checksums.
+- `admin.update.rollback` `POST /api/v1/admin/update/rollback` → `{version, job}`; 409 unless a staged release runs.
+- `admin.update.settings` `PUT /api/v1/admin/update/settings` `{auto?, hour?}` (hour 0–23 UTC; 409 when pinned by env).
+
+**Settings:** `update.self` (`BUNKER_UPDATE_SELF`, default true), `update.auto` (`BUNKER_UPDATE_AUTO`, default false), `update.hour` (`BUNKER_UPDATE_HOUR`, default 3); `BUNKER_UPDATE_CHECK=false` disables checks and updates; `BUNKER_UPDATE_REPO`/`BUNKER_UPDATE_API` pick the release source. Automatic updates: every 10 min, in the chosen UTC hour, the newest non-prerelease that is newer and isn't the version in `failure.json`.
+
+**Audit:** `admin.update.started|installed|failed|rolledback`; settings changes as `admin.config` target `updates`.

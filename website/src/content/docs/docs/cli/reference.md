@@ -84,7 +84,8 @@ See [Server functions](/bunker/docs/build/server-functions/#cli). The app's addr
 | `bunker logout` | Sign out and revoke this computer's token (`--keep-token` only forgets it) |
 | `bunker tokens [ls\|create\|rm]` | Manage personal access tokens: `bunker tokens create ci-deploy --scopes read,write --days 30` |
 | `bunker doctor` | Check config, connection, sign-in, versions and clock |
-| `bunker update` | Update to the latest release, checksum verified. `--check`, `--force`. Alias `upgrade` |
+| `bunker update` | Update this program to the latest release, checksum verified. `--check`, `--force`, `--version v0.3.0`. Alias `upgrade` |
+| `bunker update --remote` | Update the server you're signed in to (admins; same as Admin → Updates) and wait until it's back. `--check`, `--version v0.3.0` |
 | `bunker completion bash\|zsh\|fish` | Print a shell completion script |
 | `bunker backup [file]` | Download a full backup (database, files, `secret.key`) from the server you're signed in to (admins). `--no-key` leaves the key out. See [Backups](/bunker/docs/admin/backups/) |
 | `bunker restore <backup.tar.gz>` | Unpack a backup into `BUNKER_DATA_DIR` (stop the server first; the old database is kept as `bunker.db.pre-restore-<time>`) |

@@ -310,7 +310,7 @@ try {
   const screens = [
     ['new', '/new', 'Make a new site'], ['templates', '/templates', 'Templates'], ['settings', '/settings', 'Settings'],
     ['connect', '/settings/connect', 'Connect your tools'], ['admin', '/admin', 'Admin'], ['admin-people', '/admin/people', 'Admin'],
-    ['admin-ai', '/admin/ai', 'Admin'], ['admin-signin', '/admin/sign-in', 'Admin'], ['admin-audit', '/admin/audit', 'Admin'],
+    ['admin-ai', '/admin/ai', 'Admin'], ['admin-signin', '/admin/sign-in', 'Admin'], ['admin-audit', '/admin/audit', 'Admin'], ['admin-updates', '/admin/updates', 'Admin'],
     ['welcome', '/welcome', 'Welcome to Bunker'], ['signed-out', '/auth/signed-out', 'You’re signed out'],
   ];
   await check('every screen renders', async () => {

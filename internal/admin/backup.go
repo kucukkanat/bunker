@@ -36,7 +36,8 @@ func skipInBackup(rel string, backupDir string) bool {
 	case "bunker.db", "bunker.db-wal", "bunker.db-shm", "setup-code.txt":
 		return true
 	}
-	if strings.HasPrefix(rel, "blobs/tmp/") || rel == "blobs/tmp" || strings.HasPrefix(rel, "tmp/") || strings.HasPrefix(rel, "backups/") {
+	if strings.HasPrefix(rel, "blobs/tmp/") || rel == "blobs/tmp" || strings.HasPrefix(rel, "tmp/") || strings.HasPrefix(rel, "backups/") ||
+		strings.HasPrefix(rel, "bin/") || strings.HasPrefix(rel, "updates/") {
 		return true
 	}
 	if strings.HasPrefix(rel, "blobs/") && (strings.HasSuffix(rel, ".gz") || strings.HasSuffix(rel, ".br")) {
