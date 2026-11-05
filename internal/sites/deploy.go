@@ -487,6 +487,9 @@ func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
 			Files   map[string]json.RawMessage `json:"files"`
 			Message string                     `json:"message"`
 			Publish *bool                      `json:"publish"`
+			Title   string                     `json:"title"`
+			Slug    string                     `json:"slug"`
+			Source  string                     `json:"source"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			return nil, nil, core.BadRequest("invalid JSON body")
@@ -515,6 +518,7 @@ func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
 			}
 		}
 		meta["message"] = in.Message
+		meta["title"], meta["slug"], meta["source"] = in.Title, in.Slug, in.Source
 		if in.Publish != nil && !*in.Publish {
 			meta["publish"] = "false"
 		}
@@ -538,7 +542,7 @@ func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
 		}
 	}
 	for k, v := range r.URL.Query() {
-		if _, ok := meta[k]; !ok && len(v) > 0 {
+		if meta[k] == "" && len(v) > 0 {
 			meta[k] = v[0]
 		}
 	}
