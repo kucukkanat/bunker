@@ -32,7 +32,7 @@ export async function render() {
   if (!match) { r = routes[routes.length - 1]; match = [path]; }
   if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
   const ctx = {
-    params: match.slice(1).map(decodeURIComponent),
+    params: match.slice(1).map((x) => (x === undefined ? '' : decodeURIComponent(x))),
     query: new URLSearchParams(location.search),
     path,
     alive: () => my === seq,
