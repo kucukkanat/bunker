@@ -434,8 +434,11 @@ func upload(r *http.Request) (any, error) {
 	if err != nil {
 		return nil, core.BadRequest("bad upload")
 	}
-	var used, count int64
-	app.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(size),0), COUNT(*) FROM uploads WHERE site_id=?`, s.ID).Scan(&used, &count)
+	// last: the newest upload's time. Each upload gets a distinct created_at
+	// so the list cursor (created_at < before) never skips files stored in
+	// the same millisecond (several files in one request).
+	var used, count, last int64
+	app.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(size),0), COUNT(*), COALESCE(MAX(created_at),0) FROM uploads WHERE site_id=?`, s.ID).Scan(&used, &count, &last)
 	folder := r.URL.Query().Get("folder")
 	var out []*File
 	for {
@@ -497,7 +500,8 @@ func upload(r *http.Request) (any, error) {
 		if used+size > siteMaxBytes() {
 			return nil, core.Quota("this site's file storage is full (" + i64(siteMaxBytes()>>20) + " MB). Remove some files first.")
 		}
-		f := &File{ID: data.NewID(), Name: name, Folder: fold, Size: size, Type: k.ct, hash: hash, Author: u.ID, AuthorName: u.Name, Created: nowMS()}
+		f := &File{ID: data.NewID(), Name: name, Folder: fold, Size: size, Type: k.ct, hash: hash, Author: u.ID, AuthorName: u.Name, Created: max(nowMS(), last+1)}
+		last = f.Created
 		f.CreatedISO = data.ISOTime(f.Created)
 		if _, err := app.DB.ExecContext(ctx, `INSERT INTO uploads(site_id,`+cols+`) VALUES(?,?,?,?,?,?,?,?,?,?)`,
 			s.ID, f.ID, f.Name, f.Folder, f.Size, f.Type, f.hash, f.Author, f.AuthorName, f.Created); err != nil {
