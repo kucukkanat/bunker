@@ -6,6 +6,26 @@ sidebar: { order: 4 }
 
 Bunker's defaults suit most teams. These are the knobs. Settings are stored in the database and can be pinned with environment variables (`BUNKER_` + the key in capitals, dots as underscores); a pinned value wins.
 
+## Change them at runtime
+
+Six of them can be changed without a restart, with `admin.policy.update` (`PUT /api/v1/admin/policy`):
+
+```sh
+bunker api admin.policy.get
+bunker api admin.policy.update --data '{"orgWideSharing": false, "siteMaxMB": 250, "maxSitesPerUser": 50}'
+```
+
+| Field | Setting | Range |
+|---|---|---|
+| `orgWideSharing` | `sharing.org_wide` | `true` / `false` |
+| `editorsCanShare` | `sharing.editors_can_share` | `true` / `false` |
+| `maxSitesPerUser` | `max_sites_per_user` | 0 to 100,000 (`0` = no limit) |
+| `siteMaxMB` | `site_max_mb` | 1 to 10,240 |
+| `uploadMaxMB` | `upload_max_mb` | 1 to 10,240 |
+| `allowedGroups` | `auth.allowed_groups` | Comma-separated groups allowed to sign in (empty = everyone) |
+
+`admin.policy.get` also returns `pinned`: which ones are fixed by the environment. Changing a pinned one fails with `409 conflict`. Every change is audited as `admin.config` with the old and new values.
+
 ## People and sign-in
 
 | Setting | Default | |

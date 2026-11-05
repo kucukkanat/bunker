@@ -38,13 +38,13 @@ type Tile = { t: string; ext: string; d: string; preview?: boolean; ai?: boolean
 const tiles: Tile[] = [
   { t: 'A web page', ext: '.html', d: 'Published as it is. Links to popular CDN libraries are swapped for built-in copies.' },
   { t: 'A folder or zip', ext: 'folder · .zip', d: 'Finds index.html, even inside dist/ or build/. Root paths keep working.' },
-  { t: 'React in one file', ext: '.jsx · .tsx', d: 'A single component becomes a running app. No build step.', preview: true },
-  { t: 'Docs and notes', ext: '.md', d: 'Markdown becomes a clean, readable page in your house style.', preview: true },
-  { t: 'Slides', ext: '.md with ---', d: 'Split a Markdown file into slides and present from the browser.', preview: true },
-  { t: 'A spreadsheet', ext: '.csv · .xlsx', d: 'Becomes a shared table app: search, sort, add rows, by permission.', preview: true },
-  { t: 'A notebook', ext: '.ipynb', d: 'Rendered with its charts and outputs, ready to read.', preview: true },
-  { t: 'A PDF', ext: '.pdf', d: 'Opens in a built-in viewer that works inside the sandbox.', preview: true },
-  { t: 'Images and video', ext: '.png · .jpg · .mp4', d: 'A tidy gallery page your team can browse.', preview: true },
+  { t: 'React in one file', ext: '.jsx · .tsx', d: 'A single component becomes a running app. Bunker bundles it for you. No build step.' },
+  { t: 'Docs and notes', ext: '.md', d: 'Markdown becomes a clean, readable page. A folder becomes a docs site.' },
+  { t: 'Slides', ext: '.md · slides: true', d: 'Split a Markdown file into slides with --- and present from the browser.' },
+  { t: 'A spreadsheet', ext: '.csv · .xlsx', d: 'Becomes a table app: search, sort, filter, chart and export. Every sheet is a tab.' },
+  { t: 'A notebook', ext: '.ipynb', d: 'Rendered with its charts and outputs, ready to read.' },
+  { t: 'A PDF', ext: '.pdf', d: 'Opens in a built-in viewer that works inside the sandbox.' },
+  { t: 'Images and video', ext: '.png · .jpg · .mp4', d: 'A tidy gallery page your team can browse.' },
   { t: 'Describe it', ext: 'plain words', d: '“A holiday tracker where managers approve requests.” The AI builds a draft. You publish.', ai: true },
 ];
 
@@ -53,9 +53,9 @@ const security = [
   { t: 'Signed content tickets', d: 'App files are served under a short-lived HMAC ticket tied to the site, version and viewer. Revoke a share and the next request fails.', code: '/s/<site>/~r/<ticket>/index.html' },
   { t: 'No keys in pages', d: 'Data, AI and Microsoft 365 calls go through the parent frame with the viewer’s session. Uploads containing API keys are refused at publish time.', code: '422 secret_detected' },
   { t: 'Connection-Allowlist', d: 'CSP can’t stop WebRTC. On Chromium and Edge 152+ this header also blocks WebRTC, navigations and prefetch to anywhere but Bunker.', code: 'Connection-Allowlist: (response-origin)' },
-  { t: 'Viewer-scoped Microsoft 365', d: 'An app sees SharePoint, Excel and OneDrive only with the viewer’s own rights, and only for scopes your admin allowed.', code: 'delegated · admin allowlist', preview: true },
+  { t: 'Viewer-scoped Microsoft 365', d: 'An app sees SharePoint, Excel and OneDrive only with the viewer’s own rights, and only for scopes your admin allowed.', code: 'delegated · admin allowlist' },
   { t: 'Audit everything', d: 'Sign-ins, publishes, shares, views, data-rule and admin changes land in an indexed audit table, with every agent action marked as a token.', code: 'site.share · site.view · auth.login' },
-  { t: 'SSRF-safe connections', d: 'Apps reach internal APIs only through named connections an admin defines. Private and metadata addresses are blocked by default.', code: 'bunker.connections.fetch("hr", "/people")', preview: true },
+  { t: 'SSRF-safe connections', d: 'Apps reach internal APIs only through named connections an admin defines. Private and metadata addresses are blocked by default.', code: 'bunker.connections.fetch("hr", { path: "/people" })' },
   { t: 'Your sign-in, your rules', d: 'Built-in accounts use argon2id and one-time invite links. Company sign-in is single-tenant only, and Bunker refuses settings that would let personal accounts in.', code: 'argon2id · tenant ≠ common' },
 ];
 
@@ -83,7 +83,7 @@ const faq = [
   },
   {
     q: 'Is Bunker ready for production?',
-    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. The new dashboard, more app types and Microsoft 365 data are landing now and are marked Preview in the docs. Try it with a small group first.',
+    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. So are the dashboard, app types from Markdown to notebooks, templates, Microsoft 365 data, connections, audit streaming and backups. Anything unfinished is marked Preview in the docs. Try it with a small group first.',
   },
   {
     q: 'Do we need wildcard DNS or a wildcard certificate?',

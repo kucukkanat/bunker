@@ -6,6 +6,8 @@ sidebar: { order: 3 }
 
 You need an Entra role that can create app registrations (Application Developer is enough to register; **Cloud Application Administrator** to grant admin consent).
 
+Prefer not to click through the portal? The [automatic setup](/bunker/docs/sign-in/entra-auto/) does all of this with a device code, or with one script in Azure Cloud Shell.
+
 ## 1. Register the app
 
 In the [Entra admin center](https://entra.microsoft.com), go to *App registrations → New registration*:

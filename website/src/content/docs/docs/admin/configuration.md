@@ -59,7 +59,7 @@ All configuration is environment variables. You usually need none: Bunker picks 
 
 | Variable | Default | |
 |---|---|---|
-| `BUNKER_SHARING_ORG_WIDE` | `true` | Owners may share with everyone |
+| `BUNKER_SHARING_ORG_WIDE` (or `BUNKER_ORG_WIDE_SHARING`) | `true` | Owners may share with everyone |
 | `BUNKER_SHARING_EDITORS_CAN_SHARE` | `true` | Editors may share |
 | `BUNKER_UPLOAD_MAX_MB` | `100` | Largest upload (deploys and `bunker.files`) |
 | `BUNKER_UPLOAD_CONCURRENCY` | `4` | Uploads parsed in memory at once |
@@ -67,6 +67,9 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `BUNKER_MAX_SITES_PER_USER` | `500` | Apps per person |
 | `BUNKER_TRASH_DAYS` | `30` | Days before trashed apps are purged |
 | `BUNKER_ALLOW_SECRETS` | `false` | Turn off secret scanning of uploads |
+| `BUNKER_NO_TEMPLATES` | `false` | Don't create the [built-in templates](/bunker/docs/build/templates/#built-in-templates) |
+
+Admins can also change sharing, sizes, apps per person and allowed groups at runtime with `admin.policy.update` (see [Policy and limits](/bunker/docs/admin/policy/)). A variable set here pins the value.
 
 ## App data
 
@@ -105,6 +108,38 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `BUNKER_AI_SITE_DAILY_TOKENS` | `5000000` | Per app per day |
 | `BUNKER_AI_MAX_REQUEST_TOKENS` | `16000` | Largest page request |
 | `BUNKER_AI_LOG_CONTENT` | `false` | Keep prompts and answers in the audit log |
+
+## Microsoft 365
+
+See [Microsoft 365 data](/bunker/docs/admin/m365/). All of these can also be set in *Admin → Microsoft 365*.
+
+| Variable | Default | |
+|---|---|---|
+| `BUNKER_M365_ENABLED` | on when scopes are set | `true` or `false` |
+| `BUNKER_M365_SCOPES` | | Delegated Graph scopes pages may use, comma separated (`Sites.Read.All,Files.Read.All`). Setting it alone turns Microsoft 365 on |
+| `BUNKER_M365_REQUIRE_APPROVAL` | `false` | Only approved apps may use Microsoft 365 |
+| `BUNKER_M365_APPROVED_SITES` | | Approved app addresses, comma separated |
+| `BUNKER_M365_ALLOWED_SITES` | any | SharePoint site URLs pages may read, comma separated |
+
+## Audit log
+
+See [Audit log and streaming](/bunker/docs/admin/audit/).
+
+| Variable | Default | |
+|---|---|---|
+| `BUNKER_AUDIT_RETENTION_DAYS` | `365` | Delete events older than this. `0` keeps everything |
+| `BUNKER_AUDIT_WEBHOOK` | | `https://` URL that receives events as JSON batches |
+| `BUNKER_AUDIT_SYSLOG` | | `udp://host:514` or `tcp://host:6514` |
+
+## Backups
+
+See [Backups and upgrades](/bunker/docs/admin/backups/#scheduled-snapshots).
+
+| Variable | Default | |
+|---|---|---|
+| `BUNKER_BACKUP_DIR` | off | Folder for scheduled snapshots. Relative paths are inside the data folder |
+| `BUNKER_BACKUP_EVERY` | `24h` | How often (Go duration, at least `1h`) |
+| `BUNKER_BACKUP_KEEP` | `7` | Snapshots to keep |
 
 ## CLI
 
