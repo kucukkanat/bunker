@@ -31,7 +31,11 @@ func initSetup(a *core.App) {
 		os.WriteFile(filepath.Join(a.Cfg.DataDir, "setup-code.txt"), []byte(code+"\n"), 0o600)
 		url := a.Cfg.URL
 		if url == "" {
-			url = "http://localhost" + a.Cfg.Listen
+			if strings.HasPrefix(a.Cfg.Listen, ":") {
+				url = "http://localhost" + a.Cfg.Listen
+			} else {
+				url = "http://" + a.Cfg.Listen
+			}
 		}
 		banner := fmt.Sprintf("\n\n  ┌──────────────────────────────────────────────┐\n  │  Bunker is ready to set up.                  │\n  │                                              │\n  │  Open:  %-37s│\n  │  Code:  %-37s│\n  └──────────────────────────────────────────────┘\n\n", url+"/setup", code)
 		fmt.Fprint(os.Stderr, banner)
