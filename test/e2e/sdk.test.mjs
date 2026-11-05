@@ -328,6 +328,21 @@ async function main() {
   await api('POST', '/api/v1/sites/sdk-test/deploy', { files: { ...files, 'draft.txt': 'd' }, publish: false });
   await page.goto(base + '/s/sdk-test/?draft=1');
   check('draft ribbon', !!(await until(() => page.locator('.bk-ribbon', { hasText: 'Draft preview' }).count(), 3000)));
+  check('clean draft preview reports no errors', await page.evaluate(() => Array.isArray(window.__bunkerErrors) && window.__bunkerErrors.length === 0));
+
+  // page errors in a draft preview are collected for the builder's auto-fix
+  const BROKEN = '<!doctype html><title>Broken</title><script>console.error("bad config", {a:1}); Promise.reject(new Error("no data")); setTimeout(function(){ totl.x = 1; }, 50);</script>';
+  await api('POST', '/api/v1/sites/sdk-test/deploy', { files: { ...files, 'broken.html': BROKEN }, publish: false });
+  const pageE = await ctxA.newPage();
+  await pageE.goto(base + '/s/sdk-test/broken.html?draft=1');
+  const errs = await until(() => pageE.evaluate(() => (window.__bunkerErrors || []).length >= 3 && window.__bunkerErrors), 5000);
+  check('draft preview collects page errors', errs && errs.some((e) => /totl is not defined/.test(e.message) && e.source === 'broken.html' && e.line > 0) && errs.some((e) => /no data/.test(e.message)) && errs.some((e) => /bad config/.test(e.message)), errs);
+  await pageE.close();
+  const pageV = await ctxB.newPage();
+  await pageV.goto(base + '/s/sdk-test/broken.html?draft=1');
+  await sleep(500);
+  check('viewers never collect errors', await pageV.evaluate(() => window.__bunkerErrors === undefined));
+  await pageV.close();
 
   check('no uncaught errors in the shell', consoleErrors.length === 0, consoleErrors);
 }

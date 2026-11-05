@@ -24,6 +24,14 @@ type xlsxSheet struct {
 
 const maxXLSXCells = 2_000_000
 
+// A small .xlsx (a zip) can expand enormously: 600 KB unpacked to 256 MB
+// of shared strings took 20 s and 1.6 GB of memory. Members and the whole
+// workbook get an expansion budget.
+const (
+	maxXLSXPart  = 64 << 20
+	maxXLSXTotal = 128 << 20
+)
+
 func readXLSX(data []byte) ([]xlsxSheet, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
@@ -33,20 +41,31 @@ func readXLSX(data []byte) ([]xlsxSheet, error) {
 	for _, f := range zr.File {
 		byName[f.Name] = f
 	}
+	left := int64(maxXLSXTotal)
+	tooLarge := errors.New("this spreadsheet is too large to turn into a table")
 	read := func(name string) ([]byte, error) {
 		f := byName[name]
 		if f == nil {
 			return nil, errors.New("missing " + name)
 		}
-		if f.UncompressedSize64 > 256<<20 {
-			return nil, errors.New("spreadsheet is too large")
+		if f.UncompressedSize64 > maxXLSXPart || int64(f.UncompressedSize64) > left {
+			return nil, tooLarge
 		}
 		rc, err := f.Open()
 		if err != nil {
 			return nil, err
 		}
 		defer rc.Close()
-		return io.ReadAll(io.LimitReader(rc, 256<<20))
+		// Declared sizes can lie: count what actually comes out.
+		b, err := io.ReadAll(io.LimitReader(rc, min(int64(maxXLSXPart), left)+1))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(b)) > maxXLSXPart || int64(len(b)) > left {
+			return nil, tooLarge
+		}
+		left -= int64(len(b))
+		return b, nil
 	}
 	wb, err := read("xl/workbook.xml")
 	if err != nil {
@@ -87,6 +106,8 @@ func readXLSX(data []byte) ([]xlsxSheet, error) {
 	var shared []string
 	if sb, err := read("xl/sharedStrings.xml"); err == nil {
 		shared = parseShared(sb)
+	} else if err == tooLarge {
+		return nil, err
 	}
 	dateStyles := map[int]bool{}
 	if sb, err := read("xl/styles.xml"); err == nil {
@@ -104,6 +125,9 @@ func readXLSX(data []byte) ([]xlsxSheet, error) {
 			target = "xl/worksheets/sheet" + strconv.Itoa(i+1) + ".xml"
 		}
 		sb, err := read(target)
+		if err == tooLarge {
+			return nil, err
+		}
 		if err != nil {
 			continue
 		}
@@ -146,6 +170,9 @@ func parseShared(b []byte) []string {
 			case "si":
 				inSI = false
 				out = append(out, cur.String())
+				if len(out) >= maxXLSXCells { // no sheet can use more
+					return out
+				}
 			case "t":
 				inT = false
 			case "rPh":

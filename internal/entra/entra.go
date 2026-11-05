@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -79,14 +78,7 @@ var (
 	flows  = map[string]*flow{}
 )
 
-func loopback(r *http.Request) bool {
-	if r.Header.Get("X-Forwarded-For") != "" {
-		return false
-	}
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
+func loopback(r *http.Request) bool { return auth.IsLocalRequest(r) }
 
 // authorize: admins always; before setup, anyone with the setup code (or on
 // the server itself).
@@ -120,6 +112,9 @@ func initEntra(a *core.App) error {
 			}
 			if err := authorize(r, in.Code); err != nil {
 				return nil, err
+			}
+			if !auth.Configured() {
+				auth.RememberURL(r) // authorized by the setup code
 			}
 			if a.Cfg.URL == "" {
 				return nil, core.BadRequest("Bunker doesn't know its own address yet. Set BUNKER_URL (e.g. https://bunker.corp.com) and restart, then try again.")
@@ -514,7 +509,7 @@ func register(ctx context.Context, tok, tid string) (*registered, error) {
 		},
 		"groupMembershipClaims": "SecurityGroup",
 		"optionalClaims": map[string]any{"idToken": []map[string]any{
-			{"name": "email", "essential": false}, {"name": "preferred_username", "essential": false}, {"name": "groups", "essential": false},
+			{"name": "email", "essential": false}, {"name": "preferred_username", "essential": false}, {"name": "groups", "essential": false}, {"name": "acct", "essential": false},
 		}},
 		"requiredResourceAccess": []map[string]any{{"resourceAppId": graphAppID, "resourceAccess": access}},
 		"notes":                  "Created by Bunker automatic setup. Bunker signs people in with this app and reads Microsoft 365 data with each viewer's own permissions.",

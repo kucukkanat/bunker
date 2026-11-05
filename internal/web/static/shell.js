@@ -54,8 +54,30 @@
     helloSinceLoad = true;
     var n = typeof d.nonce === 'string' ? d.nonce.slice(0, 64) : null;
     if (port && n && n === lastNonce) return; // already connected to this document
+    if (collectErrors && n) { // drop errors from earlier documents
+      var keep = window.__bunkerErrors.filter(function (x) { return x.doc === n; });
+      window.__bunkerErrors.length = 0;
+      keep.forEach(function (x) { window.__bunkerErrors.push(x); });
+    }
     connect(n);
   });
+
+  // ---------- page errors (draft previews by editors only) ----------
+  // The workspace preview iframe is same-origin with this page, so the
+  // dashboard reads window.__bunkerErrors (and also gets a postMessage) to
+  // offer the builder's "Fix these errors".
+  var collectErrors = isDraft && canEdit;
+  if (collectErrors) window.__bunkerErrors = [];
+  function pageError(d) {
+    if (!collectErrors || typeof d.message !== 'string' || !d.message) return;
+    var e = { message: d.message.slice(0, 600), source: typeof d.source === 'string' ? d.source.slice(0, 300) : '', line: d.line | 0, at: Date.now(), doc: typeof d.doc === 'string' ? d.doc.slice(0, 64) : '' };
+    var buf = window.__bunkerErrors;
+    buf.push(e);
+    if (buf.length > 20) buf.splice(0, buf.length - 20);
+    if (window.parent !== window) {
+      try { window.parent.postMessage({ bkShell: 1, type: 'preview-error', error: e }, location.origin); } catch (_) {}
+    }
+  }
   frame.addEventListener('load', function () {
     if (!helloSinceLoad) connect(null); // pages without the SDK, or a missed hello
     helloSinceLoad = false;
@@ -78,6 +100,7 @@
       case 'toast': if (typeof d.text === 'string' && d.text) toast(d.text.slice(0, 300)); return;
       case 'open': return openExternal(d.url);
       case 'consent': return consentPrompt(Array.isArray(d.scopes) ? d.scopes.join(' ') : '').then(function () {});
+      case 'error': return pageError(d);
     }
   }
 

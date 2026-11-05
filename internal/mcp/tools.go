@@ -23,6 +23,7 @@ type tool struct {
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 	Annotations map[string]any `json:"annotations,omitempty"`
+	Meta        map[string]any `json:"_meta,omitempty"`
 
 	op    *core.Op
 	admin bool
@@ -39,6 +40,7 @@ type toolResult struct {
 	Content           []content `json:"content"`
 	StructuredContent any       `json:"structuredContent,omitempty"`
 	IsError           bool      `json:"isError,omitempty"`
+	Meta              any       `json:"_meta,omitempty"`
 }
 
 func textResult(t string) *toolResult {

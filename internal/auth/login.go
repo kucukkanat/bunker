@@ -182,10 +182,18 @@ func registerLogin(a *core.App) {
 	a.Mux.HandleFunc("GET /auth/dev", handleDev)
 }
 
-// SafeNext returns next if it's a same-site relative path.
+// SafeNext returns next if it's a same-site relative path. Browsers drop
+// tabs and newlines inside URLs and read "\\" as "/", so "/\t/evil.com" or
+// "/\\evil.com" would leave the site: any control character or backslash
+// is refused.
 func SafeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.ContainsRune(next, '\\') {
 		return "/"
+	}
+	for i := 0; i < len(next); i++ {
+		if next[i] < 0x20 || next[i] == 0x7f {
+			return "/"
+		}
 	}
 	return next
 }
@@ -291,6 +299,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		Groups        []string `json:"groups"`
 		IDTyp         string   `json:"idtyp"`
 		Acct          *int     `json:"acct"` // Entra: 1 = guest
+		IDP           string   `json:"idp"`  // Entra: home identity provider when not this tenant
 	}
 	if err := idt.Claims(&claims); err != nil {
 		authError(w, r, "Sign-in failed", "Unreadable identity token.")
@@ -309,7 +318,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		if claims.OID != "" {
 			subject = "entra:" + claims.OID
 		}
-		if claims.Acct != nil && *claims.Acct == 1 && !p.AllowGuests {
+		if entraGuest(claims.Acct, claims.IDP, claims.TID) && !p.AllowGuests {
 			authError(w, r, "Access denied", "Guest accounts can't use Bunker.")
 			return
 		}
@@ -450,4 +459,15 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// entraGuest reports whether an Entra ID token belongs to a guest (B2B)
+// account. acct is only sent when configured as an optional claim, so idp
+// (present when the user authenticated at another tenant or provider)
+// counts too.
+func entraGuest(acct *int, idp, tenantID string) bool {
+	if acct != nil && *acct == 1 {
+		return true
+	}
+	return idp != "" && (tenantID == "" || !strings.Contains(strings.ToLower(idp), strings.ToLower(tenantID)))
 }

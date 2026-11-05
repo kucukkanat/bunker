@@ -161,6 +161,10 @@ func TestAutoSetup(t *testing.T) {
 	if uris := web["redirectUris"].([]any); len(uris) != 1 || uris[0] != k.Srv.URL+"/auth/callback" {
 		t.Errorf("redirect: %v", uris)
 	}
+	// Guests are refused by default, which needs the acct claim in the ID token.
+	if oc, _ := json.Marshal(f.appBody["optionalClaims"]); !strings.Contains(string(oc), `"acct"`) {
+		t.Errorf("optional claims lack acct (guest detection): %s", oc)
+	}
 	rra := f.appBody["requiredResourceAccess"].([]any)[0].(map[string]any)
 	if rra["resourceAppId"] != graphAppID || len(rra["resourceAccess"].([]any)) != len(Permissions) {
 		t.Errorf("resource access: %v", rra)

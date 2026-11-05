@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -107,6 +108,7 @@ func initSetup(a *core.App) {
 				}
 				a.SetSetting(r.Context(), "auth.local", "on")
 				a.SetSetting(r.Context(), "setup.code", "")
+				RememberURL(r)
 				os.Remove(filepath.Join(a.Cfg.DataDir, "setup-code.txt"))
 				a.Audit(core.WithUser(r.Context(), u), "admin.config", 0, "auth", map[string]any{"provider": "local"})
 				return map[string]any{"ok": true, "loginUrl": "/auth/login", "email": u.Email}, nil
@@ -148,6 +150,7 @@ func initSetup(a *core.App) {
 				a.SetSetting(ctx, "admins", in.Admins)
 			}
 			a.SetSetting(ctx, "setup.code", "")
+			RememberURL(r)
 			os.Remove(filepath.Join(a.Cfg.DataDir, "setup-code.txt"))
 			clientMu.Lock()
 			client = nil
@@ -168,4 +171,27 @@ func checkIssuer(r *http.Request, issuer string) error {
 		return fmt.Errorf("%s doesn't look like a sign-in provider (HTTP %d). Check the tenant ID or issuer URL", issuer, res.StatusCode)
 	}
 	return nil
+}
+
+// RememberURL records the public URL from the (authorized) first-run setup
+// request when BUNKER_URL wasn't given, so company sign-in gets a full
+// redirect URI. Anonymous requests never set it (Host can be anything).
+func RememberURL(r *http.Request) {
+	if app.Cfg.URL != "" || isLoopback(r) {
+		return
+	}
+	host := r.Host
+	h := host
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		h = hh
+	}
+	if host == "" || strings.ContainsAny(host, "/\\ @") || net.ParseIP(strings.Trim(h, "[]")) != nil {
+		return
+	}
+	scheme := "http"
+	if r.TLS != nil || (app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
+		scheme = "https"
+	}
+	app.Cfg.URL = scheme + "://" + host
+	app.SetSetting(r.Context(), "server.url", app.Cfg.URL)
 }

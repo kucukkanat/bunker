@@ -53,6 +53,9 @@ var Libs = []Lib{
 	{Name: "sortablejs", Version: "1.15.7", JS: "Sortable.min.js", Global: "Sortable", Aliases: []string{"sortablejs", "Sortable"}},
 	{Name: "canvas-confetti", Version: "1.9.4", JS: "confetti.browser.js", Global: "confetti", Aliases: []string{"canvas-confetti"}},
 	{Name: "jquery", Version: "3.7.1", JS: "jquery.min.js", Global: "jQuery", Aliases: []string{"jquery"}},
+	// Map tiles need the internet, so pages use Leaflet with L.CRS.Simple +
+	// an image overlay (floor plans, site maps) or GeoJSON shapes.
+	{Name: "leaflet", Version: "1.9.4", JS: "leaflet.js", CSS: "leaflet.css", Global: "L", Aliases: []string{"leaflet"}},
 }
 
 var byAlias = map[string]*Lib{}
@@ -87,21 +90,33 @@ func get(name, file string) *asset {
 	}
 	b, err := files.ReadFile("files/" + key)
 	if err != nil {
-		cache[key] = nil
-		return nil
+		return nil // misses aren't remembered: anyone can ask for made-up names
 	}
 	sum := sha256.Sum256(b)
 	ct := "text/javascript; charset=utf-8"
-	if strings.HasSuffix(file, ".css") {
+	var br []byte
+	switch path.Ext(file) {
+	case ".css":
 		ct = "text/css; charset=utf-8"
+	case ".png":
+		ct = "image/png"
+	case ".svg":
+		ct = "image/svg+xml"
+	case ".js", ".mjs":
+	default:
+		ct = "text/plain; charset=utf-8"
 	}
-	a := &asset{b: b, br: core.CompressBrotli(b), etag: `"` + hex.EncodeToString(sum[:8]) + `"`, ct: ct}
+	if ct != "image/png" {
+		br = core.CompressBrotli(b)
+	}
+	a := &asset{b: b, br: br, etag: `"` + hex.EncodeToString(sum[:8]) + `"`, ct: ct}
 	cache[key] = a
 	return a
 }
 
 func initLib(a *core.App) error {
-	a.Mux.HandleFunc("GET /_/lib/{name}/{file}", func(w http.ResponseWriter, r *http.Request) {
+	// {file...}: libraries with assets in subfolders (leaflet/images/*.png).
+	a.Mux.HandleFunc("GET /_/lib/{name}/{file...}", func(w http.ResponseWriter, r *http.Request) {
 		as := get(r.PathValue("name"), r.PathValue("file"))
 		if as == nil {
 			http.NotFound(w, r)

@@ -26,6 +26,9 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("data dir: %w", err)
 	}
+	if err := writable(cfg.DataDir); err != nil {
+		return nil, fmt.Errorf("can't write to the data folder %s (%v). Give it to the user Bunker runs as, e.g. `sudo chown -R %d %s`, or in Docker use a named volume (-v bunker-data:/data) instead of a root-owned folder", cfg.DataDir, err, os.Getuid(), cfg.DataDir)
+	}
 	if err := core.LoadSecretKey(cfg.DataDir); err != nil {
 		return nil, fmt.Errorf("secret key: %w", err)
 	}
@@ -76,6 +79,18 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 	return a, nil
 }
 
+func writable(dir string) error {
+	f, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return errors.New("permission denied")
+		}
+		return err
+	}
+	f.Close()
+	return os.Remove(f.Name())
+}
+
 // Handler wraps the mux with global middleware.
 func Handler(a *core.App) http.Handler {
 	var allowedOrigin string
@@ -93,9 +108,6 @@ func Handler(a *core.App) http.Handler {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		ip := clientIP(r, a.Cfg.TrustProxy)
-		if a.Cfg.URL == "" {
-			learnURL(a, r)
-		}
 		ctx := core.WithIP(r.Context(), ip)
 		r = r.WithContext(ctx)
 
@@ -114,6 +126,11 @@ func Handler(a *core.App) http.Handler {
 		if a.Authn != nil {
 			u = a.Authn(r)
 		}
+		if u != nil && a.Cfg.URL == "" && u.IsAdmin && !u.ViaToken {
+			// Only a signed-in admin's browser may teach us our address:
+			// anyone else could send any Host header.
+			learnURL(a, r)
+		}
 		if u != nil {
 			// CSRF: cookie-authenticated unsafe requests must come from our
 			// own origin with our custom header. Browsers can't send custom
@@ -123,7 +140,11 @@ func Handler(a *core.App) http.Handler {
 					core.Err(w, core.Forbidden("missing X-Bunker header"))
 					return
 				}
-				if o := r.Header.Get("Origin"); o != "" && allowedOrigin != "" && o != allowedOrigin && !a.Cfg.Dev {
+				want := allowedOrigin
+				if want == "" {
+					want = originOf(a.Cfg.URL) // learned after start
+				}
+				if o := r.Header.Get("Origin"); o != "" && want != "" && o != want && !a.Cfg.Dev {
 					core.Err(w, core.Forbidden("cross-origin request blocked"))
 					return
 				}
@@ -163,12 +184,36 @@ func isUnsafe(m string) bool {
 	return m != http.MethodGet && m != http.MethodHead && m != http.MethodOptions
 }
 
+func originOf(s string) string {
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return u.Scheme + "://" + u.Host
+	}
+	return ""
+}
+
+// clientIP returns the caller's address. Behind a proxy, only the last
+// X-Forwarded-For entry (the one our proxy appended) is trustworthy: the
+// rest is whatever the client sent.
+var trustAlways = core.Env("TRUST_PROXY", "") != ""
+
 func clientIP(r *http.Request, trust bool) string {
+	// By default only believe forwarding headers when the connection itself
+	// comes from a proxy-like address (loopback or private network). A server
+	// exposed directly to the internet then can't be fooled by a forged
+	// X-Forwarded-For. BUNKER_TRUST_PROXY=true trusts them from anywhere.
+	if trust && !trustAlways {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := net.ParseIP(host)
+		trust = ip != nil && (ip.IsLoopback() || ip.IsPrivate())
+	}
 	if trust {
-		if v := r.Header.Get("X-Forwarded-For"); v != "" {
-			return strings.TrimSpace(strings.Split(v, ",")[0])
+		if vs := r.Header.Values("X-Forwarded-For"); len(vs) > 0 {
+			parts := strings.Split(vs[len(vs)-1], ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(ip) != nil {
+				return ip
+			}
 		}
-		if v := r.Header.Get("X-Real-Ip"); v != "" {
+		if v := strings.TrimSpace(r.Header.Get("X-Real-Ip")); net.ParseIP(v) != nil {
 			return v
 		}
 	}
@@ -254,9 +299,9 @@ func SetAutoTLS(f func(a *core.App, srv *http.Server) error) { serveAutoTLS = f 
 
 var learnMu sync.Mutex
 
-// learnURL sets the public URL from the first real request when
-// BUNKER_URL wasn't given (e.g. a bare `docker run`). It's persisted and
-// can be changed later in Admin → Settings or with BUNKER_URL.
+// learnURL sets the public URL from the first request of a signed-in
+// admin when BUNKER_URL wasn't given (e.g. a bare `docker run`). It's
+// persisted and can be changed later in Admin → Settings or with BUNKER_URL.
 func learnURL(a *core.App, r *http.Request) {
 	host := r.Host
 	if host == "" || strings.ContainsAny(host, "/\\ @") || r.URL.Path == "/healthz" {

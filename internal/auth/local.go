@@ -153,7 +153,16 @@ func tooMany(keys ...string) bool {
 	defer attemptMu.Unlock()
 	now := time.Now()
 	if len(attempts) > 100000 {
-		attempts = map[string][]time.Time{}
+		// Evict stale entries, then per-IP keys (cheap to spoof), but
+		// never per-email lockouts: a flood of other keys must not reset them.
+		for k, ts := range attempts {
+			if len(ts) == 0 || now.Sub(ts[len(ts)-1]) >= 15*time.Minute || strings.HasPrefix(k, "ip:") {
+				delete(attempts, k)
+			}
+		}
+		if len(attempts) > 200000 { // hard memory cap
+			attempts = map[string][]time.Time{}
+		}
 	}
 	limited := false
 	for _, k := range keys {
@@ -185,19 +194,46 @@ func sameOrigin(r *http.Request) bool {
 	if o == "" || o == "null" {
 		return r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin" || r.Header.Get("Sec-Fetch-Site") == "none"
 	}
-	if app.Cfg.URL != "" && strings.HasPrefix(app.Cfg.URL, o) {
+	if app.Cfg.URL != "" && strings.EqualFold(strings.TrimRight(app.Cfg.URL, "/"), o) {
 		return true
 	}
-	return strings.HasSuffix(o, "://"+r.Host)
+	return strings.EqualFold(o, "http://"+r.Host) || strings.EqualFold(o, "https://"+r.Host)
 }
 
 func isLoopback(r *http.Request) bool {
-	if r.Header.Get("X-Forwarded-For") != "" {
-		return false
+	return IsLocalRequest(r)
+}
+
+// proxyHeaders are added by reverse proxies; their presence means the
+// loopback peer is a proxy relaying someone else's request.
+var proxyHeaders = []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip", "Forwarded", "Via",
+	"Cf-Connecting-Ip", "True-Client-Ip", "X-Client-Ip", "Fly-Client-Ip", "X-Original-Forwarded-For"}
+
+// IsLocalRequest reports whether r was made on this machine (not relayed
+// by a reverse proxy running on it): a loopback peer, no proxy headers,
+// and a localhost Host name. A proxy on the same host makes every request
+// come from 127.0.0.1, so the peer address alone proves nothing.
+func IsLocalRequest(r *http.Request) bool {
+	for _, h := range proxyHeaders {
+		if r.Header.Get(h) != "" {
+			return false
+		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if ip == nil || !ip.IsLoopback() {
+		return false
+	}
+	h := r.Host
+	if hh, _, err := net.SplitHostPort(h); err == nil {
+		h = hh
+	}
+	h = strings.Trim(strings.ToLower(h), "[]")
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return true
+	}
+	hip := net.ParseIP(h)
+	return hip != nil && hip.IsLoopback()
 }
 
 func registerLocal(a *core.App) {

@@ -74,7 +74,13 @@ CREATE TABLE site_stars (
   starred INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(user_id, site_id)
 );
-`},
+`,
+			// 2: idle archival (BUNKER_ARCHIVE_AFTER_DAYS).
+			`ALTER TABLE sites ADD COLUMN archived_at INTEGER;
+ALTER TABLE sites ADD COLUMN archived_days INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sites ADD COLUMN archive_warned_at INTEGER;`,
+			`ALTER TABLE sites ADD COLUMN public INTEGER NOT NULL DEFAULT 0;`,
+		},
 		Init: initSites,
 	})
 }
@@ -84,18 +90,25 @@ var app *core.App
 // SiteRecord is the full site row.
 type SiteRecord struct {
 	core.Site
-	Description string         `json:"description"`
-	Icon        string         `json:"icon"`
-	Owner       *Person        `json:"owner,omitempty"`
-	Template    bool           `json:"isTemplate"`
-	Settings    Settings       `json:"settings"`
-	CreatedAt   int64          `json:"createdAt"`
-	UpdatedAt   int64          `json:"updatedAt"`
-	DeletedAt   *int64         `json:"deletedAt,omitempty"`
-	Role        string         `json:"role,omitempty"`
-	URL         string         `json:"url"`
-	Starred     bool           `json:"starred,omitempty"`
-	Extra       map[string]any `json:"extra,omitempty"`
+	Description string   `json:"description"`
+	Icon        string   `json:"icon"`
+	Owner       *Person  `json:"owner,omitempty"`
+	Template    bool     `json:"isTemplate"`
+	Settings    Settings `json:"settings"`
+	CreatedAt   int64    `json:"createdAt"`
+	UpdatedAt   int64    `json:"updatedAt"`
+	DeletedAt   *int64   `json:"deletedAt,omitempty"`
+	// ArchivedAt is set when the site was archived (idle or by hand).
+	ArchivedAt *int64 `json:"archivedAt,omitempty"`
+	// ArchivedDays is the idle period that triggered archival (0 = by hand).
+	ArchivedDays int64  `json:"archivedDays,omitempty"`
+	Role         string `json:"role,omitempty"`
+	// Public: anyone with the link can view without signing in (when the
+	// admin allows public links).
+	Public  bool           `json:"public"`
+	URL     string         `json:"url"`
+	Starred bool           `json:"starred,omitempty"`
+	Extra   map[string]any `json:"extra,omitempty"`
 }
 
 // Settings are per-site options.
@@ -127,6 +140,7 @@ func initSites(a *core.App) error {
 	rawCache = map[string]rawEntry{}
 	rawMu.Unlock()
 	a.Sites = resolver{}
+	a.On("sites.changed", func(context.Context, any) { invalidateAll() })
 	registerOps(a)
 	if extraOps != nil {
 		extraOps(a)
@@ -134,6 +148,7 @@ func initSites(a *core.App) error {
 	registerDeploy(a)
 	registerServing(a)
 	go purgeLoop(a)
+	registerLifecycle(a)
 	return nil
 }
 
@@ -206,13 +221,19 @@ func ValidSlug(s string) error {
 	if !slugRe.MatchString(s) {
 		return core.BadRequest("addresses use 3–48 lowercase letters, numbers and dashes")
 	}
-	if reservedSlugs[s] {
+	if reservedSlugs[s] || strings.HasPrefix(s, "trash-") { // trashed sites are renamed trash-<id>-<slug>
 		return core.BadRequest("that address is reserved")
 	}
 	return nil
 }
 
 func uniqueSlug(ctx context.Context, base string) string {
+	if strings.HasPrefix(base, "trash-") {
+		base = "site-" + base
+		if len(base) > 48 {
+			base = strings.Trim(base[:48], "-")
+		}
+	}
 	s := base
 	for i := 2; i < 1000; i++ {
 		var n int
@@ -265,20 +286,24 @@ func invalidateAll() {
 	roleCache = map[string]roleEntry{}
 }
 
-const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at`
+const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at,archived_at,archived_days,public`
 
 func scanSite(row interface{ Scan(...any) error }) (*SiteRecord, error) {
 	s := &SiteRecord{}
-	var org, tpl int
+	var org, tpl, pub int
 	var settings string
-	var del sql.NullInt64
-	if err := row.Scan(&s.ID, &s.Slug, &s.Title, &s.Description, &s.Icon, &s.OwnerID, &s.Kind, &org, &s.Version, &tpl, &settings, &s.CreatedAt, &s.UpdatedAt, &del); err != nil {
+	var del, arch sql.NullInt64
+	if err := row.Scan(&s.ID, &s.Slug, &s.Title, &s.Description, &s.Icon, &s.OwnerID, &s.Kind, &org, &s.Version, &tpl, &settings, &s.CreatedAt, &s.UpdatedAt, &del, &arch, &s.ArchivedDays, &pub); err != nil {
 		return nil, err
 	}
+	s.Public = pub == 1 && PublicLinksAllowed()
 	s.OrgView, s.Template = org == 1, tpl == 1
 	json.Unmarshal([]byte(settings), &s.Settings)
 	if del.Valid {
 		s.DeletedAt = &del.Int64
+	}
+	if arch.Valid {
+		s.ArchivedAt = &arch.Int64
 	}
 	s.URL = app.Cfg.URL + "/s/" + s.Slug + "/"
 	return s, nil
@@ -323,7 +348,10 @@ func GetByID(ctx context.Context, id int64, withDeleted bool) (*SiteRecord, erro
 
 // RoleOf computes u's role on s.
 func RoleOf(ctx context.Context, u *core.User, s *SiteRecord) core.Role {
-	if u == nil {
+	if u == nil || u.ID == 0 {
+		if s.Public && s.ArchivedAt == nil {
+			return core.RoleViewer
+		}
 		return core.RoleNone
 	}
 	if u.IsAdmin {
@@ -421,3 +449,9 @@ func purgeLoop(a *core.App) {
 		}
 	}
 }
+
+// PublicLinksAllowed reports whether the admin allows public sites.
+func PublicLinksAllowed() bool { return app.Setting("sharing.public_links") == "true" }
+
+// Guest is the anonymous viewer of public sites.
+var Guest = &core.User{ID: 0, Name: "Guest", Email: ""}

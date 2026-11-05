@@ -867,7 +867,10 @@ func exportColl(w http.ResponseWriter, r *http.Request, c *collCtx) error {
 	h.Set("Content-Type", "text/csv; charset=utf-8")
 	w.WriteHeader(200)
 	cw := csv.NewWriter(w)
-	header := append([]string{"_id"}, cols...)
+	header := []string{"_id"}
+	for _, c := range cols {
+		header = append(header, csvText(c))
+	}
 	header = append(header, "_author", "_authorName", "_created", "_updated")
 	cw.Write(header)
 	rec := make([]string, len(header))
@@ -877,7 +880,7 @@ func exportColl(w http.ResponseWriter, r *http.Request, c *collCtx) error {
 			rec[j+1] = csvCell(maps[i][k])
 		}
 		n := len(cols) + 1
-		rec[n], rec[n+1], rec[n+2], rec[n+3] = i64(d.AuthorID), d.AuthorName, ISOTime(d.Created), ISOTime(d.Updated)
+		rec[n], rec[n+1], rec[n+2], rec[n+3] = i64(d.AuthorID), csvText(d.AuthorName), ISOTime(d.Created), ISOTime(d.Updated)
 		cw.Write(rec)
 	}
 	cw.Flush()
@@ -890,7 +893,7 @@ func csvCell(v any) string {
 	case nil:
 		return ""
 	case string:
-		return x
+		return csvText(x)
 	case json.Number:
 		return x.String()
 	case bool:
@@ -901,6 +904,15 @@ func csvCell(v any) string {
 	}
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+// csvText defuses spreadsheet formula injection: text written by viewers
+// that starts with = + - @ (or a tab/CR) gets a leading apostrophe.
+func csvText(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
 }
 
 // csvValue turns a CSV cell into a JSON value: numbers and true/false

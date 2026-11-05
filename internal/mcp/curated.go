@@ -30,6 +30,10 @@ func ann(title string, ro, destructive, idem bool) map[string]any {
 }
 
 func curatedTools() []*tool {
+	return append(baseTools(), appTools()...)
+}
+
+func baseTools() []*tool {
 	return []*tool{
 		{
 			Name: "create_site_from_html", Title: "Publish an HTML page as a new site",
@@ -244,6 +248,7 @@ func resourceTemplates() []map[string]any {
 	return []map[string]any{
 		{"uriTemplate": "bunker://sites/{site}", "name": "site", "title": "A site's details and file list", "mimeType": "application/json"},
 		{"uriTemplate": "bunker://sites/{site}/files/{path}", "name": "site-file", "title": "One file of a site's working copy"},
+		{"uriTemplate": uiPrefix + "{site}", "name": "site-app", "title": "A published site as an interactive app (MCP Apps)", "mimeType": AppMimeType},
 	}
 }
 
@@ -254,12 +259,16 @@ func (s *Server) listResources(ctx context.Context) (any, error) {
 		var l struct {
 			Sites []struct {
 				Slug, Title, Role string
+				Version           int64
 			} `json:"sites"`
 		}
 		if json.Unmarshal(resp.Body, &l) == nil {
 			for i, st := range l.Sites {
 				if i >= 100 {
 					break
+				}
+				if st.Version > 0 {
+					out = append(out, appResource(st.Slug, st.Title))
 				}
 				if st.Role == "viewer" {
 					continue // file access needs editor rights
@@ -284,6 +293,9 @@ func (s *Server) readResource(ctx context.Context, uri string) (any, error) {
 		return one("text/markdown", SDKReference), nil
 	case "bunker://docs/sandbox":
 		return one("text/markdown", SandboxRules), nil
+	}
+	if strings.HasPrefix(uri, uiPrefix) {
+		return s.readApp(ctx, uri)
 	}
 	rest, ok := strings.CutPrefix(uri, "bunker://sites/")
 	if !ok || rest == "" {

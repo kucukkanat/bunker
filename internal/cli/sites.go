@@ -60,7 +60,7 @@ func init() {
 			Run:     cmdVersions,
 		},
 		&command{
-			Name: "rollback", Aliases: []string{"restore"}, Args: "[site] [version]", Group: groupSites,
+			Name: "rollback", Args: "[site] [version]", Group: groupSites,
 			Summary: "Make an earlier version live again (default: the previous one)",
 			Run:     cmdRollback,
 		},

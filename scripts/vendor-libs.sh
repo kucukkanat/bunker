@@ -33,3 +33,11 @@ get papaparse@5.7.0 papaparse.min.js papaparse papaparse.min.js
 get sortablejs@1.15.7 Sortable.min.js sortablejs Sortable.min.js
 get canvas-confetti@1.9.4 dist/confetti.browser.js canvas-confetti confetti.browser.js
 get jquery@3.7.1 dist/jquery.min.js jquery jquery.min.js
+get leaflet@1.9.4 dist/leaflet.js leaflet leaflet.js
+get leaflet@1.9.4 dist/leaflet.css leaflet leaflet.css
+get leaflet@1.9.4 LICENSE leaflet LICENSE
+for img in layers.png layers-2x.png marker-icon.png marker-icon-2x.png marker-shadow.png; do
+	get leaflet@1.9.4 dist/images/$img leaflet/images $img
+done
+# Not vendored: mermaid (dist/mermaid.min.js is 5.5 MB, over the 3 MB budget) and
+# SheetJS xlsx (npm only has the outdated 0.18.5; current builds live on cdn.sheetjs.com).

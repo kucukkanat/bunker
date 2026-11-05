@@ -107,17 +107,27 @@ async function people(el, ctx) {
     const f = q.value.trim().toLowerCase();
     const shown = users.filter((u) => !f || (u.name + ' ' + u.email).toLowerCase().includes(f));
     clear(listEl, shown.length ? h('div.list', shown.map((u) => h('div.item', avatar(u.name || u.email),
-      h('div.n', h('b', u.name || u.email, u.id === state.me.id && !/\byou\b/i.test(u.name) ? ' (you)' : ''), h('span', u.email + ' · last seen ' + (relTime(u.lastSeenAt || u.lastSeen) || 'never') + (u.groups?.length ? ' · ' + plural(u.groups.length, 'group') : ''))),
+      h('div.n', h('b', u.name || u.email, u.id === state.me.id && !/\byou\b/i.test(u.name) ? ' (you)' : ''), h('span', u.email + ' · last seen ' + (relTime(u.lastSeenAt || u.lastSeen) || 'never') + (u.groups?.length ? ' · ' + plural(u.groups.length, 'group') : '') + (u.sites ? ' · owns ' + plural(u.sites, 'site') : ''))),
       u.disabled && h('span.badge.danger', 'Disabled'),
       h('label.row.small', 'Admin', toggle({ checked: u.isAdmin, label: 'Admin: ' + (u.name || u.email), disabled: u.id === state.me.id, onchange: async (v, t) => {
         try { await patch('/api/v1/admin/users/' + u.id, { isAdmin: v }); u.isAdmin = v; toast((u.name || u.email) + (v ? ' is now an admin.' : ' is no longer an admin.'), { type: 'ok' }); }
         catch { t.checked = !v; }
       } })),
       u.id !== state.me.id && h('button.btn.sm' + (u.disabled ? '' : '.danger'), { onclick: async () => {
-        if (!u.disabled && !(await confirmDialog({ title: 'Disable ' + (u.name || u.email) + '?', message: 'They’re signed out everywhere and their tokens stop working. Their sites stay, so you may want to transfer them.', confirm: 'Disable account', danger: true }))) return;
-        await patch('/api/v1/admin/users/' + u.id, { disabled: !u.disabled });
+        const who = u.name || u.email;
+        const body = { disabled: !u.disabled };
+        if (!u.disabled && u.sites > 0) {
+          // Owner leaves: offer to move their sites in the same step.
+          const to = await promptDialog({ title: 'Disable ' + who + '?', label: 'Move their ' + plural(u.sites, 'site') + ' to… (email)', type: 'email', placeholder: 'new.owner@company.com', hint: 'They’re signed out everywhere and their tokens stop working. The new owner needs to have signed in once. Leave empty to keep the sites with ' + who + '.', confirm: 'Disable account' });
+          if (to === null) return;
+          if (to) body.transferTo = to;
+        } else if (!u.disabled && !(await confirmDialog({ title: 'Disable ' + who + '?', message: 'They’re signed out everywhere and their tokens stop working.', confirm: 'Disable account', danger: true }))) return;
+        let r;
+        try { r = await patch('/api/v1/admin/users/' + u.id, body, { quiet: true }); }
+        catch (e) { toast(e.message, { type: 'error' }); return; }
         u.disabled = !u.disabled;
-        toast(u.disabled ? 'Account disabled.' : 'Account enabled again.');
+        if (body.transferTo) u.sites = 0;
+        toast(u.disabled ? 'Account disabled.' + (body.transferTo ? ' Moved ' + plural(r?.moved ?? 0, 'site') + ' to ' + body.transferTo + '.' : '') : 'Account enabled again.', { type: 'ok' });
         draw();
       } }, u.disabled ? 'Enable' : 'Disable'),
       methods?.local && h('button.btn.sm.ghost', { 'aria-label': 'Password reset link for ' + u.email, title: 'Password reset link', onclick: () => resetLink(u) }, icon('key', 16)),

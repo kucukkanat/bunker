@@ -112,6 +112,7 @@ type heading struct {
 }
 
 type mdDoc struct {
+	bud    *mdBudget
 	src    string // source path
 	out    string // output html path
 	title  string
@@ -139,11 +140,12 @@ func mdOut(p string) string {
 var numPrefix = regexp.MustCompile(`^(\d+)[-_. ]+`)
 
 func renderMarkdown(files map[string][]byte, mds []string) (string, error) {
+	bud := newMDBudget()
 	outOf := map[string]string{}
 	var docs []*mdDoc
 	for _, p := range mds {
 		fm, body := frontMatter(files[p])
-		d := &mdDoc{src: p, out: mdOut(p), fm: fm, body: body}
+		d := &mdDoc{src: p, out: mdOut(p), fm: fm, body: body, bud: bud}
 		if _, taken := files[d.out]; taken && !strings.HasSuffix(d.out, "index.html") {
 			d.out = strings.TrimSuffix(d.out, ".html") + "-md.html"
 		}
@@ -272,6 +274,11 @@ func sortDocs(docs []*mdDoc) {
 
 func (d *mdDoc) render(outOf map[string]string) {
 	if d.slides {
+		d.title = firstNonEmpty(d.fm["title"], niceName(d.src))
+		return
+	}
+	if !d.bud.allow(d.body) {
+		d.html = "<pre>" + esc(string(d.body)) + "</pre>"
 		d.title = firstNonEmpty(d.fm["title"], niceName(d.src))
 		return
 	}
@@ -527,7 +534,7 @@ func slidesPage(d *mdDoc, depth int) []byte {
 			cls = " lead"
 		}
 		var hb bytes.Buffer
-		_ = md.Convert([]byte(s), &hb)
+		d.bud.convert([]byte(s), &hb)
 		b.WriteString(`<section class="slide` + esc(cls) + `" aria-roledescription="slide" aria-label="` + strconv.Itoa(i+1) + ` of ` + strconv.Itoa(len(parts)) + `">`)
 		b.WriteString(hb.String())
 		if truthy(firstNonEmpty(d.fm["paginate"], "true")) {
@@ -556,4 +563,90 @@ func firstNonEmpty(v ...string) string {
 		}
 	}
 	return ""
+}
+
+// Goldmark's parser is quadratic on some inputs (200 KB of "[a](" takes
+// ~17 s; deeply nested lists or quotes are similar), and any signed-in
+// person can deploy markdown. mdBudget caps the work per deploy: hostile
+// shapes and anything past the byte budget are shown as plain text.
+type mdBudget struct{ left int }
+
+const (
+	mdBudgetBytes   = 4 << 20 // markdown converted per deploy
+	mdMaxBrackets   = 3000    // "[" per document (links, refs, footnotes)
+	mdMaxLineNested = 32      // container markers (> - * + 1.) opening one line
+)
+
+func newMDBudget() *mdBudget { return &mdBudget{left: mdBudgetBytes} }
+
+// allow reports whether src may be converted, and charges it.
+func (b *mdBudget) allow(src []byte) bool {
+	if b == nil {
+		b = newMDBudget()
+	}
+	if len(src) > b.left || mdHostile(src) {
+		return false
+	}
+	b.left -= len(src)
+	return true
+}
+
+// convert renders src as markdown, or as escaped plain text when it's
+// over budget or shaped to blow up the parser.
+func (b *mdBudget) convert(src []byte, w *bytes.Buffer) {
+	if !b.allow(src) {
+		w.WriteString("<pre>" + esc(string(src)) + "</pre>")
+		return
+	}
+	_ = md.Convert(src, w)
+}
+
+func mdHostile(src []byte) bool {
+	if bytes.Count(src, []byte("[")) > mdMaxBrackets {
+		return true
+	}
+	for len(src) > 0 {
+		line := src
+		if i := bytes.IndexByte(src, '\n'); i >= 0 {
+			line, src = src[:i], src[i+1:]
+		} else {
+			src = nil
+		}
+		if lineNesting(line) > mdMaxLineNested {
+			return true
+		}
+	}
+	return false
+}
+
+// lineNesting counts block container markers at the start of a line.
+func lineNesting(l []byte) int {
+	n := 0
+	for i := 0; i < len(l); {
+		c := l[i]
+		switch {
+		case c == ' ' || c == '\t':
+			i++
+		case c == '>':
+			n++
+			i++
+		case (c == '-' || c == '*' || c == '+') && (i+1 == len(l) || l[i+1] == ' ' || l[i+1] == '\t'):
+			n++
+			i += 2
+		case c >= '0' && c <= '9':
+			j := i
+			for j < len(l) && j-i < 10 && l[j] >= '0' && l[j] <= '9' {
+				j++
+			}
+			if j < len(l) && (l[j] == '.' || l[j] == ')') && (j+1 == len(l) || l[j+1] == ' ') {
+				n++
+				i = j + 1
+				continue
+			}
+			return n
+		default:
+			return n
+		}
+	}
+	return n
 }

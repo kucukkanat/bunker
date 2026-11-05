@@ -45,6 +45,33 @@ func registerExtra(a *core.App) {
 			return core.Created{V: ns}, nil
 		}})
 
+	a.Handle(core.Op{Name: "sites.embed", Method: "GET", Path: "/api/v1/sites/{site}/embed", Summary: "Get a short-lived link that shows the live site inside another app (MCP Apps hosts)",
+		Params: []core.Param{siteParam},
+		Fn: func(r *http.Request) (any, error) {
+			u := core.MustUser(r)
+			s, role, err := Full(r.Context(), u, r.PathValue("site"), core.RoleViewer)
+			if err != nil {
+				return nil, err
+			}
+			if s.Version == 0 {
+				return nil, core.BadRequest("This site hasn't been published yet. Publish it first, then open it again.")
+			}
+			if s.ArchivedAt != nil {
+				return nil, core.BadRequest("This site was archived. Restore it in Bunker first.")
+			}
+			base := ContentBase(r)
+			t := MakeEmbedTicket(s.ID, s.Version, u.ID)
+			a.Audit(r.Context(), "site.embed", s.ID, s.Slug, nil)
+			return map[string]any{
+				"url":       base + "/s/" + s.Slug + "/~e/" + t + "/",
+				"filesBase": "/s/" + s.Slug + "/~f/" + MakeTicket(s.ID, s.Version, u.ID) + "/",
+				"origin":    base,
+				"appUrl":    AppBase(r) + "/s/" + s.Slug + "/",
+				"expiresAt": EmbedExpiry(),
+				"site":      map[string]any{"slug": s.Slug, "id": s.ID, "title": s.Title, "icon": s.Icon, "role": role.String(), "version": s.Version, "live": s.Version},
+			}, nil
+		}})
+
 	a.Handle(core.Op{Name: "sites.export", Method: "GET", Path: "/api/v1/sites/{site}/export.zip", Summary: "Download a site's files as a zip",
 		Params: []core.Param{siteParam, {Name: "version", In: "query", Type: "integer", Desc: "Version (default: draft if any, else live)"}},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
@@ -103,3 +130,23 @@ func copyN(w interface{ Write([]byte) (int, error) }, r interface{ Read([]byte) 
 }
 
 var _ = strings.TrimSpace
+
+// AppBase is Bunker's public origin (BUNKER_URL, else the request's).
+func AppBase(r *http.Request) string {
+	if app.Cfg.URL != "" {
+		return strings.TrimRight(app.Cfg.URL, "/")
+	}
+	scheme := "http"
+	if r.TLS != nil || (app.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+// ContentBase is the origin user content is served from.
+func ContentBase(r *http.Request) string {
+	if app.Cfg.ContentURL != "" {
+		return strings.TrimRight(app.Cfg.ContentURL, "/")
+	}
+	return AppBase(r)
+}

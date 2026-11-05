@@ -119,6 +119,10 @@ func (c *Client) Do(method, path string, body any, hdr ...string) Res {
 		req.Header.Set("X-Bunker-Page", "1")
 	}
 	for i := 0; i+1 < len(hdr); i += 2 {
+		if strings.EqualFold(hdr[i], "Host") {
+			req.Host = hdr[i+1]
+			continue
+		}
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
 	if c.Token != "" {

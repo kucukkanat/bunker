@@ -191,6 +191,10 @@ const maxFiles = 20000
 // collectFiles walks dir honoring the ignore rules.
 func collectFiles(dir string, ig *Ignorer) ([]*localFile, error) {
 	var out []*localFile
+	realRoot, rerr := filepath.EvalSymlinks(dir)
+	if rerr != nil {
+		realRoot = dir
+	}
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -209,6 +213,11 @@ func collectFiles(dir string, ig *Ignorer) ([]*localFile, error) {
 			isDir = info.IsDir()
 			if isDir {
 				return nil // don't follow directory symlinks (loops)
+			}
+			// Never publish files from outside the folder (a symlink to
+			// ~/.ssh/id_ed25519 in an untrusted project, say).
+			if t, err := filepath.EvalSymlinks(p); err != nil || !within(realRoot, t) {
+				return nil
 			}
 		}
 		if ig.Match(rel, isDir) {
@@ -394,4 +403,10 @@ func findOutput(dir string, proj *Project) string {
 		}
 	}
 	return ""
+}
+
+// within reports whether path p is root or inside it.
+func within(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

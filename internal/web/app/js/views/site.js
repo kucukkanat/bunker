@@ -151,6 +151,18 @@ export default async function workspace(root, ctx) {
     },
     previewVersion(n) { viewVersion = n; updatePreview(); },
     get viewVersion() { return viewVersion; },
+    // Errors the draft preview reported (shell.js keeps the last 20).
+    previewErrors() {
+      try {
+        const b = frame.contentWindow && frame.contentWindow.__bunkerErrors;
+        return Array.isArray(b) ? b.map(({ message, source, line }) => ({ message, source, line })) : [];
+      } catch { return []; }
+    },
+    // Resolves `ms` after the preview has finished loading (max ~8s wait).
+    async previewSettled(ms = 2000) {
+      for (let i = 0; i < 80 && !loading.classList.contains('hidden'); i++) await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, ms));
+    },
     draftChanged() { ws.hasDraft = true; paintTop(); updatePreview(true); sig = ''; },
     filesSubs: new Set(),
     upload: () => pk.inputs[1].click(),
@@ -173,6 +185,7 @@ export default async function workspace(root, ctx) {
     const draft = ws.hasDraft;
     statusEl.className = 'badge dot ' + (draft ? 'draft' : s.version ? 'ok' : '');
     statusEl.textContent = draft ? 'Draft — not published yet' : s.version ? 'Live · version ' + s.version : 'Not published yet';
+    if (s.archivedAt) { statusEl.className = 'badge dot'; statusEl.textContent = 'Archived — open the preview to restore it'; }
     publishBtn.disabled = !draft;
     publishBtn.title = draft ? 'Make your changes live for everyone you’ve shared with' : 'Nothing new to publish';
     discardBtn.classList.toggle('hidden', !draft);

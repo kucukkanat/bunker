@@ -43,13 +43,13 @@ Open the URL, create your admin account, and drop a file. Every option (Koyeb, C
 
 ## What you get
 
-- **Anything becomes an app.** HTML, folders, zips and build output today; Markdown, spreadsheets, notebooks, PDFs and single-file React next. Or describe it to the AI builder.
+- **Anything becomes an app.** HTML, folders, zips and build output; Markdown docs and slides; CSV and Excel table apps; Jupyter notebooks; PDFs; images, video and audio; single-file React, JSX and TSX. Or start from one of eight templates, or describe it to the AI builder. [What each file type becomes](https://kucukkanat.github.io/bunker/docs/build/drop-anything/).
 - **Share like a document.** People, groups or everyone, as viewer or editor. "Ask for access" requests, notifications, view stats.
 - **Every change is a version.** Drafts, diffs and one-click restore.
-- **A real backend without servers.** `window.bunker` gives pages a database with access rules and live updates, file uploads, per-person storage, live rooms, AI and notifications, all with the viewer's own permissions.
+- **A real backend without servers.** `window.bunker` gives pages a database with access rules and live updates, file uploads, per-person storage, live rooms, AI and notifications, all with the viewer's own permissions. Plus Microsoft 365 data and admin-defined connections to internal APIs.
 - **Built for agents.** A CLI (`bunker deploy`, `share`, `rollback`, `ai`, `api`), local and remote MCP (add `https://your-bunker/mcp` to Claude, Cursor or ChatGPT), `/llms.txt`, and every UI action in the API.
-- **Safe by design.** Opaque-origin sandbox, signed content tickets, strict CSP plus `Connection-Allowlist`, no keys in pages, secret scanning, audit log. [Threat model](https://kucukkanat.github.io/bunker/docs/security/threat-model/), including what remains.
-- **Tiny footprint.** One pure-Go binary with SQLite. Back up one folder.
+- **Safe by design.** Opaque-origin sandbox, signed content tickets, strict CSP plus `Connection-Allowlist`, no keys in pages, secret scanning, an audit log you can search, export and stream to your SIEM. [Threat model](https://kucukkanat.github.io/bunker/docs/security/threat-model/), including what remains.
+- **Tiny footprint.** One pure-Go binary with SQLite. Back up one folder, or let Bunker write scheduled snapshots.
 
 ## Status
 

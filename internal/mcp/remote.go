@@ -231,6 +231,9 @@ func (b *inproc) Do(ctx context.Context, req *Request) (*Response, error) {
 	}
 	hr.Header.Set("Accept", "application/json, text/event-stream")
 	hr.Header.Set("User-Agent", "bunker-mcp")
+	if req.PageSafe {
+		hr.Header.Set("X-Bunker-Page", "1")
+	}
 	hr.RemoteAddr = b.ip + ":0"
 	if p, err := url.Parse(b.base); err == nil {
 		hr.Host = p.Host

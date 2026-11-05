@@ -34,8 +34,8 @@ Bunker runs code that people wrote (or that an AI wrote for them) and shows it t
 | App sends data to the internet | CSP `default-src 'none'` with only `'self'` sources and `connect-src 'self'`; `form-action 'none'`; no popups; `Connection-Allowlist` on Chromium and Edge |
 | App holds or leaks keys | Pages never receive tokens; uploads with API keys are refused; AI and connection keys stay on the server, encrypted |
 | Viewer loosens data rules | Rule changes are editor-only operations that pages can't call |
-| SSRF through connections | Named connections with fixed base URLs; private and metadata IPs blocked by default, DNS pinned, redirects re-checked (connections are Preview) |
-| Microsoft 365 overreach | Delegated tokens only, scopes on an admin allowlist, every Graph call audited (Preview) |
+| SSRF through connections | Named connections with fixed base URLs and path prefixes; private and metadata IPs blocked by default, checked on the dialed IP after DNS resolution, redirects limited to the same host, proxies bypassed, 5 MB and per-app rate limits |
+| Microsoft 365 overreach | Delegated tokens only, GET only, known Graph paths mapped to scopes on an admin allowlist, optional per-app approval and SharePoint site list, every Graph call audited |
 | Wrong people sign in | Invite-only built-in accounts; single-tenant Entra, Workspace domain for Google, public email domains refused; optional allowed groups; guests off by default |
 | Password guessing | argon2id; 10 attempts per 15 minutes per IP and email; constant-time checks |
 | Claiming a fresh server | One-time setup code, except from localhost |

@@ -87,6 +87,34 @@ func initNotify(a *core.App) error {
 		Send(ctx, fmt.Sprint(m["id"]), "share", fmt.Sprintf("%v shared “%s” with you", m["by"], s.Title), "You can "+map[string]string{"viewer": "view", "editor": "edit"}[fmt.Sprint(m["role"])]+" it now.", "/s/"+s.Slug+"/", s.ID)
 	})
 
+	// Idle archival (sites module): warn the owner a week ahead, then tell them.
+	a.On("site.archive_warning", func(ctx context.Context, p any) {
+		m, _ := p.(map[string]any)
+		s, email := siteOwner(ctx, m)
+		if s == nil {
+			return
+		}
+		left := (toInt64(m["archiveAt"]) - core.Now() + 43200) / 86400
+		when := "soon"
+		if left >= 1 {
+			when = fmt.Sprintf("in %d day%s", left, map[bool]string{true: "", false: "s"}[left == 1])
+		}
+		Send(ctx, email, "archive", fmt.Sprintf("“%s” will be archived %s", s.Title, when),
+			fmt.Sprintf("Nobody has opened or changed it for a while (sites are archived after %d days without use). Open it to keep it. Archived sites can be restored any time.", toInt64(m["days"])), "/s/"+s.Slug+"/", s.ID)
+	})
+	a.On("site.archived", func(ctx context.Context, p any) {
+		m, _ := p.(map[string]any)
+		if toInt64(m["days"]) == 0 {
+			return // archived by hand: no news for the owner
+		}
+		s, email := siteOwner(ctx, m)
+		if s == nil {
+			return
+		}
+		Send(ctx, email, "archive", fmt.Sprintf("“%s” was archived", s.Title),
+			fmt.Sprintf("Nobody used it for %d days. Its files and data are kept: open it and press Restore to bring it back.", toInt64(m["days"])), "/s/"+s.Slug+"/", s.ID)
+	})
+
 	a.Handle(core.Op{Name: "notifications.list", Method: "GET", Path: "/api/v1/notifications", Summary: "Your notifications",
 		Params: []core.Param{{Name: "unread", In: "query", Type: "boolean"}},
 		Fn: func(r *http.Request) (any, error) {
@@ -448,4 +476,29 @@ func loadByEmail(ctx context.Context, email string) *core.User {
 	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
 	json.Unmarshal([]byte(gj), &u.Groups)
 	return u
+}
+
+func toInt64(v any) int64 {
+	switch x := v.(type) {
+	case int64:
+		return x
+	case int:
+		return int64(x)
+	case float64:
+		return int64(x)
+	}
+	return 0
+}
+
+// siteOwner loads the site named by payload["siteId"] and its owner's email.
+func siteOwner(ctx context.Context, m map[string]any) (*sites.SiteRecord, string) {
+	s, err := sites.GetByID(ctx, toInt64(m["siteId"]), false)
+	if err != nil {
+		return nil, ""
+	}
+	var email string
+	if app.DB.QueryRowContext(ctx, `SELECT email FROM users WHERE id=? AND disabled=0`, s.OwnerID).Scan(&email) != nil {
+		return nil, ""
+	}
+	return s, email
 }

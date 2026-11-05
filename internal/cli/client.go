@@ -79,6 +79,10 @@ var userAgent = "bunker-cli/" + core.Version + " (" + runtime.GOOS + "/" + runti
 
 // Raw performs a request and returns the response (caller closes body).
 func (c *Client) Raw(ctx context.Context, method, path string, q url.Values, body io.Reader, ct string) (*http.Response, error) {
+	return c.raw(ctx, method, path, q, body, ct, nil)
+}
+
+func (c *Client) raw(ctx context.Context, method, path string, q url.Values, body io.Reader, ct string, hdr http.Header) (*http.Response, error) {
 	u := c.Server + path
 	if len(q) > 0 {
 		u += "?" + q.Encode()
@@ -95,6 +99,9 @@ func (c *Client) Raw(ctx context.Context, method, path string, q url.Values, bod
 	}
 	req.Header.Set("Accept", "application/json, text/event-stream;q=0.9, */*;q=0.5")
 	req.Header.Set("User-Agent", userAgent)
+	for k, v := range hdr {
+		req.Header[k] = v
+	}
 	if c.debug != nil {
 		c.debug(method + " " + u)
 	}
@@ -172,7 +179,11 @@ func (c *Client) Do(ctx context.Context, r *mcp.Request) (*mcp.Response, error) 
 	if r.Body != nil {
 		body = bytes.NewReader(r.Body)
 	}
-	resp, err := c.Raw(ctx, r.Method, r.Path, r.Query, body, r.ContentType)
+	var hdr http.Header
+	if r.PageSafe {
+		hdr = http.Header{"X-Bunker-Page": {"1"}}
+	}
+	resp, err := c.raw(ctx, r.Method, r.Path, r.Query, body, r.ContentType, hdr)
 	if err != nil {
 		return nil, err
 	}
