@@ -34,3 +34,4 @@ table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:9px 10px
 dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--card);color:var(--text);padding:22px;max-width:520px;width:calc(100% - 32px);box-shadow:var(--sh)}
 dialog::backdrop{background:rgba(10,13,11,.45)}
 @media(max-width:600px){.wrap{padding:18px 14px 48px}.hero{align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

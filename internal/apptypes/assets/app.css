@@ -222,3 +222,4 @@ article.prose{background:none;border:0;border-radius:0;box-shadow:none;padding:0
 .prose table{background:none;box-shadow:none;border-radius:0;width:auto;max-width:100%}
 .prose th{text-transform:none;letter-spacing:0;font-size:inherit;color:var(--text)}
 @media print{.bk-top,.docs nav.side,.docs aside.toc,.toolbar,.menu-btn{display:none!important}.docs{display:block}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

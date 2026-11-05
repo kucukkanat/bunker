@@ -50,13 +50,15 @@ export default async function build(panel, ws) {
       scroll();
     };
     setStatus('Thinking…');
-    const end = () => { statusEl?.remove(); statusEl = null; };
+    // The reply streams in token by token: screen readers wait for it to
+    // finish (aria-busy) and then read it once.
+    const end = () => { statusEl?.remove(); statusEl = null; ai?.removeAttribute('aria-busy'); };
     return (type, d) => {
       if (type === 'status') setStatus(typeof d === 'string' ? d : d?.text || d?.message || d?.status);
       else if (type === 'text' || type === 'delta' || type === 'message') {
         const t = typeof d === 'string' ? d : d?.text ?? d?.delta ?? d?.content ?? '';
         if (!t) return;
-        if (!ai) { ai = bubble('ai', ''); if (statusEl) log.append(statusEl); }
+        if (!ai) { ai = bubble('ai', ''); ai.setAttribute('aria-busy', 'true'); if (statusEl) log.append(statusEl); }
         ai.firstChild ? (ai.firstChild.textContent += t) : ai.prepend(t);
         scroll();
       } else if (type === 'file') {

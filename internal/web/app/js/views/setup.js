@@ -33,9 +33,14 @@ function howto(provider, redirect) {
     h('li', 'Enter your company’s email domain so only your people can sign in.'));
 }
 
+let uid = 0;
+const nextId = (p) => p + '-' + ++uid;
+const describe = (input, id) => input.setAttribute('aria-describedby', [input.getAttribute('aria-describedby'), id].filter(Boolean).join(' '));
 const field = (label, input, hint) => {
   if (!input.hasAttribute('aria-label')) input.setAttribute('aria-label', label);
-  return h('label.field', h('span.label', label), input, hint && h('span.hint', hint));
+  const hid = hint && nextId('hint');
+  if (hid) describe(input, hid);
+  return h('label.field', h('span.label', label), input, hint && h('span.hint', { id: hid }, hint));
 };
 function codeField(ref) {
   const inp = h('input.input.mono', { placeholder: 'XXXX-XXXX', maxlength: 9, autocomplete: 'off', spellcheck: 'false', required: true, 'aria-label': 'Setup code', style: { letterSpacing: '.12em', textTransform: 'uppercase', maxWidth: '220px' } });
@@ -167,18 +172,22 @@ function localForm({ codeNeeded, onSaved }) {
   const pw = h('input.input', { type: 'password', required: true, minlength: 10, autocomplete: 'new-password' });
   const pw2 = h('input.input', { type: 'password', required: true, minlength: 10, autocomplete: 'new-password' });
   const tip = 'At least 10 characters. A short sentence works well.';
-  const meter = h('p.hint.small.muted', { 'aria-live': 'polite', style: { marginTop: '6px' } }, tip);
+  const meter = h('p.hint.small.muted', { id: nextId('pw-hint'), 'aria-live': 'polite', style: { marginTop: '6px' } }, tip);
+  describe(pw, meter.id);
   pw.addEventListener('input', () => {
     const n = pw.value.length;
     meter.textContent = n === 0 ? tip : n < 10 ? (10 - n) + ' more to go' : 'Looks good';
     meter.style.color = n >= 10 ? 'var(--ok)' : '';
   });
   const err = errorBox();
+  err.id = nextId('setup-err');
+  describe(pw2, err.id);
+  pw2.addEventListener('input', () => pw2.removeAttribute('aria-invalid'));
   const save = h('button.btn.primary.lg', { type: 'submit' }, 'Create my account', icon('arrow', 18));
   return h('form.stack', { onsubmit: async (e) => {
     e.preventDefault();
     err.classList.add('hidden');
-    if (pw.value !== pw2.value) return showErr(err, { message: 'The two passwords don’t match.' });
+    if (pw.value !== pw2.value) { pw2.setAttribute('aria-invalid', 'true'); pw2.focus(); return showErr(err, { message: 'The two passwords don’t match.' }); }
     await busy(save, async () => {
       try {
         await post('/api/v1/setup', { provider: 'local', email: email.value.trim(), name: name.value.trim(), password: pw.value, code: code.value ? code.value() : undefined }, { quiet: true });

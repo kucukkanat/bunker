@@ -20,7 +20,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" role="main">
   <div class="hero"><div><h1 id="title">Tell us what you think</h1><p id="sub">Two minutes, honest answers. We read every one.</p></div></div>
   <div class="grid g2">
     <section class="card">
@@ -63,6 +63,7 @@ for (var i = 1; i <= 5; i++) (function (n) {
   var b = document.createElement('button'); b.type = 'button'; b.textContent = '★'; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', n + ' star' + (n > 1 ? 's' : ''));
   b.onclick = function () { rating = n; paintStars(); }; $('stars').appendChild(b);
 })(i);
+paintStars();
 function paintStars() { [].forEach.call($('stars').children, function (b, i) { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', i + 1 === rating); }); }
 CONFIG.topics.forEach(function (t) {
   var b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', 'false');

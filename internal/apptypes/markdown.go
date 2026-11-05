@@ -334,7 +334,7 @@ var h23Re = regexp.MustCompile(`(?s)<h([23]) id="([^"]+)">(.*?)</h[23]>`)
 func addAnchors(h string) string {
 	return h23Re.ReplaceAllStringFunc(h, func(m string) string {
 		sm := h23Re.FindStringSubmatch(m)
-		return `<h` + sm[1] + ` id="` + sm[2] + `">` + sm[3] + ` <a class="anchor" href="#` + sm[2] + `" aria-hidden="true">#</a></h` + sm[1] + `>`
+		return `<h` + sm[1] + ` id="` + sm[2] + `">` + sm[3] + ` <a class="anchor" href="#` + sm[2] + `" aria-hidden="true" tabindex="-1">#</a></h` + sm[1] + `>`
 	})
 }
 

@@ -16,7 +16,7 @@
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal .h{font-size:.72rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding:4px 0}
 .cal .d{min-height:74px;border:1px solid var(--line);border-radius:8px;padding:4px 5px;background:var(--card);font-size:.75rem;overflow:hidden}
-.cal .d.o{opacity:.45}.cal .d.t{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.cal .d.w{background:var(--card2)}
+.cal .d.o{opacity:.68}.cal .d.t{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.cal .d.w{background:var(--card2)}
 .cal .d b{display:block;font-size:.78rem;margin-bottom:2px}
 .cal .d span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:0 4px;margin:1px 0;background:var(--soft)}
 .cal .d span.sick{background:rgba(194,104,63,.18)}.cal .d span.trip{background:rgba(90,120,180,.18)}
@@ -24,7 +24,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" role="main">
   <div class="hero">
     <div><h1 id="title">Team directory</h1><p>Who’s who, and who’s out.</p></div>
     <div class="row"><button class="btn" id="b-me">Edit my profile</button><button class="btn primary" id="b-out">I’m away…</button></div>

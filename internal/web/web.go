@@ -140,6 +140,21 @@ func initWeb(a *core.App) error {
 	for _, p := range []string{"/{$}", "/new", "/sites/", "/admin", "/admin/", "/settings", "/settings/", "/device", "/templates", "/trash", "/docs", "/welcome"} {
 		a.Mux.HandleFunc("GET "+p, appIndex)
 	}
+	// Anything else: browsers get a small, titled page instead of Go's
+	// plain-text "404 page not found"; other clients keep the plain one.
+	a.Mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.NotFound(w, r)
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "text/html; charset=utf-8")
+		h.Set("Cache-Control", "no-store")
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`<!doctype html><html lang="en"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Page not found · Bunker</title><link rel=stylesheet href="/_/kit.css">
+<main class="bk-center"><div class="bk-card"><img src="/_/icon.svg" width=40 height=40 alt=""><h1>Page not found</h1><p>There’s nothing at this address. Check the link, or go back to Bunker.</p><p><a class="bk-btn" href="/">Go to Bunker</a></p></div></main></html>`))
+	})
 	a.Mux.HandleFunc("GET /setup", appIndex)
 	a.Mux.HandleFunc("GET /auth/signed-out", appIndex)
 	a.Mux.HandleFunc("GET /app/{path...}", func(w http.ResponseWriter, r *http.Request) {
