@@ -64,7 +64,7 @@ export default async function functions(panel, ws) {
   const wrap = h('div.fn-wrap', skeletons(3, '.line'));
   clear(panel, wrap);
   let d;
-  try { d = await get(sp(ws.slug, '/functions'), { quiet: true }); }
+  try { d = await get(sp(ws.slug, '/functions' + (ws.hasDraft ? '?draft=1' : '')), { quiet: true }); }
   catch (e) {
     if (!ws.alive()) return;
     clear(wrap, e.missing || e.status === 404
@@ -127,7 +127,7 @@ export default async function functions(panel, ws) {
           functions(panel, ws);
         }) }, icon('plus', 16), 'Add api/hello.js to my draft'))));
   } else {
-    clear(listEl, h('div.row', h('h2.h3#fn-h-list', 'Functions'), h('span.count.faint.small', fns.length), h('span.spacer'),
+    clear(listEl, h('div.row', h('h2.h3#fn-h-list', 'Functions'), h('span.count.faint.small', fns.length), ws.hasDraft && h('span.badge.draft', { title: 'You have unpublished changes. Schedules and triggers use the live version until you publish.' }, 'From your draft'), h('span.spacer'),
       h('button.btn.sm.ghost', { onclick: () => functions(panel, ws) }, icon('refresh', 14), 'Refresh')),
       h('div.list', fns.map((f) => h('div.item.fn-item',
         h('span.site-icon.sm', icon('terminal', 16)),
