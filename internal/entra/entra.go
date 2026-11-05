@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -79,14 +78,7 @@ var (
 	flows  = map[string]*flow{}
 )
 
-func loopback(r *http.Request) bool {
-	if r.Header.Get("X-Forwarded-For") != "" {
-		return false
-	}
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
+func loopback(r *http.Request) bool { return auth.IsLocalRequest(r) }
 
 // authorize: admins always; before setup, anyone with the setup code (or on
 // the server itself).

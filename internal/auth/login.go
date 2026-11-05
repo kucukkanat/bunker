@@ -182,10 +182,18 @@ func registerLogin(a *core.App) {
 	a.Mux.HandleFunc("GET /auth/dev", handleDev)
 }
 
-// SafeNext returns next if it's a same-site relative path.
+// SafeNext returns next if it's a same-site relative path. Browsers drop
+// tabs and newlines inside URLs and read "\\" as "/", so "/\t/evil.com" or
+// "/\\evil.com" would leave the site: any control character or backslash
+// is refused.
 func SafeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.ContainsRune(next, '\\') {
 		return "/"
+	}
+	for i := 0; i < len(next); i++ {
+		if next[i] < 0x20 || next[i] == 0x7f {
+			return "/"
+		}
 	}
 	return next
 }
