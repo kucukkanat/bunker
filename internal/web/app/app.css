@@ -497,7 +497,8 @@ select.mini { height: 32px; padding: 0 28px 0 10px; border-radius: 8px; border: 
 .provider b { display: block; }
 .provider span { color: var(--muted); font-size: .88rem; }
 ol.howto { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 12px; }
-ol.howto li { counter-increment: s; position: relative; padding-left: 38px; font-size: .94rem; }
+ol.howto li { counter-increment: s; position: relative; padding-left: 38px; font-size: .94rem; min-width: 0; }
+ol.howto .code { margin-top: 8px; max-height: 260px; }
 ol.howto li::before { content: counter(s); position: absolute; left: 0; top: -1px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--forest-700); font-weight: 700; font-size: .8rem; }
 .copy-field { display: flex; gap: 8px; align-items: center; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-soft); font: .84rem var(--mono); }
 .copy-field span { flex: 1; min-width: 0; overflow-wrap: anywhere; }

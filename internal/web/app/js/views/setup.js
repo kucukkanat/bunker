@@ -1,5 +1,5 @@
 // /setup: first-run wizard. Built-in accounts (default) or company sign-in.
-import { h, icon, clear, copyBtn, busy, celebrate } from '../ui.js';
+import { h, icon, clear, copyBtn, busy, celebrate, codeBlock } from '../ui.js';
 import { get, post, api } from '../api.js';
 
 const PROVIDERS = {
@@ -46,6 +46,79 @@ function codeField(ref) {
 }
 const errorBox = () => h('div.notice.warn.hidden', { role: 'alert' });
 function showErr(box, ex) { clear(box, icon('warn', 18), h('div', h('b', 'That didn’t work. '), ex.message)); box.classList.remove('hidden'); }
+
+// "Set up automatically with Microsoft": an admin signs in with a device
+// code and Bunker registers itself in their tenant. Shared with Admin → Sign-in.
+export function entraAuto({ codeNeeded, onDone }) {
+  const code = {};
+  const box = h('div.stack-sm');
+  const err = errorBox();
+  let stop = false;
+  const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+  const startBtn = h('button.btn.primary.lg', { type: 'button', style: { width: '100%' }, onclick: () => start() }, icon('sparkle', 18), 'Set up automatically with Microsoft');
+  const intro = () => clear(box,
+    h('p.small.muted', 'Are you a Microsoft 365 admin? Sign in once and Bunker registers itself in your organization: app, secret and permissions. Nothing to copy by hand.'),
+    codeNeeded && codeField(code), err, startBtn, scriptFallback());
+  async function start() {
+    err.classList.add('hidden');
+    let f;
+    await busy(startBtn, async () => {
+      try { f = await post('/api/v1/setup/entra/auto/start', { code: code.value ? code.value() : undefined }, { quiet: true }); }
+      catch (ex) { showErr(err, ex); }
+    });
+    if (!f) return;
+    const status = h('p.row.small', { 'aria-live': 'polite' }, h('span.spin'), h('span', 'Waiting for you to sign in…'));
+    const cancel = h('button.btn.ghost', { type: 'button', onclick: () => { stop = true; intro(); } }, 'Cancel');
+    clear(box,
+      h('ol.howto',
+        h('li', 'Open ', h('a', { href: f.verificationUri, target: '_blank', rel: 'noopener' }, f.verificationUri), ' in a new tab.', h('div.row', { style: { marginTop: '8px' } }, h('a.btn.sm', { href: f.verificationUri, target: '_blank', rel: 'noopener' }, icon('ext', 14), 'Open Microsoft sign-in'))),
+        h('li', 'Enter this code:', h('div.copy-field', { style: { margin: '8px 0 4px' } }, h('span.mono', { 'data-testid': 'entra-user-code', style: { fontSize: '1.3rem', letterSpacing: '.12em' } }, f.userCode), copyBtn(f.userCode))),
+        h('li', f.hint || 'Sign in as a Global Administrator or Application Administrator, and accept.')),
+      status, h('div.row', h('span.spacer'), cancel));
+    stop = false;
+    let wait = f.interval || 5;
+    const pollCode = code.value ? code.value() : undefined;
+    while (!stop) {
+      await sleep(wait);
+      if (stop || !box.isConnected) return;
+      let r;
+      try { r = await post('/api/v1/setup/entra/auto/poll', { flowId: f.flowId, code: pollCode }, { quiet: true }); }
+      catch (ex) {
+        if (ex.status === 0) continue; // network blip: keep trying
+        intro(); showErr(err, ex);
+        if (/blocked|conditional_access/.test(ex.code)) box.querySelector('details')?.setAttribute('open', '');
+        return;
+      }
+      if (r.done) {
+        celebrate();
+        clear(box, h('div.notice', icon('check', 18), h('div', h('b', 'Bunker is registered in your organization. '),
+          'People can now sign in with their Microsoft work account.',
+          r.secretExpires && ' The client secret is valid until ' + new Date(r.secretExpires).toLocaleDateString() + '.',
+          r.warnings?.length ? h('ul', { style: { margin: '8px 0 0', paddingLeft: '18px' } }, r.warnings.map((w) => h('li', w))) : null)));
+        onDone && onDone(r);
+        return;
+      }
+      if (r.status === 'registering') status.lastChild.textContent = 'Signed in. Registering Bunker in your organization…';
+      wait = r.interval || wait;
+    }
+  }
+  function scriptFallback() {
+    const slot = h('div', { style: { marginTop: '10px' } });
+    const d = h('details', { ontoggle: async () => {
+      if (!d.open || slot.childNodes.length) return;
+      try {
+        const s = await get('/api/v1/setup/entra/script', { quiet: true });
+        clear(slot, h('ol.howto',
+          h('li', 'Open ', h('a', { href: 'https://shell.azure.com', target: '_blank', rel: 'noopener' }, 'Azure Cloud Shell'), ' (choose Bash) and sign in as an admin.'),
+          h('li', 'Paste this script and press Enter:', codeBlock(s.script)),
+          h('li', 'It prints a tenant ID, client ID and secret. Paste them into the form under “Do it by hand”.')));
+      } catch (ex) { clear(slot, h('p.small.muted', ex.message)); }
+    } }, h('summary.small', { style: { cursor: 'pointer', color: 'var(--muted)' } }, 'Blocked by your organization? Use an Azure Cloud Shell script instead'), slot);
+    return d;
+  }
+  intro();
+  return box;
+}
 
 // The company sign-in form, shared with Admin → Sign-in.
 export function providerForm({ provider, admin, codeNeeded, onSaved }) {
@@ -133,8 +206,6 @@ export default async function setup(root) {
   const codeNeeded = st.codeNeeded !== false;
   let step = 1, mode = '', provider = 'entra', email = '';
   const center = { textAlign: 'center' };
-  // Offered only when the server advertises it (integrations workstream).
-  const autoOk = !(st.entraAuto || st.autoEntra) ? Promise.resolve(false) : fetch('/api/v1/setup/entra/auto', { headers: { 'X-Bunker': '1' } }).then((r) => r.status === 405).catch(() => false);
 
   if (st.dev) {
     return clear(card, h('div.big-check', icon('code', 32)), h('h1', { style: center }, 'Bunker is in dev mode'),
@@ -189,29 +260,20 @@ export default async function setup(root) {
     } else if (mode === 'local') {
       done('You’re all set', signedIn ? 'Your account is ready and you’re signed in. Next: make your first site, then invite your team from Admin → People.' : 'Your account is set up. Sign in with ' + email + ' and the password you just chose.', signedIn);
     } else if (step === 2) {
-      const auto = h('div');
       clear(card, stepsBar(),
         h('h1', 'Which company sign-in?'), h('p.lead', 'People will use their normal work account. Nobody gets a new password.'),
         h('div.providers', { style: { marginTop: '24px' }, role: 'group', 'aria-label': 'Sign-in provider' }, Object.entries(PROVIDERS).map(([k, p]) =>
           choice(() => { provider = k; step = 3; draw(); }, k === provider, p.logo, p.color, p.name, p.desc, k === 'entra' && 'Recommended'))),
-        auto, back(1));
-      autoOk.then((ok) => {
-        if (!ok || step !== 2) return;
-        const b = h('button.btn.lg', { style: { width: '100%' }, onclick: () => busy(b, async () => {
-          const r = await api('/api/v1/setup/entra/auto', { method: 'POST', body: {} });
-          const to = r?.url || r?.redirect || r?.authorizeUrl;
-          if (to) location.href = to;
-          else if (r?.ok || r?.configured) { step = 4; draw(); }
-        }) }, icon('sparkle', 18), 'Set up automatically with Microsoft');
-        clear(auto, h('hr.divider'), h('p.small.muted', { style: { marginBottom: '10px' } }, 'Are you a Microsoft 365 admin? Bunker can register itself for you.'), b);
-      });
+        back(1));
     } else if (step === 3) {
       const p = PROVIDERS[provider];
+      const manual = [h('div', { style: { margin: '24px 0' } }, howto(provider, redirect)), h('hr.divider'), providerForm({ provider, codeNeeded, onSaved: () => { step = 4; draw(); } })];
       clear(card, stepsBar(), urlWarn(),
-        h('h1', 'Connect ' + p.name), h('p.lead', 'Follow these steps in another tab, then paste the values here.'),
-        h('div', { style: { margin: '24px 0' } }, howto(provider, redirect)),
-        h('hr.divider'),
-        providerForm({ provider, codeNeeded, onSaved: () => { step = 4; draw(); } }),
+        h('h1', 'Connect ' + p.name),
+        provider === 'entra'
+          ? [h('div', { style: { marginTop: '20px' } }, entraAuto({ codeNeeded, onDone: () => setTimeout(() => { step = 4; draw(); }, 1200) })),
+            h('details.manual', { style: { marginTop: '20px' } }, h('summary', h('b', 'Do it by hand instead')), h('p.lead', { style: { marginTop: '8px' } }, 'Follow these steps in another tab, then paste the values here.'), manual)]
+          : [h('p.lead', 'Follow these steps in another tab, then paste the values here.'), manual],
         back(2));
     } else {
       done('You’re ready', 'Company sign-in is connected. Sign in with your work account to start building. The admins you listed can manage Bunker from the Admin page.');
