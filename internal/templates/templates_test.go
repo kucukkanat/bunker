@@ -2,6 +2,7 @@ package templates
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -135,5 +136,45 @@ func TestTemplatesWellFormed(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Server functions shipped with templates are valid ES modules with a
+// default export, and the seeded site keeps them.
+func TestTemplateFunctions(t *testing.T) {
+	node, nodeErr := exec.LookPath("node")
+	found := 0
+	for _, tp := range All {
+		fs, err := Files(tp.Dir)
+		if err != nil {
+			t.Fatal(tp.Dir, err)
+		}
+		for p, b := range fs {
+			if !strings.HasPrefix(p, "api/") || !strings.HasSuffix(p, ".js") {
+				continue
+			}
+			found++
+			if !strings.Contains(string(b), "export default") {
+				t.Errorf("%s/%s: no export default", tp.Dir, p)
+			}
+			if strings.Contains(string(b), "document.") || strings.Contains(string(b), "window.") {
+				t.Errorf("%s/%s: uses browser globals", tp.Dir, p)
+			}
+			if nodeErr == nil {
+				f := filepath.Join(t.TempDir(), "fn.mjs")
+				os.WriteFile(f, b, 0o600)
+				if out, err := exec.Command(node, "--check", f).CombinedOutput(); err != nil {
+					t.Errorf("%s/%s: %s", tp.Dir, p, out)
+				}
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("no template ships a server function")
+	}
+	k := testkit.New(t)
+	r := k.As("", "").Must("GET", "/api/v1/sites/template-contact/files", nil)
+	if !strings.Contains(fmt.Sprint(r), "api/contact.js") {
+		t.Fatalf("seeded contact template misses its function: %v", r)
 	}
 }

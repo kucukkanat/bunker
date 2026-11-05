@@ -10,6 +10,7 @@ package templates
 import (
 	"context"
 	"embed"
+	"io/fs"
 	"sort"
 	"strings"
 
@@ -43,6 +44,7 @@ var All = []Template{
 	{"template-okrs", "okrs", "Goals & OKRs", "Quarterly objectives with key results, owners, progress bars and check-ins.", "🎯"},
 	{"template-kudos", "kudos", "Kudos wall", "Thank a teammate in public. Live wall with reactions and company values.", "🙌"},
 	{"template-lunch", "lunch-orders", "Lunch orders", "A weekly menu, one order per person per day and live tallies for the organizer.", "🥪"},
+	{"template-contact", "contact-form", "Contact form", "A contact form checked on the server, with a private inbox and notifications for the team.", "✉️"},
 }
 
 // firstRelease are the templates of the first release. Installs seeded by
@@ -80,6 +82,9 @@ var Rules = map[string]map[string]string{
 	"template-okrs":       {"objectives": "open"},
 	"template-kudos":      {"kudos": "own", "reactions": "own"},
 	"template-lunch":      {"menu": "read", "orders": "own"},
+	// Messages are written by the elevated api/contact.js function (as
+	// the owner), so senders can't read anyone's messages.
+	"template-contact": {"messages": "private"},
 }
 
 // applyRules sets missing rules on the built-in templates (an admin's
@@ -108,6 +113,30 @@ func Render(dir string) ([]byte, error) {
 	s := strings.Replace(string(b), "/*BK:STYLE*/", string(css), 1)
 	s = strings.Replace(s, "/*BK:JS*/", string(js), 1)
 	return []byte(s), nil
+}
+
+// Files returns all of a template's files: the rendered index.html plus
+// anything else in its folder (server functions in api/, data files...).
+func Files(dir string) (map[string][]byte, error) {
+	html, err := Render(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]byte{"index.html": html}
+	root := "files/" + dir
+	err = fs.WalkDir(files, root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel := strings.TrimPrefix(p, root+"/")
+		if rel == "index.html" {
+			return nil
+		}
+		b, err := files.ReadFile(p)
+		out[rel] = b
+		return err
+	})
+	return out, err
 }
 
 // Seed creates each built-in template once. A template is skipped when
@@ -176,7 +205,7 @@ func saveKnown(ctx context.Context, a *core.App, known map[string]bool) error {
 
 // create publishes one built-in template as a site owned by owner.
 func create(ctx context.Context, a *core.App, owner *core.User, t Template) error {
-	html, err := Render(t.Dir)
+	tf, err := Files(t.Dir)
 	if err != nil {
 		return err
 	}
@@ -184,7 +213,7 @@ func create(ctx context.Context, a *core.App, owner *core.User, t Template) erro
 	if err != nil {
 		return err
 	}
-	m, err := sites.StoreFiles(map[string][]byte{"index.html": html})
+	m, err := sites.StoreFiles(tf)
 	if err != nil {
 		return err
 	}
