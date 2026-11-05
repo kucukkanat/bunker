@@ -93,7 +93,7 @@ func LoadConfig() *Config {
 		switch {
 		case c.TLSCert != "":
 			c.TLS = "file"
-		case port != "" || c.Dev || listenSet || !strings.HasPrefix(c.URL, "https://") || isLocalURL(c.URL):
+		case port != "" || c.Dev || listenSet || !strings.HasPrefix(c.URL, "https://") || isLocalURL(c.URL) || inContainer():
 			c.TLS = "off"
 		default:
 			// A bare machine with an https URL: get certificates automatically.
@@ -109,6 +109,17 @@ func LoadConfig() *Config {
 		}
 	}
 	return c
+}
+
+// inContainer: inside Docker/Kubernetes TLS is normally terminated by a
+// proxy or the platform, so we never grab ports 80/443 automatically there.
+func inContainer() bool {
+	for _, f := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(f); err == nil {
+			return true
+		}
+	}
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != "" || os.Getenv("container") != ""
 }
 
 func isLocalURL(u string) bool {
