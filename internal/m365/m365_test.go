@@ -69,7 +69,7 @@ func setup(t *testing.T, tokenScopes string) *env {
 	auth.GraphBase = graph.URL
 	t.Cleanup(func() { auth.GraphBase = old })
 	cacheMu.Lock()
-	cache = map[string]cacheEntry{}
+	cache, cacheBytes = map[string]cacheEntry{}, 0
 	cacheMu.Unlock()
 
 	e.k = testkit.New(t)

@@ -175,20 +175,39 @@ func cacheGet(k string) (cacheEntry, bool) {
 	return e, true
 }
 
+// cacheMaxBody/cacheMaxBytes bound memory: entries were only counted, and
+// 2000 answers of up to 8 MB each could pin gigabytes.
+const (
+	cacheMaxBody  = 512 << 10
+	cacheMaxBytes = 64 << 20
+)
+
+var cacheBytes int
+
 func cachePut(k string, e cacheEntry) {
+	if len(e.body) > cacheMaxBody {
+		return
+	}
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	if len(cache) >= cacheMax {
+	if old, ok := cache[k]; ok {
+		cacheBytes -= len(old.body)
+	}
+	if len(cache) >= cacheMax || cacheBytes+len(e.body) > cacheMaxBytes {
+		cacheBytes = 0
 		now := time.Now()
 		for key, v := range cache {
 			if now.After(v.exp) {
 				delete(cache, key)
+			} else {
+				cacheBytes += len(v.body)
 			}
 		}
-		if len(cache) >= cacheMax {
-			cache = map[string]cacheEntry{}
+		if len(cache) >= cacheMax || cacheBytes+len(e.body) > cacheMaxBytes {
+			cache, cacheBytes = map[string]cacheEntry{}, 0
 		}
 	}
+	cacheBytes += len(e.body)
 	cache[k] = e
 }
 
@@ -653,7 +672,7 @@ func initM365(a *core.App) error {
 			cfg := loadConfig()
 			a.Audit(ctx, "admin.config", 0, "m365", map[string]any{"old": old, "new": cfg})
 			cacheMu.Lock()
-			cache = map[string]cacheEntry{}
+			cache, cacheBytes = map[string]cacheEntry{}, 0
 			cacheMu.Unlock()
 			return map[string]any{"config": cfg}, nil
 		}})
