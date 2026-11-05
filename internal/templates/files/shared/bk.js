@@ -36,6 +36,8 @@ var BK = (function () {
   return {
     demo: !real,
     me: function () { return real ? Promise.resolve(sdk.me()).then(function (u) { return u || {}; }) : Promise.resolve({ id: 0, name: 'You (demo)', email: 'you@example.com', groups: [] }); },
+    // inGroup(name): is the viewer in this group? (false in demo mode)
+    inGroup: function (g) { return real && sdk.me.inGroup ? Promise.resolve(sdk.me.inGroup(g)).catch(function () { return false; }) : Promise.resolve(false); },
     col: function (n) { return real ? realCol(n) : demoCol(n); },
     toast: toast,
     err: function (e) { toast(errText(e)); console.warn(e); },

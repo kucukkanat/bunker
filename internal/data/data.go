@@ -72,6 +72,17 @@ func initData(a *core.App) error {
 	registerEvents(a)
 	registerKV(a)
 	registerMe(a)
+	// A site made from a template starts with the template's data rules.
+	a.On("site.from_template", func(ctx context.Context, p any) {
+		m, _ := p.(map[string]any)
+		from, _ := m["from"].(int64)
+		to, _ := m["to"].(int64)
+		if from == 0 || to == 0 {
+			return
+		}
+		now := core.Now()
+		a.DB.ExecContext(ctx, `INSERT OR IGNORE INTO collections(site_id,name,rule,created_at,updated_at) SELECT ?,name,rule,?,? FROM collections WHERE site_id=? AND rule<>'own'`, to, now, now, from)
+	})
 	a.On("site.purge", func(ctx context.Context, p any) {
 		id, ok := p.(int64)
 		if !ok {
