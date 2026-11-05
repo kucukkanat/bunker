@@ -1,0 +1,23 @@
+# DigitalOcean App Platform: https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+# Deploy: https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master
+#
+# DEMO ONLY: App Platform has no persistent disks, so the SQLite database and
+# uploads are wiped on every redeploy or restart. For real use, run the
+# installer on a Droplet: curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sudo sh
+spec:
+  name: bunker
+  services:
+    - name: bunker
+      git:
+        repo_clone_url: https://github.com/kucukkanat/bunker.git
+        branch: master
+      dockerfile_path: Dockerfile
+      http_port: 8080
+      instance_count: 1
+      instance_size_slug: apps-s-1vcpu-0.5gb
+      health_check:
+        http_path: /healthz
+      envs:
+        - key: APP_URL
+          value: ${APP_URL}
+          scope: RUN_TIME

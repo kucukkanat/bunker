@@ -1,0 +1,77 @@
+#cloud-config
+# Bunker VM bootstrap (used by deploy/azure/main.bicep).
+# __BUNKER_HOST__, __BUNKER_SETUP_CODE__ and __BUNKER_VERSION__ are filled in by the template.
+
+# Data disk (LUN 0) -> ext4 -> /var/lib/bunker. Never reformatted if it has data.
+disk_setup:
+  /dev/disk/azure/scsi1/lun0:
+    table_type: gpt
+    layout: true
+    overwrite: false
+fs_setup:
+  - device: /dev/disk/azure/scsi1/lun0
+    partition: 1
+    filesystem: ext4
+    label: bunkerdata
+    overwrite: false
+mounts:
+  - ["/dev/disk/azure/scsi1/lun0-part1", "/var/lib/bunker", "ext4", "defaults,nofail,noatime", "0", "2"]
+
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/caddy/Caddyfile
+    permissions: "0644"
+    content: |
+      # Automatic HTTPS (Let's Encrypt) for the Azure DNS name.
+      # Using your own domain? Add it here, set BUNKER_URL in
+      # /etc/bunker/bunker.env, then: systemctl restart bunker caddy
+      __BUNKER_HOST__ {
+      	encode zstd gzip
+      	reverse_proxy 127.0.0.1:8080 {
+      		flush_interval -1
+      	}
+      }
+  - path: /usr/local/sbin/bunker-bootstrap
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      # Bunker as a hardened systemd service, listening on localhost only.
+      export BUNKER_URL="https://__BUNKER_HOST__"
+      export BUNKER_LISTEN="127.0.0.1:8080"
+      export BUNKER_SETUP_CODE="__BUNKER_SETUP_CODE__"
+      export BUNKER_VERSION="__BUNKER_VERSION__"
+      curl -fsSL --retry 5 https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sh
+      # Caddy in front for TLS (Ubuntu's package; fall back to Caddy's repo).
+      if ! command -v caddy >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y caddy || {
+          apt-get install -y debian-keyring debian-archive-keyring apt-transport-https gnupg
+          curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
+          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y caddy
+        }
+      fi
+      # The package ships a default Caddyfile; ours was written first, keep it.
+      if [ -f /etc/caddy/Caddyfile.dpkg-new ]; then rm -f /etc/caddy/Caddyfile.dpkg-new; fi
+      grep -q "__BUNKER_HOST__\|127.0.0.1:8080" /etc/caddy/Caddyfile || cp /etc/caddy/Caddyfile.bunker /etc/caddy/Caddyfile
+      systemctl enable caddy
+      systemctl restart caddy
+  - path: /etc/caddy/Caddyfile.bunker
+    permissions: "0644"
+    content: |
+      __BUNKER_HOST__ {
+      	encode zstd gzip
+      	reverse_proxy 127.0.0.1:8080 {
+      		flush_interval -1
+      	}
+      }
+
+runcmd:
+  - [sh, -c, "/usr/local/sbin/bunker-bootstrap 2>&1 | tee /var/log/bunker-bootstrap.log"]
+
+final_message: "Bunker is ready: https://__BUNKER_HOST__/setup"

@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy bunker:8080 {
+		# Live updates (SSE) must not be buffered.
+		flush_interval -1
+	}
+}

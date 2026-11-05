@@ -1,0 +1,359 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "17529759957015647024"
+    }
+  },
+  "parameters": {
+    "name": {
+      "type": "string",
+      "defaultValue": "bunker",
+      "minLength": 2,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Short name used for the VM and its resources."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region. Defaults to the resource group's region."
+      }
+    },
+    "dnsLabel": {
+      "type": "string",
+      "defaultValue": "[format('bunker-{0}', uniqueString(resourceGroup().id))]",
+      "minLength": 3,
+      "maxLength": 63,
+      "metadata": {
+        "description": "DNS label: Bunker will be at https://<label>.<region>.cloudapp.azure.com. Must be unique in the region."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "allowedValues": [
+        "Standard_B1ms",
+        "Standard_B2s",
+        "Standard_B2ms",
+        "Standard_D2s_v5",
+        "Standard_D4s_v5"
+      ],
+      "metadata": {
+        "description": "VM size. B2s (2 vCPU, 4 GiB) comfortably serves a few thousand users; B1ms is fine for trying it out."
+      }
+    },
+    "dataDiskSizeGiB": {
+      "type": "int",
+      "defaultValue": 32,
+      "minValue": 8,
+      "maxValue": 4095,
+      "metadata": {
+        "description": "Size of the data disk for Bunker, in GiB."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "bunkeradmin",
+      "metadata": {
+        "description": "Admin user name on the VM."
+      }
+    },
+    "authenticationType": {
+      "type": "string",
+      "defaultValue": "password",
+      "allowedValues": [
+        "password",
+        "sshPublicKey"
+      ],
+      "metadata": {
+        "description": "Sign-in method for the VM admin user."
+      }
+    },
+    "adminPasswordOrKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password, or an SSH public key (ssh-ed25519 / ssh-rsa ...) when authenticationType is sshPublicKey."
+      }
+    },
+    "allowSsh": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Open SSH (port 22) to the internet. Off by default; use Azure Bastion, serial console or Run Command instead."
+      }
+    },
+    "setupCode": {
+      "type": "string",
+      "defaultValue": "[toUpper(substring(replace(newGuid(), '-', ''), 0, 10))]",
+      "minLength": 6,
+      "metadata": {
+        "description": "One-time code for the first-run setup page. Leave the generated value unless you want your own."
+      }
+    },
+    "bunkerVersion": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Bunker release to install, e.g. v1.2.0, or latest."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "#cloud-config\n# Bunker VM bootstrap (used by deploy/azure/main.bicep).\n# __BUNKER_HOST__, __BUNKER_SETUP_CODE__ and __BUNKER_VERSION__ are filled in by the template.\n\n# Data disk (LUN 0) -> ext4 -> /var/lib/bunker. Never reformatted if it has data.\ndisk_setup:\n  /dev/disk/azure/scsi1/lun0:\n    table_type: gpt\n    layout: true\n    overwrite: false\nfs_setup:\n  - device: /dev/disk/azure/scsi1/lun0\n    partition: 1\n    filesystem: ext4\n    label: bunkerdata\n    overwrite: false\nmounts:\n  - [\"/dev/disk/azure/scsi1/lun0-part1\", \"/var/lib/bunker\", \"ext4\", \"defaults,nofail,noatime\", \"0\", \"2\"]\n\npackage_update: true\npackages:\n  - curl\n  - ca-certificates\n  - unattended-upgrades\n\nwrite_files:\n  - path: /etc/caddy/Caddyfile\n    permissions: \"0644\"\n    content: |\n      # Automatic HTTPS (Let's Encrypt) for the Azure DNS name.\n      # Using your own domain? Add it here, set BUNKER_URL in\n      # /etc/bunker/bunker.env, then: systemctl restart bunker caddy\n      __BUNKER_HOST__ {\n      \tencode zstd gzip\n      \treverse_proxy 127.0.0.1:8080 {\n      \t\tflush_interval -1\n      \t}\n      }\n  - path: /usr/local/sbin/bunker-bootstrap\n    permissions: \"0755\"\n    content: |\n      #!/bin/sh\n      set -eu\n      # Bunker as a hardened systemd service, listening on localhost only.\n      export BUNKER_URL=\"https://__BUNKER_HOST__\"\n      export BUNKER_LISTEN=\"127.0.0.1:8080\"\n      export BUNKER_SETUP_CODE=\"__BUNKER_SETUP_CODE__\"\n      export BUNKER_VERSION=\"__BUNKER_VERSION__\"\n      curl -fsSL --retry 5 https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sh\n      # Caddy in front for TLS (Ubuntu's package; fall back to Caddy's repo).\n      if ! command -v caddy >/dev/null 2>&1; then\n        DEBIAN_FRONTEND=noninteractive apt-get install -y caddy || {\n          apt-get install -y debian-keyring debian-archive-keyring apt-transport-https gnupg\n          curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg\n          curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list\n          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y caddy\n        }\n      fi\n      # The package ships a default Caddyfile; ours was written first, keep it.\n      if [ -f /etc/caddy/Caddyfile.dpkg-new ]; then rm -f /etc/caddy/Caddyfile.dpkg-new; fi\n      grep -q \"__BUNKER_HOST__\\|127.0.0.1:8080\" /etc/caddy/Caddyfile || cp /etc/caddy/Caddyfile.bunker /etc/caddy/Caddyfile\n      systemctl enable caddy\n      systemctl restart caddy\n  - path: /etc/caddy/Caddyfile.bunker\n    permissions: \"0644\"\n    content: |\n      __BUNKER_HOST__ {\n      \tencode zstd gzip\n      \treverse_proxy 127.0.0.1:8080 {\n      \t\tflush_interval -1\n      \t}\n      }\n\nruncmd:\n  - [sh, -c, \"/usr/local/sbin/bunker-bootstrap 2>&1 | tee /var/log/bunker-bootstrap.log\"]\n\nfinal_message: \"Bunker is ready: https://__BUNKER_HOST__/setup\"\n",
+    "host": "[format('{0}.{1}.cloudapp.azure.com', parameters('dnsLabel'), parameters('location'))]",
+    "url": "[format('https://{0}', variables('host'))]",
+    "cloudInit": "[replace(replace(replace(variables('$fxv#0'), '__BUNKER_HOST__', variables('host')), '__BUNKER_SETUP_CODE__', parameters('setupCode')), '__BUNKER_VERSION__', parameters('bunkerVersion'))]",
+    "linuxConfiguration": {
+      "disablePasswordAuthentication": true,
+      "ssh": {
+        "publicKeys": [
+          {
+            "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+            "keyData": "[parameters('adminPasswordOrKey')]"
+          }
+        ]
+      }
+    },
+    "webRules": [
+      {
+        "name": "allow-http",
+        "properties": {
+          "priority": 100,
+          "direction": "Inbound",
+          "access": "Allow",
+          "protocol": "Tcp",
+          "sourceAddressPrefix": "Internet",
+          "sourcePortRange": "*",
+          "destinationAddressPrefix": "*",
+          "destinationPortRange": "80"
+        }
+      },
+      {
+        "name": "allow-https",
+        "properties": {
+          "priority": 110,
+          "direction": "Inbound",
+          "access": "Allow",
+          "protocol": "*",
+          "sourceAddressPrefix": "Internet",
+          "sourcePortRange": "*",
+          "destinationAddressPrefix": "*",
+          "destinationPortRange": "443"
+        }
+      }
+    ],
+    "sshRule": [
+      {
+        "name": "allow-ssh",
+        "properties": {
+          "priority": 120,
+          "direction": "Inbound",
+          "access": "Allow",
+          "protocol": "Tcp",
+          "sourceAddressPrefix": "Internet",
+          "sourcePortRange": "*",
+          "destinationAddressPrefix": "*",
+          "destinationPortRange": "22"
+        }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-nsg', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": "[if(parameters('allowSsh'), concat(variables('webRules'), variables('sshRule')), variables('webRules'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-vnet', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.20.0.0/24"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "default",
+            "properties": {
+              "addressPrefix": "10.20.0.0/26",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('name')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('name')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-ip', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "publicIPAddressVersion": "IPv4",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsLabel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-nic', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('name'))), '2023-11-01').subnets[0].id]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('name')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('name')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('name')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('name')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('name')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[if(equals(parameters('authenticationType'), 'password'), parameters('adminPasswordOrKey'), null())]",
+          "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), null(), variables('linuxConfiguration'))]",
+          "customData": "[base64(variables('cloudInit'))]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[format('{0}-osdisk', parameters('name'))]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            },
+            "deleteOption": "Delete"
+          },
+          "dataDisks": [
+            {
+              "name": "[format('{0}-data', parameters('name'))]",
+              "lun": 0,
+              "createOption": "Empty",
+              "diskSizeGB": "[parameters('dataDiskSizeGiB')]",
+              "caching": "ReadWrite",
+              "managedDisk": {
+                "storageAccountType": "StandardSSD_LRS"
+              },
+              "deleteOption": "Detach"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('name')))]",
+              "properties": {
+                "deleteOption": "Delete"
+              }
+            }
+          ]
+        },
+        "securityProfile": {
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('name')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "metadata": {
+        "description": "Bunker's public URL."
+      },
+      "value": "[variables('url')]"
+    },
+    "setupUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Open this page and enter the setup code to connect Microsoft Entra ID (ready a few minutes after deployment)."
+      },
+      "value": "[format('{0}/setup', variables('url'))]"
+    },
+    "setupCode": {
+      "type": "string",
+      "metadata": {
+        "description": "One-time setup code."
+      },
+      "value": "[parameters('setupCode')]"
+    },
+    "entraRedirectUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Redirect URI to register on the Entra app registration."
+      },
+      "value": "[format('{0}/auth/callback', variables('url'))]"
+    },
+    "ssh": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH command (when allowSsh is on)."
+      },
+      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), variables('host'))]"
+    }
+  }
+}

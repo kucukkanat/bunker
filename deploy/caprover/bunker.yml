@@ -1,0 +1,36 @@
+# CapRover one-click app template (captainVersion 4).
+# CapRover dashboard -> Apps -> One-Click Apps/Databases -> "TEMPLATE" ->
+# paste this file -> Deploy. Then enable HTTPS on the app and open /setup.
+# (To deploy from source instead: `caprover deploy` uses ../../captain-definition.)
+captainVersion: 4
+services:
+  $$cap_appname:
+    image: ghcr.io/kucukkanat/bunker:$$cap_bunker_version
+    restart: always
+    volumes:
+      - $$cap_appname-data:/data
+    environment:
+      BUNKER_URL: https://$$cap_appname.$$cap_root_domain
+      BUNKER_TRUST_PROXY: "true"
+      BUNKER_SETUP_CODE: $$cap_setup_code
+    caproverExtra:
+      containerHttpPort: "8080"
+caproverOneClickApp:
+  variables:
+    - id: $$cap_bunker_version
+      label: Bunker version
+      defaultValue: latest
+      description: Image tag from https://github.com/kucukkanat/bunker/pkgs/container/bunker
+    - id: $$cap_setup_code
+      label: Setup code
+      defaultValue: $$cap_gen_random_hex(12)
+      description: One-time code for the first-run setup page at /setup.
+  instructions:
+    start: Bunker is a self-hosted platform for internal apps, with Microsoft Entra ID sign-in.
+    end: >-
+      Bunker is deployed. Enable HTTPS for $$cap_appname in the app settings, then open
+      https://$$cap_appname.$$cap_root_domain/setup and enter the setup code $$cap_setup_code.
+  displayName: Bunker
+  isOfficial: false
+  description: Internal apps anyone can build. IT can trust.
+  documentation: https://kucukkanat.github.io/bunker/

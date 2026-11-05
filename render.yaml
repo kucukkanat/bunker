@@ -1,0 +1,31 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploy: https://render.com/deploy?repo=https://github.com/kucukkanat/bunker
+#
+# After the first deploy, open <your-service>.onrender.com/setup and enter
+# BUNKER_SETUP_CODE (Dashboard -> bunker -> Environment, or the deploy logs).
+services:
+  - type: web
+    name: bunker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Persistent disks need a paid instance type; Starter is the smallest.
+    plan: starter
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: bunker-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      # One-time code for the first-run setup page.
+      - key: BUNKER_SETUP_CODE
+        generateValue: true
+      # Render mounts disks owned by root; run the container as root so
+      # Bunker can write to /data (passed to the Docker build as a build arg).
+      - key: BUNKER_RUN_UID
+        value: "0"
+      # RENDER_EXTERNAL_URL is detected automatically; set BUNKER_URL only
+      # when you add a custom domain.
+      # - key: BUNKER_URL
+      #   value: https://bunker.example.com

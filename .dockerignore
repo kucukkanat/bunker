@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.do
+deploy
+website
+brand
+dist
+bunker-data
+/bunker
+*.test
+*.md
+Dockerfile
+docker-compose.yml
+install.sh
+install.ps1
+Makefile

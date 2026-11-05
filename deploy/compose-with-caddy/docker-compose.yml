@@ -1,0 +1,40 @@
+# Bunker behind Caddy with automatic HTTPS (Let's Encrypt).
+#
+#   1. Point a DNS A/AAAA record (e.g. bunker.example.com) at this server.
+#   2. Open ports 80 and 443.
+#   3. DOMAIN=bunker.example.com docker compose up -d
+#      (or put DOMAIN=bunker.example.com in a .env file next to this one)
+#   4. docker compose logs bunker   -> open https://DOMAIN/setup and enter the code.
+
+services:
+  bunker:
+    image: ghcr.io/kucukkanat/bunker:latest
+    restart: unless-stopped
+    volumes:
+      - bunker-data:/data
+    environment:
+      BUNKER_URL: https://${DOMAIN:?set DOMAIN, e.g. DOMAIN=bunker.example.com}
+      BUNKER_TRUST_PROXY: "true"
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - bunker
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"               # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. DOMAIN=bunker.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  bunker-data:
+  caddy-data:
+  caddy-config:

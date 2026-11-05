@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["website/**", "brand/**", "**.md"]
+  pull_request:
+    paths-ignore: ["website/**", "brand/**", "**.md"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Build
+        run: CGO_ENABLED=0 go build -trimpath -o bunker ./cmd/bunker && ./bunker version
+      - name: Smoke test
+        run: |
+          BUNKER_DATA_DIR="$RUNNER_TEMP/data" ./bunker serve &
+          pid=$!
+          for i in $(seq 1 30); do ./bunker healthcheck && break; sleep 1; done
+          ./bunker healthcheck
+          test -s "$RUNNER_TEMP/data/setup-code.txt"
+          kill "$pid"
+
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: shellcheck install.sh
+        run: shellcheck install.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: bunker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run image
+        run: |
+          docker run -d --name bunker -p 8080:8080 bunker:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/healthz && break; sleep 1; done
+          curl -fsS http://localhost:8080/healthz
+          docker logs bunker 2>&1 | grep -q "Bunker is ready to set up"
+          docker image ls bunker:ci

@@ -5,6 +5,7 @@
 Bunker is a self-hosted platform where non-technical people describe an app in plain words and share it privately with coworkers. Sandboxed, Microsoft Entra ID sign-in, MIT licensed. *In development.*
 
 - Website & docs: https://kucukkanat.github.io/bunker/
+- **Deploy:** [DEPLOY.md](DEPLOY.md) (Azure, Render, Railway, Fly, Docker, one-line Linux installer)
 - Plan: [PLAN.md](PLAN.md)
 - Brand kit: [brand/](brand/)
 - Website source: [website/](website/) (Astro + Starlight)
