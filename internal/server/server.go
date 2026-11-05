@@ -110,6 +110,11 @@ func Handler(a *core.App) http.Handler {
 			}
 			r = r.WithContext(core.WithUser(r.Context(), u))
 		}
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/oauth/") || strings.HasPrefix(r.URL.Path, "/mcp") {
+			if rateLimited(w, r, u, ip) {
+				return
+			}
+		}
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		a.Mux.ServeHTTP(sw, r)
 		if d := time.Since(start); d > 2*time.Second && !strings.Contains(r.URL.Path, "/events") && !strings.HasPrefix(r.URL.Path, "/mcp") {

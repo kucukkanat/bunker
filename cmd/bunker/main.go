@@ -52,6 +52,9 @@ func serve(dev bool) int {
 		log.Error("startup failed", "err", err)
 		return 1
 	}
+	if dev {
+		fmt.Fprintf(os.Stderr, "\n  Bunker is running in dev mode (you're signed in as a local admin).\n  Open %s\n\n", cfg.URL)
+	}
 	if err := server.Run(a); err != nil {
 		log.Error("server error", "err", err)
 		return 1

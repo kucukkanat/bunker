@@ -88,13 +88,17 @@ func LoadConfig() *Config {
 	if c.URL == "" {
 		c.URL = detectPlatformURL()
 	}
+	listenSet := Env("LISTEN", "") != ""
 	if c.TLS == "" {
-		if port != "" || c.URL == "" || !strings.HasPrefix(c.URL, "https://") || c.Dev {
-			c.TLS = "off"
-		} else if c.TLSCert != "" {
+		switch {
+		case c.TLSCert != "":
 			c.TLS = "file"
-		} else {
+		case port != "" || c.Dev || listenSet || !strings.HasPrefix(c.URL, "https://") || isLocalURL(c.URL):
 			c.TLS = "off"
+		default:
+			// A bare machine with an https URL: get certificates automatically.
+			c.TLS = "auto"
+			c.Listen = ":443"
 		}
 	}
 	c.TrustProxy = EnvBool("TRUST_PROXY", port != "" || c.TLS == "off")
@@ -105,6 +109,10 @@ func LoadConfig() *Config {
 		}
 	}
 	return c
+}
+
+func isLocalURL(u string) bool {
+	return strings.Contains(u, "://localhost") || strings.Contains(u, "://127.") || strings.Contains(u, "://[::1]")
 }
 
 // detectPlatformURL figures out our public URL on common one-click hosts.
