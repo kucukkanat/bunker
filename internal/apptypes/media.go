@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/kucukkanat/bunker/internal/apptypes/vendor"
+	"github.com/kucukkanat/bunker/internal/apptypes/bundled"
 	"github.com/kucukkanat/bunker/internal/core"
 )
 
@@ -121,7 +121,7 @@ func renderMedia(files map[string][]byte, items []string) (string, error) {
 // (and CSP object-src 'none' blocks <embed>/<object>), so PDFs get a
 // pdf.js viewer. A download link is always offered as a fallback.
 func renderPDF(files map[string][]byte, pdfs []string) (string, error) {
-	lib, worker := vendor.PDFJS()
+	lib, worker := bundled.PDFJS()
 	if len(lib) == 0 || len(worker) == 0 {
 		return "", core.Internal("the PDF viewer is missing from this build")
 	}

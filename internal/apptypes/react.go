@@ -9,7 +9,7 @@ import (
 
 	"github.com/evanw/esbuild/pkg/api"
 
-	"github.com/kucukkanat/bunker/internal/apptypes/vendor"
+	"github.com/kucukkanat/bunker/internal/apptypes/bundled"
 	"github.com/kucukkanat/bunker/internal/core"
 	"github.com/kucukkanat/bunker/internal/vendorlib"
 )
@@ -190,7 +190,7 @@ if (typeof C === "function" && root && !root.firstChild) render(createElement(C)
 				}
 				return api.OnResolveResult{}, fmt.Errorf("can't find %s (imported from %s)", spec, strings.TrimPrefix(a.Importer, "/"))
 			}
-			if name, ok := vendor.Resolve(spec); ok {
+			if name, ok := bundled.Resolve(spec); ok {
 				return api.OnResolveResult{Path: name, Namespace: "vendor"}, nil
 			}
 			if l := globalLib(spec); l != nil {
@@ -227,7 +227,7 @@ if (typeof C === "function" && root && !root.firstChild) render(createElement(C)
 			return api.OnLoadResult{Contents: &src, Loader: api.LoaderJS}, nil
 		})
 		b.OnLoad(api.OnLoadOptions{Filter: ".*", Namespace: "vendor"}, func(a api.OnLoadArgs) (api.OnLoadResult, error) {
-			src, ok := vendor.Source(a.Path)
+			src, ok := bundled.Source(a.Path)
 			if !ok {
 				return api.OnLoadResult{}, fmt.Errorf("vendored module %s missing", a.Path)
 			}
@@ -343,7 +343,7 @@ func findLib(name string) *vendorlib.Lib {
 
 // SupportedImports lists the bare imports React-style pages may use.
 func SupportedImports() []string {
-	s := vendor.Supported()
+	s := bundled.Supported()
 	sort.Strings(s)
 	return s
 }

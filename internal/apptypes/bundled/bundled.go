@@ -11,7 +11,7 @@
 //
 // pdf.js (legacy build) is also embedded, gzip-compressed, for the PDF
 // viewer generated for dropped .pdf files.
-package vendor
+package bundled
 
 import (
 	"bytes"
