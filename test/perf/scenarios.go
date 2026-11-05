@@ -135,6 +135,12 @@ func (h *harness) scenDB() {
 		c, _ := h.viewer(w, i)
 		return h.page(h.get(p+"?where="+where+"&order=-amount&limit=20", c))
 	}, nil)
+	// A filter no index can serve: every document's title is read.
+	scan := url.QueryEscape(`{"title":{"$contains":"number 9999"}}`)
+	h.load("db query (full scan, $contains)", h.duration, h.conc, func(w, i int) *http.Request {
+		c, _ := h.viewer(w, i)
+		return h.page(h.get(p+"?where="+scan+"&limit=20", c))
+	}, nil)
 	h.load("db get by id", h.duration, h.conc, func(w, i int) *http.Request {
 		c, _ := h.viewer(w, i)
 		return h.page(h.get(p+"/"+sd.docIDs[(w*31+i)%len(sd.docIDs)], c))

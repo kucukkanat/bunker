@@ -58,6 +58,16 @@ CREATE TABLE kv (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY(site_id, user_id, key)
 );
+`, `
+CREATE TABLE doc_indexes (
+  name TEXT PRIMARY KEY,
+  site_id INTEGER NOT NULL,
+  coll TEXT NOT NULL,
+  field TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  used_at INTEGER NOT NULL
+);
+CREATE INDEX doc_indexes_site ON doc_indexes(site_id, coll);
 `},
 		Init: initData,
 	})
@@ -72,6 +82,8 @@ func initData(a *core.App) error {
 	registerEvents(a)
 	registerKV(a)
 	registerMe(a)
+	startIndexer(nil) // runs for the life of the process
+	prepareWriteStmts(a.DB)
 	// A site made from a template starts with the template's data rules.
 	a.On("site.from_template", func(ctx context.Context, p any) {
 		m, _ := p.(map[string]any)
@@ -89,6 +101,14 @@ func initData(a *core.App) error {
 			return
 		}
 		ctx = context.WithoutCancel(ctx)
+		if tx, err := a.DB.BeginTx(ctx, nil); err == nil {
+			keys, err := dropIndexes(ctx, tx, id, "")
+			if err == nil && tx.Commit() == nil {
+				forgetIndexes(keys)
+			} else {
+				tx.Rollback()
+			}
+		}
 		a.DB.ExecContext(ctx, `DELETE FROM docs WHERE site_id=?`, id)
 		a.DB.ExecContext(ctx, `DELETE FROM collections WHERE site_id=?`, id)
 		a.DB.ExecContext(ctx, `DELETE FROM kv WHERE site_id=?`, id)

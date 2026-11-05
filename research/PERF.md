@@ -211,7 +211,9 @@ compressor kept by `sync.Pool` across the startup GC; it is not growth.
   hot `(site, coll, field)` filters/sorts (the research doc's
   recommendation; needs the path inlined as a literal for the planner to
   use it), storing documents as JSONB, or a `WITHOUT ROWID` docs table
-  (a table rewrite migration).
+  (a table rewrite migration). **Done:** adaptive expression indexes,
+  4.0–4.5k req/s; JSONB and `WITHOUT ROWID` measured and not adopted. See
+  "bunker.db queries on JSON fields" below.
 - **`GET /api/v1/sites`** with 200 visible sites (~1.3–2k req/s): ~70% is
   SQLite stepping and scanning ~210 rows × 17 columns (~5 µs/row in
   modernc), ~12% JSON encoding. A bigger win needs an in-memory snapshot
@@ -229,7 +231,9 @@ compressor kept by `sync.Pool` across the startup GC; it is not growth.
   for raw HTML/CSS once more than a few hundred viewer×site pairs were
   active (~0.4–0.8k req/s). API calls are far lower: site list with 200
   sites 1.3–2k, db list 6k, db get 23–26k, db add ~3k, a JSON-field
-  filter over 10k docs ~65 req/s.
+  filter + sort over 10k docs ~65 req/s before the adaptive indexes and
+  4.0–4.5k after (a filter no index can serve, such as `$contains`, still
+  ~60 req/s).
 - **"~26 MB idle"**: the stripped binary uses 26.7–28.9 MB with an empty
   data directory and ~42 MB idle after 300 users, 200 sites and 10k
   documents; ~46 MB after load.
@@ -239,6 +243,125 @@ compressor kept by `sync.Pool` across the startup GC; it is not growth.
   before, the same load dropped 36–54% of deliveries. That supports
   5,000 concurrent viewers on 4 vCPU with ~1 GB RAM for this workload;
   it doesn't cover heavy JSON-filter queries (above).
+
+## bunker.db queries on JSON fields (November 2026)
+
+**Problem.** `where` + `order` on JSON fields over a 10k-document
+collection ran at ~65 req/s (p99 3–4 s at 64 connections): every query
+read and parsed every document of the collection and sorted the matches.
+
+**Adopted: adaptive expression indexes** (`internal/data/autoindex.go`).
+Each list/count query counts its index-friendly fields per (site,
+collection, field): conditions every match must meet (`=`, `null`,
+`$gt/$gte/$lt/$lte`, `$in`; not under `$or`) plus the sort field. When a
+field gets `BUNKER_DB_INDEX_AFTER` (20) queries within 10 minutes on a
+collection with at least `BUNKER_DB_INDEX_MIN_DOCS` (1,000) entries, a
+background worker builds
+
+```
+CREATE INDEX docs_x_<hash> ON docs(site_id, coll, json_extract(data, '$."field"'), id)
+WHERE site_id=<id> AND coll='<name>'
+```
+
+and records it in `doc_indexes` (migration data#2), in the same write
+transaction as an `ANALYZE docs` with `analysis_limit=1000`.
+
+- The planner only uses a partial index when the query repeats the
+  index's WHERE terms and expression literally, so the query builder now
+  writes `site_id=<int> AND coll='<name>'` (validated, quotes doubled) and
+  JSON paths (`fieldRe` allows no quotes) as literals instead of bound
+  parameters, for every query. `_updated` and `_authorName` (columns
+  without an index) are candidates too; `_id`, `_created` and `_author`
+  already have indexes.
+- Caps: `BUNKER_DB_INDEX_PER_COLLECTION` (4; 0 turns the feature off),
+  `BUNKER_DB_INDEX_PER_SITE` (8), `BUNKER_DB_INDEX_MAX` (64). An index no
+  query has touched for `BUNKER_DB_INDEX_UNUSED_DAYS` (7) is dropped by a
+  daily sweep (last use is kept in memory and written at most hourly).
+  Dropping a collection or purging a site drops its indexes in the same
+  transaction as the documents.
+- **Why 64, not thousands.** Every index on `docs` costs every statement
+  on `docs`. `BenchmarkIndexesOnDocs` (partial indexes for other
+  collections, 6,000 docs):
+
+  | indexes on docs | insert (unprepared) | insert (prepared) | get by id |
+  |---|---|---|---|
+  | 0 | 111 µs | 117 µs | 8.0 µs |
+  | 8 | 128 µs | 115 µs | 7.8 µs |
+  | 64 | 284 µs | 121 µs | 8.9 µs |
+  | 200 | 923 µs | 290 µs | 10.0 µs |
+  | 2,000 (exploratory run, JSONB documents) | 66 ms | — | 50 µs |
+
+  Most of it is prepare-time code generation per index (modernc
+  re-prepares every `Exec`), so the document write path now runs its
+  statements through statements prepared once at startup
+  (`internal/data/wtx.go`): parsing no longer happens while the write
+  lock is held. Without that, the two indexes the harness creates cost
+  db add ~22% (3.1–3.3k → 2.2–2.6k req/s, writers queue on the lock);
+  with it, db add is unchanged.
+- **Statistics matter, and must be consistent.** Measured on 10k docs:
+  without statistics the planner walks `docs_created` for a selective
+  equality (9.4 ms instead of 15 µs through the index); with statistics
+  for only some indexes it full-scans a low-cardinality index and sorts
+  instead of reading the sort field's index in order (9.9 ms instead of
+  37 µs). Sampling all of `docs` (~40 ms for 300k docs and 11 indexes)
+  in the transaction that creates the index fixes both; a separate
+  `ANALYZE` after the commit left other connections a window with the
+  new index but old statistics (seen under `-race`).
+- Building an index holds the write lock: ~0.3 s per 100k documents of
+  the collection (writers wait, within `busy_timeout`). One at a time.
+- Semantics are unchanged: same expressions, same comparisons and type
+  ordering; the index only changes how rows are found.
+  `TestAdaptiveIndexesKeepResults` pages (7 per page) through 32 filters
+  × 15 sorts over 100 documents with ties, missing fields, NULLs, nested
+  fields, mixed types and `me`, with indexes off and then on, and
+  requires identical id sequences and counts; it also checks with
+  `EXPLAIN QUERY PLAN` that filters, sorts (no sort step), cursor pages,
+  nested fields and meta columns use the indexes.
+  `TestAdaptiveIndexLimitsAndCleanup` covers the thresholds, caps, sweep,
+  re-creation, collection drop and site purge.
+
+**Results** (`go run ./test/perf -only db`, 4 vCPU, 64 connections; a
+harness build of the old code and one of the new alternated, 5 runs each;
+the machine was shared, ±10%):
+
+| Scenario | before | after | p99 before → after |
+|---|---|---|---|
+| db query (`status = open`, order `-amount`, 20, 10k docs) | 66–70 req/s | 3,960–4,490 req/s | 3.0–4.1 s → 54–61 ms |
+| db query, full scan (`$contains`, no index possible) | 58–61 | 56–59 | unchanged |
+| db list (limit 50) | 5.6–6.3k | 5.5–6.2k | unchanged |
+| db get by id | 23.5–25.8k | 21.9–24.3k | −5%, within noise (path and SQL unchanged; identical in a SQL benchmark) |
+| db add | 3.0–3.4k | 3.0–3.5k | unchanged |
+
+SQL alone (`BenchmarkJSONFilter`, 4 goroutines): 17.1 ms → 0.13 ms per
+query. The full-scan scenario is new in the harness (`$contains`, which
+no index serves) so the cost of unindexed queries stays visible.
+
+**Measured and not adopted**
+
+- **JSONB storage** (`jsonb(?)` on write, `json(data)` on read, background
+  batch conversion of old rows). SQLite 3.54.1 in modernc supports it.
+  In a microbenchmark with a collection's rows contiguous in the table,
+  an unindexed filter + sort was 6x faster (13.8 → 2.1 ms). In the
+  harness only +20% (66 → 78–80 req/s): once `json_extract` no longer
+  parses text, the cost is one b-tree descent per document
+  (`BtreeTableMoveto` 54% of CPU, much of it modernc's mutexes), because
+  the index the planner walks isn't in rowid order; forcing a
+  primary-key walk in the microbenchmark gave 14.8 ms, the same as text.
+  Meanwhile `json()` on output cost db list ~16% (6.0k → 5.0–5.2k).
+  Not a clear win; reverted.
+- **`WITHOUT ROWID` docs table** keyed (site_id, coll, id). Microbenchmark
+  with three collections written interleaved (as in a shared database),
+  JSONB: unindexed filter 12 → 21 ms, list of 50 +35%, insert +43%; with
+  8 KB documents (which the b-tree keeps in interior cells too) scan
+  4x, list 1.5x, insert 1.7x slower. Not adopted; it would also need a
+  table-rewriting migration.
+- **Forcing `INDEXED BY docs_created` for unindexed scans** (it is nearly
+  in rowid order): no change in the harness. Removed.
+- **`mmap_size`** stays off: the hot query now touches a few dozen
+  pages, and the remaining full-scan cost is per-row descents, not I/O.
+- **Covering `_created`/`_author`**: already real columns with their own
+  indexes; nothing to do. Projection already splices the stored text
+  without parsing it.
 
 ## SQLite pool split (research recommendation #15) — not adopted
 

@@ -171,7 +171,7 @@ func siteUsage(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, siteID int64) usage {
 	var u usage
-	q.QueryRowContext(ctx, `SELECT COALESCE(SUM(docs),0), COALESCE(SUM(bytes),0) FROM collections WHERE site_id=?`, siteID).Scan(&u.docs, &u.bytes)
+	q.QueryRowContext(ctx, sqlSiteUsage, siteID).Scan(&u.docs, &u.bytes)
 	return u
 }
 
@@ -186,7 +186,7 @@ func checkQuota(u usage, addDocs, addBytes int64) error {
 }
 
 // ensureColl creates the collection row if needed and returns its rule.
-func ensureColl(ctx context.Context, tx *sql.Tx, siteID int64, coll string) (string, error) {
+func ensureColl(ctx context.Context, tx txQ, siteID int64, coll string) (string, error) {
 	var rule string
 	err := tx.QueryRowContext(ctx, `SELECT rule FROM collections WHERE site_id=? AND name=?`, siteID, coll).Scan(&rule)
 	if err == nil {
@@ -210,7 +210,7 @@ func ensureColl(ctx context.Context, tx *sql.Tx, siteID int64, coll string) (str
 func getRow(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, siteID int64, coll, id string) (*row, error) {
-	d, err := scanRow(q.QueryRowContext(ctx, `SELECT `+rowCols+` FROM docs WHERE site_id=? AND coll=? AND id=?`, siteID, coll, id))
+	d, err := scanRow(q.QueryRowContext(ctx, sqlGetRow, siteID, coll, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, core.NotFound("no entry with id " + id + " in " + coll)
 	}
@@ -234,43 +234,11 @@ func runQuery(ctx context.Context, siteID int64, coll string, u *core.User, acc 
 	if q.Limit > maxLimit {
 		q.Limit = maxLimit
 	}
-	o, err := parseOrder(q.Order)
+	query, args, err := buildQuery(siteID, coll, u, acc, q)
 	if err != nil {
 		return nil, err
 	}
-	w := &whereBuilder{uid: u.ID}
-	if err := w.build(q.Where, 0); err != nil {
-		return nil, err
-	}
-	var sb strings.Builder
-	args := []any{}
-	sb.WriteString(`SELECT ` + rowCols + `, ` + o.expr + ` FROM docs WHERE site_id=? AND coll=?`)
-	args = append(args, o.args...)
-	args = append(args, siteID, coll)
-	if !acc.ReadAll {
-		sb.WriteString(` AND author_id=?`)
-		args = append(args, u.ID)
-	}
-	sb.WriteString(" AND ")
-	sb.WriteString(w.sql.String())
-	args = append(args, w.args...)
-	if q.After != "" {
-		v, id, err := decodeCursor(q.After)
-		if err != nil {
-			return nil, err
-		}
-		c, cargs := o.cursorCond(v, id)
-		sb.WriteString(" AND " + c)
-		args = append(args, cargs...)
-	}
-	dir := " ASC"
-	if o.desc {
-		dir = " DESC"
-	}
-	sb.WriteString(" ORDER BY " + o.expr + dir + ", id" + dir + " LIMIT ?")
-	args = append(args, o.args...)
-	args = append(args, q.Limit+1)
-	rows, err := app.DB.QueryContext(ctx, sb.String(), args...)
+	rows, err := app.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		if strings.Contains(err.Error(), "malformed JSON") || strings.Contains(err.Error(), "JSON path") {
 			return nil, core.BadRequest("that filter can't be applied")
@@ -300,6 +268,46 @@ func runQuery(ctx context.Context, siteID int64, coll string, u *core.User, acc 
 	return res, rows.Err()
 }
 
+// buildQuery returns the SQL of a list query (q.Limit set) and counts its
+// fields for adaptive indexes.
+func buildQuery(siteID int64, coll string, u *core.User, acc Access, q Query) (string, []any, error) {
+	o, err := parseOrder(q.Order)
+	if err != nil {
+		return "", nil, err
+	}
+	w := &whereBuilder{uid: u.ID}
+	if err := w.build(q.Where, 0); err != nil {
+		return "", nil, err
+	}
+	noteQuery(siteID, coll, w.fields, o.field)
+	var sb strings.Builder
+	args := []any{}
+	sb.WriteString(`SELECT ` + rowCols + `, ` + o.expr + ` FROM docs WHERE ` + docScope(siteID, coll))
+	if !acc.ReadAll {
+		sb.WriteString(` AND author_id=?`)
+		args = append(args, u.ID)
+	}
+	sb.WriteString(" AND ")
+	sb.WriteString(w.sql.String())
+	args = append(args, w.args...)
+	if q.After != "" {
+		v, id, err := decodeCursor(q.After)
+		if err != nil {
+			return "", nil, err
+		}
+		c, cargs := o.cursorCond(v, id)
+		sb.WriteString(" AND " + c)
+		args = append(args, cargs...)
+	}
+	dir := " ASC"
+	if o.desc {
+		dir = " DESC"
+	}
+	sb.WriteString(" ORDER BY " + o.expr + dir + ", id" + dir + " LIMIT ?")
+	args = append(args, q.Limit+1)
+	return sb.String(), args, nil
+}
+
 func countDocs(ctx context.Context, siteID int64, coll string, u *core.User, acc Access, where map[string]any) (int64, error) {
 	if !acc.ReadAll && !acc.ReadOwn {
 		return 0, core.Forbidden("you can't read this collection")
@@ -308,8 +316,9 @@ func countDocs(ctx context.Context, siteID int64, coll string, u *core.User, acc
 	if err := w.build(where, 0); err != nil {
 		return 0, err
 	}
-	q := `SELECT COUNT(*) FROM docs WHERE site_id=? AND coll=?`
-	args := []any{siteID, coll}
+	noteQuery(siteID, coll, w.fields, "")
+	q := `SELECT COUNT(*) FROM docs WHERE ` + docScope(siteID, coll)
+	args := []any{}
 	if !acc.ReadAll {
 		q += ` AND author_id=?`
 		args = append(args, u.ID)
@@ -387,11 +396,12 @@ func resolveColl(r *http.Request, min core.Role) (*collCtx, error) {
 
 // writeDoc creates or replaces (mode "add", "set") or merges ("update").
 func writeDoc(ctx context.Context, c *collCtx, mode, id string, body map[string]any) (*row, string, error) {
-	tx, err := app.DB.BeginTx(ctx, nil)
+	rtx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, "", err
 	}
-	defer tx.Rollback()
+	defer rtx.Rollback()
+	tx := wtx{rtx}
 	rule, err := ensureColl(ctx, tx, c.site.ID, c.coll)
 	if err != nil {
 		return nil, "", err
@@ -422,7 +432,7 @@ func writeDoc(ctx context.Context, c *collCtx, mode, id string, body map[string]
 			return nil, "", err
 		}
 		d = &row{ID: id, Data: data, AuthorID: c.u.ID, AuthorName: c.u.Name, Created: now, Updated: now}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO docs(site_id,coll,id,data,size,author_id,author_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		if _, err := tx.ExecContext(ctx, sqlInsertDoc,
 			c.site.ID, c.coll, d.ID, d.Data, len(d.Data), d.AuthorID, d.AuthorName, d.Created, d.Updated); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") {
 				return nil, "", core.Conflict("an entry with this id already exists")
@@ -457,7 +467,7 @@ func writeDoc(ctx context.Context, c *collCtx, mode, id string, body map[string]
 			return nil, "", err
 		}
 		d = &row{ID: id, Data: data, AuthorID: existing.AuthorID, AuthorName: existing.AuthorName, Created: existing.Created, Updated: now}
-		if _, err := tx.ExecContext(ctx, `UPDATE docs SET data=?, size=?, updated_at=? WHERE site_id=? AND coll=? AND id=?`, d.Data, len(d.Data), now, c.site.ID, c.coll, id); err != nil {
+		if _, err := tx.ExecContext(ctx, sqlUpdateDoc, d.Data, len(d.Data), now, c.site.ID, c.coll, id); err != nil {
 			return nil, "", err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE collections SET bytes=bytes+?, updated_at=? WHERE site_id=? AND name=?`, delta, now, c.site.ID, c.coll); err != nil {
@@ -477,11 +487,12 @@ func isNotFound(err error) bool {
 }
 
 func deleteDoc(ctx context.Context, c *collCtx, id string) error {
-	tx, err := app.DB.BeginTx(ctx, nil)
+	rtx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer rtx.Rollback()
+	tx := wtx{rtx}
 	d, err := getRow(ctx, tx, c.site.ID, c.coll, id)
 	if err != nil {
 		return err
@@ -750,6 +761,10 @@ func registerDB(a *core.App) {
 				return nil, err
 			}
 			defer tx.Rollback()
+			idx, err := dropIndexes(r.Context(), tx, c.site.ID, c.coll)
+			if err != nil {
+				return nil, err
+			}
 			res, err := tx.ExecContext(r.Context(), `DELETE FROM docs WHERE site_id=? AND coll=?`, c.site.ID, c.coll)
 			if err != nil {
 				return nil, err
@@ -759,6 +774,7 @@ func registerDB(a *core.App) {
 			if err := tx.Commit(); err != nil {
 				return nil, err
 			}
+			forgetIndexes(idx)
 			ruleCacheSet(c.site.ID, c.coll, RuleOwn)
 			a.Audit(r.Context(), "db.drop", c.site.ID, c.coll, map[string]any{"docs": n})
 			a.Bus.Publish("site:"+i64(c.site.ID)+":db:"+c.coll, []byte(`{"author":0,"data":{"type":"dropped"}}`))
