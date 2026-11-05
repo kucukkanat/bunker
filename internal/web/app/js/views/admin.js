@@ -264,6 +264,13 @@ async function ai(el, ctx) {
     fVersion.classList.toggle('hidden', !/azure/.test(v.provider));
     models.classList.toggle('hidden', off);
     limits.classList.toggle('hidden', off);
+    // Hints that fit the chosen provider.
+    const az = /azure/.test(v.provider), local = v.provider === 'openai-compatible';
+    const hint = (f, t) => { const el = f.querySelector('.hint'); if (el) el.textContent = t; };
+    hint(fEndpoint, az ? 'Your Azure OpenAI resource, like https://my-team.openai.azure.com' : 'The address of your Ollama, LM Studio or vLLM server, like http://localhost:11434/v1');
+    hint(fKey, local ? 'Leave empty if your server doesn’t need one. Stored encrypted; pages never see it.' : 'Stored encrypted on the server. Pages and people never see it.');
+    hint(models.firstChild, az ? 'The deployment name in Azure.' : local ? 'The model name on your server, like llama3.1 or qwen2.5-coder.' : 'Leave as is unless you want a different model.');
+    builderModel.placeholder = local ? 'llama3.1' : '';
   };
   const status = h('div');
   const paintStatus = (c) => clear(status, c.configured ? h('div.notice.ok', icon('check', 18), h('div', h('b', 'AI is on. '), 'Using ' + (c.providerLabel || c.provider) + '.'))
