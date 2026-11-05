@@ -3,10 +3,11 @@ import { h, icon, clear, empty, avatar, toast, modal, copyBtn, confirmDialog, pr
 import { get, put, post, patch, del, maybe, enc, list } from '../api.js';
 import { state } from '../state.js';
 import { providerForm, entraAuto } from './setup.js';
+import { blockDialog, unblock, adminBlocks } from '../functions.js';
 
 const SECTIONS = [
   ['', 'Overview'], ['people', 'People'], ['sites', 'Sites'], ['sign-in', 'Sign-in'], ['ai', 'AI'],
-  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['sharing', 'Sharing'], ['email', 'Email'], ['audit', 'Audit log'],
+  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['functions', 'Server functions'], ['sharing', 'Sharing'], ['email', 'Email'], ['audit', 'Audit log'],
 ];
 
 const notYet = (what) => empty({ title: what + ' isn’t installed yet', text: 'This part of Bunker is still being built. When your server is updated, its settings appear here.', art: false, iconName: 'info' });
@@ -23,7 +24,7 @@ export default async function admin(root, ctx) {
     h('nav.subnav', { 'aria-label': 'Admin sections' }, SECTIONS.map(([id, l]) => h('a', { href: '/admin' + (id ? '/' + id : ''), 'aria-current': id === sub ? 'page' : null }, l))),
     body));
   document.title = title + ' · Admin · Bunker';
-  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, sharing, email, audit }[sub];
+  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, functions: serverFunctions, sharing, email, audit }[sub];
   if (!fn) return clear(body, empty({ title: 'Nothing here', text: 'Pick a section above.', art: false }));
   return fn(body, ctx);
 }
@@ -68,6 +69,15 @@ async function people(el, ctx) {
   const invitesEl = h('div');
   clear(el, h('div.row.wrap', { style: { marginBottom: '16px' } }, q, h('span.spacer'), transferBtn, inviteBtn), invitesEl, listEl);
   let users = [];
+  let blocks = null; // server functions blocks, null when not installed
+  const fnToggle = async (u) => {
+    const who = u.name || u.email;
+    const b = blocks.get('user:' + u.id);
+    if (b ? await unblock({ kind: 'user', id: u.id, label: who }) : await blockDialog({ kind: 'user', id: u.id, label: who })) {
+      blocks = (await adminBlocks()) || blocks;
+      draw();
+    }
+  };
   const linkDialog = (title, text, link) => {
     link = new URL(link, location.origin).href; // a full address people can open
     const m = modal({ title, body: [h('p.muted', text), h('div.copy-field', { style: { marginTop: '14px' } }, h('span', { 'data-testid': 'invite-link' }, link), copyBtn(link))], footer: [h('button.btn.primary', { onclick: () => m.close() }, 'Done')] });
@@ -120,6 +130,7 @@ async function people(el, ctx) {
     clear(listEl, shown.length ? h('div.list', shown.map((u) => h('div.item', avatar(u.name || u.email),
       h('div.n', h('b', u.name || u.email, u.id === state.me.id && !/\byou\b/i.test(u.name) ? ' (you)' : ''), h('span', u.email + ' · last seen ' + (relTime(u.lastSeenAt || u.lastSeen) || 'never') + (u.groups?.length ? ' · ' + plural(u.groups.length, 'group') : '') + (u.sites ? ' · owns ' + plural(u.sites, 'site') : ''))),
       u.disabled && h('span.badge.danger', 'Disabled'),
+      blocks?.get('user:' + u.id) && h('span.badge.danger', { title: 'Reason: ' + (blocks.get('user:' + u.id).reason || '—') }, icon('code', 12), 'Server functions off'),
       h('label.row.small', 'Admin', toggle({ checked: u.isAdmin, label: 'Admin: ' + (u.name || u.email), disabled: u.id === state.me.id, onchange: async (v, t) => {
         try { await patch('/api/v1/admin/users/' + u.id, { isAdmin: v }); u.isAdmin = v; toast((u.name || u.email) + (v ? ' is now an admin.' : ' is no longer an admin.'), { type: 'ok' }); }
         catch { t.checked = !v; }
@@ -141,6 +152,7 @@ async function people(el, ctx) {
         toast(u.disabled ? 'Account disabled.' + (body.transferTo ? ' Moved ' + plural(r?.moved ?? 0, 'site') + ' to ' + body.transferTo + '.' : '') : 'Account enabled again.', { type: 'ok' });
         draw();
       } }, u.disabled ? 'Enable' : 'Disable'),
+      blocks && h('button.btn.sm.ghost', { 'aria-label': (blocks.get('user:' + u.id) ? 'Turn server functions back on for ' : 'Turn off server functions for ') + u.email, title: blocks.get('user:' + u.id) ? 'Turn server functions back on' : 'Turn off server functions', 'aria-pressed': null, onclick: () => fnToggle(u) }, icon(blocks.get('user:' + u.id) ? 'undo' : 'terminal', 16)),
       methods?.local && h('button.btn.sm.ghost', { 'aria-label': 'Password reset link for ' + u.email, title: 'Password reset link', onclick: () => resetLink(u) }, icon('key', 16)),
       h('button.btn.sm.ghost', { 'aria-label': 'Transfer sites owned by ' + u.email, title: 'Transfer their sites', onclick: () => transferSites(u.email) }, icon('arrow', 16)))))
       : empty({ title: 'Nobody matches', art: false, iconName: 'users' }));
@@ -156,9 +168,10 @@ async function people(el, ctx) {
     } catch (e) { toast(e.missing ? 'Transferring sites isn’t available on this server yet.' : e.message, { type: 'error' }); }
   }
   q.addEventListener('input', debounce(draw, 120));
-  const d = await get('/api/v1/admin/users').catch(() => null);
+  const [d, bl] = await Promise.all([get('/api/v1/admin/users').catch(() => null), adminBlocks()]);
   if (!ctx.alive() || !d) return;
   users = d.users || [];
+  blocks = bl;
   draw();
 }
 
@@ -166,19 +179,30 @@ async function sites(el, ctx) {
   const q = h('input.input', { type: 'search', placeholder: 'Search all sites', 'aria-label': 'Search all sites', style: { maxWidth: '320px' } });
   const tbl = h('div', skeletons(3, '.line'));
   clear(el, h('div.row', { style: { marginBottom: '16px' } }, q), tbl);
-  const d = await get('/api/v1/sites?filter=everything').catch(() => null);
+  const [d, bl] = await Promise.all([get('/api/v1/sites?filter=everything').catch(() => null), adminBlocks()]);
   if (!ctx.alive() || !d) return;
   const all = d.sites || [];
+  let blocks = bl;
+  const fnToggle = async (s) => {
+    const label = '“' + s.title + '”';
+    const b = blocks.get('site:' + s.slug);
+    if (b ? await unblock({ kind: 'site', id: s.slug, label }) : await blockDialog({ kind: 'site', id: s.slug, label })) {
+      blocks = (await adminBlocks()) || blocks;
+      draw();
+    }
+  };
+  const ownerBlock = (s) => blocks && s.ownerId != null && blocks.get('user:' + s.ownerId);
   const draw = () => {
     const f = q.value.trim().toLowerCase();
     const shown = all.filter((s) => !f || (s.title + ' ' + s.slug + ' ' + (s.owner?.email || '')).toLowerCase().includes(f));
     clear(tbl, shown.length ? h('div.table-wrap', h('table.t',
       h('thead', h('tr', ['Site', 'Owner', 'Visibility', 'Version', 'Updated', ''].map((c) => h('th', { scope: 'col' }, c)))),
       h('tbody', shown.map((s) => h('tr',
-        h('td', h('div.row', siteIcon(s, 'sm'), h('div', h('b', s.title), h('div.tiny.faint.mono', '/s/' + s.slug)))),
+        h('td', h('div.row', siteIcon(s, 'sm'), h('div', h('b', s.title), h('div.tiny.faint.mono', '/s/' + s.slug)),
+          (blocks?.get('site:' + s.slug) || ownerBlock(s)) && h('span.badge.danger', { title: 'Reason: ' + ((blocks.get('site:' + s.slug) || ownerBlock(s)).reason || '—') + (blocks.get('site:' + s.slug) ? '' : ' (turned off for the owner)') }, icon('code', 12), 'Server functions off'))),
         h('td', s.owner?.name || ''), h('td', s.orgView ? h('span.badge.ok', 'Whole organization') : h('span.badge', 'Shared people')),
         h('td', s.version ? 'v' + s.version : h('span.faint', 'Not published')), h('td', { title: fullTime(s.updatedAt) }, relTime(s.updatedAt)),
-        h('td', h('div.row', h('a.btn.sm.ghost', { href: '/sites/' + s.slug }, 'Manage'), h('a.btn.sm.ghost', { href: '/s/' + s.slug + '/', target: '_blank', rel: 'noopener' }, 'Open')))))))) : empty({ title: f ? 'No sites match' : 'No sites yet', art: false, iconName: 'grid' }));
+        h('td', h('div.row', blocks && h('button.btn.sm.ghost', { title: blocks.get('site:' + s.slug) ? 'Turn server functions back on for this app' : 'Turn off server functions for this app', 'aria-label': (blocks.get('site:' + s.slug) ? 'Turn server functions back on for ' : 'Turn off server functions for ') + s.title, onclick: () => fnToggle(s) }, icon(blocks.get('site:' + s.slug) ? 'undo' : 'terminal', 16)), h('a.btn.sm.ghost', { href: '/sites/' + s.slug }, 'Manage'), h('a.btn.sm.ghost', { href: '/s/' + s.slug + '/', target: '_blank', rel: 'noopener' }, 'Open')))))))) : empty({ title: f ? 'No sites match' : 'No sites yet', art: false, iconName: 'grid' }));
   };
   q.addEventListener('input', debounce(draw, 120));
   draw();
@@ -493,4 +517,128 @@ async function audit(el, ctx) {
   kind.addEventListener('change', load);
   since.addEventListener('change', load);
   load();
+}
+
+// Server functions: on/off, limits, outbound internet, who's turned off.
+const OUTBOUND = [
+  ['internet', 'Public internet', 'Functions can call any public website or API. Addresses inside your network (like 10.x, 192.168.x or localhost) are always refused.'],
+  ['allowlist', 'Only listed sites', 'Functions can call only the hosts you list below. Use *.example.com to allow every subdomain.'],
+  ['off', 'No internet', 'Functions can’t call outside sites at all. They can still reach the systems you set up under Connections.'],
+];
+const HOST = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$|^(\*\.)?[a-z0-9-]+$/;
+
+async function serverFunctions(el, ctx) {
+  let cfg;
+  try { cfg = await get('/api/v1/admin/functions', { quiet: true }); }
+  catch (e) { if (ctx.alive()) clear(el, e.missing || e.status === 404 ? notYet('Server functions') : empty({ title: 'Couldn’t load the settings', text: e.message, art: false })); return; }
+  if (!ctx.alive()) return;
+  const v = { ...cfg, allowlist: [...(cfg.allowlist || [])] };
+  const save = async (body, undo) => {
+    try { const n = await put('/api/v1/admin/functions', body, { quiet: true }); if (n && typeof n === 'object') Object.assign(cfg, n); return true; }
+    catch (e) { toast(e.message, { type: 'error' }); undo && undo(); return false; }
+  };
+
+  // ---- on / off ----
+  const onOff = h('div.setting',
+    h('div', h('b', 'Run server code'), h('span.d', 'Apps can have an api/ folder with code that runs on this server. Turn this off to stop every function, schedule and trigger at once. Pages keep working.')),
+    toggle({ checked: cfg.enabled !== false, label: 'Run server code', onchange: async (x, t) => {
+      if (!x && !(await confirmDialog({ title: 'Turn off server code for everyone?', message: 'Every app’s functions, schedules and triggers stop right away. Pages still load, but anything that calls a function shows an error.', confirm: 'Turn off', danger: true }))) { t.checked = true; return; }
+      if (await save({ enabled: x }, () => (t.checked = !x))) { v.enabled = x; toast(x ? 'Server code is on.' : 'Server code is off for everyone.', { type: 'ok' }); }
+    } }));
+
+  // ---- limits ----
+  const num = (k, label, hint, { unit = '', scale = 1, min = 1, step = 1 } = {}) => {
+    const inp = h('input.input', { type: 'number', min, step, value: v[k] != null ? +(v[k] / scale).toFixed(2) : '', 'aria-label': label, oninput: () => (v[k] = inp.value === '' ? undefined : Math.round(+inp.value * scale)) });
+    return h('label.field', h('span.label', label), h('div.row', inp, unit && h('span.small.muted', unit)), hint && h('span.hint', hint));
+  };
+  const limits = h('div.fn-grid',
+    num('memoryMb', 'Memory per run', 'How much memory one run can use. Default 64 MB.', { unit: 'MB', min: 8 }),
+    num('timeoutMs', 'Time limit for a call', 'How long a page or webhook waits for a function. Default 30 seconds.', { unit: 'seconds', scale: 1000, step: 0.5 }),
+    num('triggerTimeoutMs', 'Time limit for schedules and triggers', 'Runs nobody is waiting on can take longer. Default 120 seconds.', { unit: 'seconds', scale: 1000, step: 0.5 }),
+    num('siteConcurrency', 'Runs at once per app', 'More than this and callers are told to try again. Default 4.', { unit: 'runs' }),
+    num('globalConcurrency', 'Runs at once in total', 'Across all apps. Keeps the server responsive. Default: twice the CPU cores, at least 4.', { unit: 'runs' }));
+
+  // ---- outbound ----
+  const hostsEl = h('div.chips.fn-hosts');
+  const hostIn = h('input.input', { placeholder: 'api.example.com or *.example.com', 'aria-label': 'Add a host', autocomplete: 'off', spellcheck: 'false' });
+  const hostBad = h('span.hint.fn-bad.hidden', { role: 'alert' });
+  const addHost = () => {
+    const x = hostIn.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/:].*$/, '');
+    if (!x) return;
+    if (!HOST.test(x)) { hostBad.textContent = '“' + hostIn.value.trim() + '” doesn’t look like a host name. Try api.example.com.'; hostBad.classList.remove('hidden'); return; }
+    hostBad.classList.add('hidden');
+    if (!v.allowlist.includes(x)) v.allowlist.push(x);
+    hostIn.value = '';
+    drawHosts();
+  };
+  hostIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addHost(); } });
+  const drawHosts = () => clear(hostsEl, v.allowlist.length ? v.allowlist.map((x) => h('span.chip', h('span.mono', x),
+    h('button.x', { type: 'button', 'aria-label': 'Remove ' + x, onclick: () => { v.allowlist = v.allowlist.filter((y) => y !== x); drawHosts(); } }, icon('x', 12))))
+    : h('span.small.muted', 'No hosts yet, so functions can’t call anything outside.'));
+  drawHosts();
+  const hostBox = h('div.fn-hostbox', h('div.row', hostIn, h('button.btn', { type: 'button', onclick: addHost }, 'Add')), hostBad, hostsEl);
+  const out = h('fieldset.fn-radios', h('legend', 'Calling other websites'),
+    OUTBOUND.map(([id, label, text]) => h('label.check', h('input', { type: 'radio', name: 'fn-outbound', value: id, checked: (v.outbound || 'internet') === id, onchange: () => { v.outbound = id; hostBox.classList.toggle('hidden', id !== 'allowlist'); } }), h('div', h('b', label), h('span', text)))),
+    hostBox);
+  hostBox.classList.toggle('hidden', (v.outbound || 'internet') !== 'allowlist');
+
+  const saveBtn = h('button.btn.primary', { type: 'submit' }, 'Save');
+  const form = h('form.card.pad.stack', { onsubmit: async (e) => {
+    e.preventDefault();
+    if (hostIn.value.trim()) addHost();
+    if (v.outbound === 'allowlist' && !v.allowlist.length && !(await confirmDialog({ title: 'Save an empty list?', message: 'With no hosts listed, functions can’t call any outside site.', confirm: 'Save anyway' }))) return;
+    await busy(saveBtn, async () => {
+      const body = {};
+      for (const k of ['memoryMb', 'timeoutMs', 'triggerTimeoutMs', 'siteConcurrency', 'globalConcurrency', 'outbound', 'allowlist']) if (v[k] !== undefined) body[k] = v[k];
+      if (await save(body)) toast('Server functions settings saved.', { type: 'ok' });
+    });
+  } }, h('h2.h3', 'Limits'), limits, out, h('div.row', h('span.spacer'), saveBtn));
+
+  // ---- who's turned off ----
+  const blocksEl = h('div', skeletons(2, '.line'));
+  const blockBtn = h('button.btn', { onclick: () => pickBlock(() => drawBlocks()) }, icon('plus', 16), 'Turn off for a person or app');
+  async function drawBlocks() {
+    const d = await maybe('/api/v1/admin/functions/blocks').catch(() => null);
+    if (!ctx.alive()) return;
+    const items = d?.items || [];
+    clear(blocksEl, items.length ? h('div.list', items.map((b) => {
+      const label = b.label || (b.kind === 'site' ? '/s/' + b.id : String(b.id));
+      return h('div.item', h('span.site-icon.sm', icon(b.kind === 'user' ? 'user' : 'grid', 16)),
+        h('div.n', h('b', label, ' ', h('span.badge', b.kind === 'user' ? 'Person · all their apps' : 'App')),
+          h('span', (b.reason ? '“' + b.reason + '”' : 'No reason given') + ' · ' + [b.by && 'by ' + (typeof b.by === 'object' ? b.by.name || b.by.email : b.by), relTime(b.at)].filter(Boolean).join(' '))),
+        h('button.btn.sm', { onclick: async () => { if (await unblock({ kind: b.kind, id: b.id, label })) drawBlocks(); } }, 'Turn back on'));
+    })) : empty({ title: 'Nobody is turned off', text: 'If a person’s or an app’s code misbehaves, turn it off here. Their pages keep working, and they see your reason.', art: false, iconName: 'check' }));
+  }
+
+  clear(el,
+    h('p.muted', { style: { marginBottom: '16px' } }, 'Apps can run code on this server from an api/ folder: to save data as the owner, call an outside service with a secret key, or do something every night. Each run is sandboxed and limited.'),
+    h('div.card.pad', onOff),
+    h('div', { style: { marginTop: '16px' } }, form),
+    h('div.card.pad', { style: { marginTop: '16px' } }, h('div.row.wrap', { style: { marginBottom: '12px' } }, h('h2.h3', 'Turned off for'), h('span.spacer'), blockBtn), blocksEl));
+  drawBlocks();
+}
+
+// Pick a person or app to turn off, then ask for the reason.
+async function pickBlock(done) {
+  const [u, s] = await Promise.all([get('/api/v1/admin/users', { quiet: true }).catch(() => null), get('/api/v1/sites?filter=everything', { quiet: true }).catch(() => null)]);
+  const users = u?.users || [], sites = s?.sites || [];
+  let kind = 'user';
+  const q = h('input.input', { type: 'search', placeholder: 'Search by name or email', 'aria-label': 'Search', autofocus: true, autocomplete: 'off' });
+  const res = h('div.list.fn-pick', { role: 'list' });
+  const seg = h('div.seg', { role: 'group', 'aria-label': 'Turn off for' },
+    h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setKind('user') }, 'A person'),
+    h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setKind('site') }, 'An app'));
+  const setKind = (k) => { kind = k; seg.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === (k === 'user')))); q.placeholder = k === 'user' ? 'Search by name or email' : 'Search by app name or address'; draw(); };
+  const draw = () => {
+    const f = q.value.trim().toLowerCase();
+    const rows = (kind === 'user' ? users.map((x) => ({ id: x.id, label: x.name || x.email, sub: x.email, av: avatar(x.name || x.email) }))
+      : sites.map((x) => ({ id: x.slug, label: '“' + x.title + '”', sub: '/s/' + x.slug + (x.owner?.name ? ' · ' + x.owner.name : ''), av: siteIcon(x, 'sm') })))
+      .filter((x) => !f || (x.label + ' ' + x.sub).toLowerCase().includes(f)).slice(0, 8);
+    clear(res, rows.length ? rows.map((x) => h('div.item', { role: 'listitem' }, x.av, h('div.n', h('b', x.label), h('span', x.sub)),
+      h('button.btn.sm.danger', { type: 'button', onclick: async () => { m.close(); if (await blockDialog({ kind, id: x.id, label: x.label })) done(); } }, 'Choose')))
+      : h('div.item', h('span.small.muted', 'Nothing matches.')));
+  };
+  q.addEventListener('input', debounce(draw, 100));
+  const m = modal({ title: 'Turn off server code', body: h('div.stack-sm', seg, q, res) });
+  draw();
 }

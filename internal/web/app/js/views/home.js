@@ -4,6 +4,7 @@ import { state, aiStatus, aiReady } from '../state.js';
 import { siteCard, startAI, dropCreate, htmlCreate, githubCreate, IDEAS } from '../components.js';
 import { fromDataTransfer, pickers, onWindowDrag } from '../drop.js';
 import { showWelcome } from './welcome.js';
+import { fnStatus, blockedBanner } from '../functions.js';
 
 function greeting(name) {
   const hr = new Date().getHours();
@@ -79,7 +80,9 @@ export default async function home(root, ctx) {
   document.addEventListener('paste', onPaste);
 
   const lists = h('div');
+  const fnSlot = h('div.fn-slot');
   clear(root, h('div.page',
+    fnSlot,
     h('div.home-head',
       h('div', h('h1', greeting(me?.name)), h('p.sub', 'What would you like to make today?')),
       h('label.search', icon('search', 18), search, h('kbd', '/'))),
@@ -101,7 +104,7 @@ export default async function home(root, ctx) {
 
   let all = [], recent = [];
   try {
-    const [a, r] = await Promise.all([get('/api/v1/sites'), get('/api/v1/sites?filter=recent').catch(() => ({ sites: [] }))]);
+    const [a, r] = await Promise.all([get('/api/v1/sites'), get('/api/v1/sites?filter=recent').catch(() => ({ sites: [] })), fnStatus().then(() => ctx.alive() && clear(fnSlot, blockedBanner()))]);
     all = a.sites || [];
     recent = (r.sites || []).sort((x, y) => (y.extra?.visitedAt || 0) - (x.extra?.visitedAt || 0));
   } catch { clear(lists, empty({ title: 'Couldn’t load your sites', text: 'Check your connection, then refresh the page.' })); return cleanup; }

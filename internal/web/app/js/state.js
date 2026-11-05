@@ -7,6 +7,7 @@ export const state = {
   sites: null, // cached list for the palette
   ai: undefined, // undefined = unknown, null = not installed, {configured}
   live: {}, // slug -> builder event hub handed over from Home
+  fn: undefined, // server functions status (functions.js); null = not installed
 };
 
 export async function loadSites(force) {
