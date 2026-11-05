@@ -37,4 +37,4 @@ Your own private app cloud: drop a file or describe an app, get a private, share
 - Admin: people, sites, sign-in, AI, Microsoft 365, connections, sharing policy, email, audit log, stats; offboarding (move someone's sites), idle archival, backups (download, scheduled snapshots, `bunker backup`/`restore`), Prometheus `/metrics`.
 - Footprint: ~27 MB idle RSS, content-addressed precompressed (brotli/gzip) files; on 4 vCPU the shell page serves ~38k req/s and site files 22–41k req/s; 5,000 live update streams fan out 1,000 changes with p99 ~0.3 s; filtered/sorted `bunker.db` queries get adaptive indexes (10k docs: ~70 → ~4,000 req/s) (see `research/PERF.md`, reproducible with `go run ./test/perf`).
 - Optional email (SMTP) for invites, resets and notifications; installable dashboard (web app manifest).
-- Accessibility: WCAG 2.2 AA checks (axe) with no serious/critical violations.
+- Accessibility: WCAG 2.2 AA checks (axe, 202 audits) with zero violations.
