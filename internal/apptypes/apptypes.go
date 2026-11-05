@@ -85,6 +85,9 @@ func categorize(p string) category {
 	return catOther
 }
 
+// serverExts are code files that are server functions when under api/.
+var serverExts = map[string]bool{".js": true, ".mjs": true, ".ts": true, ".mts": true}
+
 // Apply is the transformer entry point. It only acts when the upload has
 // no HTML entry page; it returns the detected kind ("" when it left the
 // files alone).
@@ -113,6 +116,9 @@ func Apply(ctx context.Context, files map[string][]byte) (string, error) {
 		}
 		if strings.HasPrefix(p, AssetDir) {
 			continue
+		}
+		if strings.HasPrefix(p, "api/") && serverExts[strings.ToLower(path.Ext(p))] {
+			continue // server functions run on Bunker, not in the page
 		}
 		c := categorize(p)
 		if c == catJSON && (path.Base(p) == "package.json" || path.Base(p) == "tsconfig.json" || strings.HasSuffix(p, "package-lock.json")) {

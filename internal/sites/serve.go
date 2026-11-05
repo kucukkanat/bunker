@@ -176,6 +176,12 @@ type RawHandler func(w http.ResponseWriter, r *http.Request, s *SiteRecord, t Ti
 
 var rawPrefixes = map[string]RawHandler{}
 
+var hiddenFile func(m Manifest, name string) bool
+
+// RegisterHiddenFiles installs a check for files that are part of a version
+// but must never be served to browsers (server function code).
+func RegisterHiddenFiles(fn func(m Manifest, name string) bool) { hiddenFile = fn }
+
 // RegisterRawPrefix installs a handler for /s/<slug>/<prefix>... (prefix like "~f/").
 // The ticket is validated (signature, expiry, site, viewer access) before h runs.
 func RegisterRawPrefix(prefix string, h RawHandler) { rawPrefixes[prefix] = h }
@@ -493,6 +499,9 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string, embed bool) {
 	}
 	clean := strings.TrimSuffix(p, "/")
 	name, f, found := resolveFile(m, p, s.Settings)
+	if found && hiddenFile != nil && hiddenFile(m, name) {
+		found = false // server-side code is never sent to browsers
+	}
 	status := http.StatusOK
 	if !found {
 		status = http.StatusNotFound

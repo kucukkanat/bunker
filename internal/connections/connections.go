@@ -348,6 +348,10 @@ var blockedNets = func() []*net.IPNet {
 	return out
 }()
 
+// BlockedIP reports whether ip is not a public address (for other modules
+// that make outbound requests, like server functions).
+func BlockedIP(ip net.IP) bool { return blockedIP(ip) }
+
 // blockedIP reports whether ip is private, loopback, link-local (incl.
 // cloud metadata 169.254.169.254), multicast or otherwise not public.
 func blockedIP(ip net.IP) bool {

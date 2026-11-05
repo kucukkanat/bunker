@@ -225,6 +225,12 @@ func parseChannels(siteID int64, role core.Role, list string) ([]chanReq, error)
 			if role >= core.RoleEditor {
 				out = append(out, chanReq{base + "draft", sub{ch: ch, kind: 'f'}})
 			}
+		case "logs":
+			// Server function logs: editors only, the code and its output are theirs.
+			if role < core.RoleEditor {
+				return nil, core.Forbidden("only editors can follow server function logs")
+			}
+			out = append(out, chanReq{base + "logs", sub{ch: ch, kind: 'x'}})
 		case "db":
 			if err := checkColl(name); err != nil {
 				return nil, err
@@ -241,7 +247,7 @@ func parseChannels(siteID int64, role core.Role, list string) ([]chanReq, error)
 			}
 			out = append(out, chanReq{base + "presence:" + name, sub{ch: ch, kind: 'p', coll: name}})
 		default:
-			return nil, core.BadRequest("unknown channel " + ch + ". Use db:<collection>, room:<name>, presence:<room> or deploy.")
+			return nil, core.BadRequest("unknown channel " + ch + ". Use db:<collection>, room:<name>, presence:<room>, deploy or logs.")
 		}
 	}
 	return out, nil
@@ -274,7 +280,7 @@ func splitDBMsg(msg []byte) (int64, []byte, bool) {
 
 func registerEvents(a *core.App) {
 	a.Handle(core.Op{Name: "events.stream", Method: "GET", Path: "/api/v1/sites/{site}/events", Summary: "Live updates (server-sent events) for data changes, rooms, presence and new versions", PageSafe: true, Stream: true,
-		Params:  []core.Param{siteParam, {Name: "ch", In: "query", Required: true, Desc: "Comma-separated channels: db:<collection>, room:<name>, presence:<room>, deploy"}},
+		Params:  []core.Param{siteParam, {Name: "ch", In: "query", Required: true, Desc: "Comma-separated channels: db:<collection>, room:<name>, presence:<room>, deploy, logs (editors)"}},
 		Handler: func(w http.ResponseWriter, r *http.Request) { hub.serveSSE(w, r) }})
 
 	a.Handle(core.Op{Name: "rooms.send", Method: "POST", Path: "/api/v1/sites/{site}/rooms/{room}", Summary: "Send a message to everyone in a room (not stored)", PageSafe: true,

@@ -63,7 +63,7 @@ Claude-Session: https://claude.ai/code/session_01LZES8o2Lem8J5XywqE5Rcv
 ```
 
 ## Server functions (internal/fnrt, internal/functions)
-Server code that site owners drop next to their pages. On by default; admins can turn it off globally, per person or per app. No build step, no containers: every call runs in a fresh QuickJS instance compiled to WASI (quickjs-ng v0.17.0 `qjs-wasi.wasm`, sha256 `42a732a6…e1975fd`, vendored in `internal/fnrt/qjs-wasi.wasm`) inside wazero (pure Go). The page SDK's permission model is unchanged: by default a function acts with the viewer's own rights.
+Server code that site owners drop next to their pages. On by default; admins can turn it off globally, per person or per app. No build step, no containers: every call runs in a fresh QuickJS instance compiled to WASI (quickjs-ng v0.17.0 `qjs-wasi.wasm`, sha256 `42a732a676ec2d93488c19411e0fad283bf72658fdad746f089914b523c783b1`, vendored in `internal/fnrt/qjs-wasi.wasm`) inside wazero (pure Go). The page SDK's permission model is unchanged: by default a function acts with the viewer's own rights.
 
 **Files.** `api/<name>.(js|mjs|ts)` with an `export default` is a function named `<name>` (nested folders allowed: `api/orders/refund.ts` → `orders/refund`). Files or folders starting with `_` under `api/` are shared modules (importable, not callable). Imports are bundled at publish with the embedded esbuild (ESM, target es2023, TypeScript stripped, `qjs:*`/`std`/`os` imports rejected; no npm). Function files and `_` modules are never served to browsers (404). Static `api/*.json` etc. keep working.
 
@@ -94,7 +94,7 @@ res, err := e.Run(ctx, fnrt.Job{Code: bundledESM, Input: json.RawMessage, Contex
 // Codes: "busy" "timeout" "memory" "script" "output_too_large" "too_many_calls" "bad_code"
 cfg, err := e.Inspect(ctx, bundledESM) // evaluates the module (1 s, no host) and returns its `config` export as JSON
 ```
-Host protocol (JSON, one line each way over stdin/stdout; stderr = logs): request `{t:"api", method, path, body}` (path relative to `/api/v1/sites/<slug>`, or exactly `/me`), `{t:"secret", name}`, `{t:"fetch", url, method, headers, body, bodyB64}`; reply `{ok:true, status, data}` or `{ok:false, status, error:{code,message}}` (fetch data: `{status, headers, body | bodyB64}`). `api` requests are dispatched in-process to `a.Mux` as the run-as user with `X-Bunker-Page: 1`, so only PageSafe ops work.
+Host protocol (JSON, one line each way over stdin/stdout; stderr = logs): request `{t:"api", method, path, body}` (path relative to `/api/v1/sites/<slug>`, or exactly `/me`), `{t:"secret", name}`, `{t:"fetch", url, method, headers, body | bodyB64}`; reply `{ok:true, status, data}` or `{ok:false, status, error:{code,message}}` (fetch data: `{status, headers, body | bodyB64}`). `api` requests are dispatched in-process to `a.Mux` as the run-as user with `X-Bunker-Page: 1`, so only PageSafe ops work.
 
 **Default limits** (admin-tunable): memory 64 MB, call timeout 30 s, trigger/schedule timeout 120 s, input/output 1 MB, logs 64 KB/run, 1,000 host calls/run, 4 concurrent runs per app, `max(4, 2×CPU)` overall. Over capacity → `429 busy`.
 

@@ -231,8 +231,8 @@ func cmdDeploy(x *App, a *Args) error {
 			m[f.Rel] = f.Hash
 		}
 		var out struct {
-			Version int64  `json:"version"`
-			URL     string `json:"url"`
+			Version   int64    `json:"version"`
+			URL       string   `json:"url"`
 			Draft     bool     `json:"draft"`
 			Functions []fnInfo `json:"functions"`
 		}
@@ -427,10 +427,10 @@ func (x *App) postUpload(ctx context.Context, c *Client, body io.Reader, ct, sit
 		q.Set("source", "cli")
 	}
 	var out struct {
-		Slug    string `json:"slug"`
-		Title   string `json:"title"`
-		Version int64  `json:"version"`
-		URL     string `json:"url"`
+		Slug      string   `json:"slug"`
+		Title     string   `json:"title"`
+		Version   int64    `json:"version"`
+		URL       string   `json:"url"`
 		Draft     bool     `json:"draft"`
 		Functions []fnInfo `json:"functions"`
 	}

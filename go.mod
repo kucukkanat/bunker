@@ -6,6 +6,7 @@ require (
 	github.com/andybalholm/brotli v1.2.8
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/evanw/esbuild v0.28.2
+	github.com/tetratelabs/wazero v1.12.0
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.37.0

@@ -137,6 +137,17 @@ func mergePatch(dst, patch map[string]any) {
 
 // ---- change events ----
 
+// changed tells live subscribers and server-side listeners (write triggers)
+// about a committed change.
+func changed(ctx context.Context, c *collCtx, typ string, d *row) {
+	publishChange(c.site.ID, c.coll, typ, d)
+	var doc json.RawMessage
+	if typ != "deleted" {
+		doc = d.JSON()
+	}
+	app.Emit(ctx, "db.written", map[string]any{"siteId": c.site.ID, "collection": c.coll, "type": typ, "id": d.ID, "doc": doc, "user": c.u})
+}
+
 // publishChange sends a change to subscribers of db:<coll>. The bus
 // message is {"author":N,"data":<client payload>} so subscribers can
 // filter by author cheaply without decoding the document.
@@ -510,7 +521,7 @@ func deleteDoc(ctx context.Context, c *collCtx, id string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	publishChange(c.site.ID, c.coll, "deleted", d)
+	changed(ctx, c, "deleted", d)
 	return nil
 }
 
@@ -643,7 +654,7 @@ func registerDB(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
-			publishChange(c.site.ID, c.coll, typ, d)
+			changed(r.Context(), c, typ, d)
 			return core.Created{V: d.JSON()}, nil
 		}})
 
@@ -686,7 +697,7 @@ func registerDB(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
-			publishChange(c.site.ID, c.coll, typ, d)
+			changed(r.Context(), c, typ, d)
 			return d.JSON(), nil
 		}
 	}

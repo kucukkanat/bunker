@@ -11,6 +11,7 @@ import (
 	_ "github.com/kucukkanat/bunker/internal/demo"
 	_ "github.com/kucukkanat/bunker/internal/entra"
 	_ "github.com/kucukkanat/bunker/internal/files"
+	_ "github.com/kucukkanat/bunker/internal/functions"
 	_ "github.com/kucukkanat/bunker/internal/hooks"
 	_ "github.com/kucukkanat/bunker/internal/m365"
 	_ "github.com/kucukkanat/bunker/internal/mail"

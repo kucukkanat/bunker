@@ -714,14 +714,31 @@ func deployFiles2(ctx context.Context, u *core.User, s *SiteRecord, files map[st
 			return nil, err
 		}
 		SetKind(ctx, s.ID, kind)
-		return map[string]any{"draft": true, "files": len(m), "kind": kind, "previewUrl": app.Cfg.PublicURL() + "/s/" + s.Slug + "/?draft=1"}, nil
+		return withDeployInfo(ctx, m, map[string]any{"draft": true, "files": len(m), "kind": kind, "previewUrl": app.Cfg.PublicURL() + "/s/" + s.Slug + "/?draft=1"}), nil
 	}
 	n, err := Commit(ctx, u, s, m, message, source, true)
 	if err != nil {
 		return nil, err
 	}
 	SetKind(ctx, s.ID, kind)
-	return map[string]any{"version": n, "files": len(m), "bytes": m.Size(), "kind": kind, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
+	return withDeployInfo(ctx, m, map[string]any{"version": n, "files": len(m), "bytes": m.Size(), "kind": kind, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}), nil
+}
+
+var deployInfo []func(ctx context.Context, m Manifest) map[string]any
+
+// RegisterDeployInfo adds fields to deploy responses (e.g. the server
+// functions a deploy contains).
+func RegisterDeployInfo(fn func(ctx context.Context, m Manifest) map[string]any) {
+	deployInfo = append(deployInfo, fn)
+}
+
+func withDeployInfo(ctx context.Context, m Manifest, res map[string]any) map[string]any {
+	for _, fn := range deployInfo {
+		for k, v := range fn(ctx, m) {
+			res[k] = v
+		}
+	}
+	return res
 }
 
 // draftLocks serialize read-modify-write updates of a site's draft
@@ -924,13 +941,16 @@ func registerDeploy(a *core.App) {
 			}
 			src := firstNonEmpty(in.Source, "cli")
 			if in.Publish != nil && !*in.Publish {
-				return map[string]any{"draft": true}, SaveDraft(r.Context(), u, s, m)
+				if err := SaveDraft(r.Context(), u, s, m); err != nil {
+					return nil, err
+				}
+				return withDeployInfo(r.Context(), m, map[string]any{"draft": true}), nil
 			}
 			n, err := Commit(r.Context(), u, s, m, in.Message, src, true)
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
+			return withDeployInfo(r.Context(), m, map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}), nil
 		}})
 
 	// ---- versions ----
@@ -1180,7 +1200,7 @@ func registerDeploy(a *core.App) {
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}, nil
+			return withDeployInfo(r.Context(), m, map[string]any{"version": n, "url": app.Cfg.PublicURL() + "/s/" + s.Slug + "/"}), nil
 		}})
 	a.Handle(core.Op{Name: "drafts.discard", Method: "DELETE", Path: "/api/v1/sites/{site}/draft", Summary: "Throw away unpublished changes", Destructive: true,
 		Params: []core.Param{siteParam},

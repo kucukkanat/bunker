@@ -1,7 +1,8 @@
 // Package hooks provides inbound webhooks: a secret URL that other tools
 // (Power Automate, Zapier, scripts, forms) can POST JSON to, which lands as
-// documents in one of a site's bunker.db collections. No code runs on the
-// server; the request is written as the person who created the hook.
+// documents in one of a site's bunker.db collections, or is handed to one of
+// the site's server functions. Either way it acts as the person who created
+// the hook.
 package hooks
 
 import (
@@ -20,6 +21,7 @@ import (
 
 	"github.com/kucukkanat/bunker/internal/auth"
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/functions"
 	"github.com/kucukkanat/bunker/internal/sites"
 )
 
@@ -41,7 +43,7 @@ CREATE TABLE hooks (
   calls INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX hooks_site ON hooks(site_id);
-`},
+`, `ALTER TABLE hooks ADD COLUMN fn TEXT NOT NULL DEFAULT '';`},
 		Init: initHooks,
 	})
 }
@@ -67,7 +69,7 @@ func initHooks(a *core.App) error {
 			if err != nil {
 				return nil, err
 			}
-			rows, err := a.DB.QueryContext(r.Context(), `SELECT h.id,h.name,h.coll,h.prefix,h.created_at,COALESCE(h.last_used_at,0),h.calls,COALESCE(u.name,'') FROM hooks h LEFT JOIN users u ON u.id=h.created_by WHERE h.site_id=? ORDER BY h.id`, s.ID)
+			rows, err := a.DB.QueryContext(r.Context(), `SELECT h.id,h.name,h.coll,h.fn,h.prefix,h.created_at,COALESCE(h.last_used_at,0),h.calls,COALESCE(u.name,'') FROM hooks h LEFT JOIN users u ON u.id=h.created_by WHERE h.site_id=? ORDER BY h.id`, s.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -75,32 +77,33 @@ func initHooks(a *core.App) error {
 			out := []map[string]any{}
 			for rows.Next() {
 				var id, ca, lu, calls int64
-				var name, coll, prefix, by string
-				rows.Scan(&id, &name, &coll, &prefix, &ca, &lu, &calls, &by)
-				out = append(out, map[string]any{"id": id, "name": name, "collection": coll, "prefix": prefix, "createdAt": ca, "lastUsedAt": lu, "calls": calls, "createdBy": by})
+				var name, coll, fn, prefix, by string
+				rows.Scan(&id, &name, &coll, &fn, &prefix, &ca, &lu, &calls, &by)
+				out = append(out, map[string]any{"id": id, "name": name, "collection": coll, "function": fn, "prefix": prefix, "createdAt": ca, "lastUsedAt": lu, "calls": calls, "createdBy": by})
 			}
 			return map[string]any{"hooks": out}, nil
 		}})
 
-	a.Handle(core.Op{Name: "hooks.create", Method: "POST", Path: "/api/v1/sites/{site}/hooks", Summary: "Create a webhook URL that adds JSON it receives to a collection",
+	a.Handle(core.Op{Name: "hooks.create", Method: "POST", Path: "/api/v1/sites/{site}/hooks", Summary: "Create a webhook URL that adds JSON it receives to a collection, or passes it to a server function",
 		Params: []core.Param{siteParam, {Name: "name", In: "body", Required: true, Desc: "What sends to it, e.g. 'Power Automate: new hires'"},
-			{Name: "collection", In: "body", Required: true, Desc: "Collection the data goes into"}},
+			{Name: "collection", In: "body", Desc: "Collection the data goes into (or use function)"},
+			{Name: "function", In: "body", Desc: "Server function that receives the data instead, e.g. \"orders\" for api/orders.js"}},
 		Fn: func(r *http.Request) (any, error) {
 			u := core.MustUser(r)
 			s, _, err := sites.Full(r.Context(), u, r.PathValue("site"), core.RoleEditor)
 			if err != nil {
 				return nil, err
 			}
-			var in struct{ Name, Collection string }
+			var in struct{ Name, Collection, Function string }
 			if err := core.Decode(r, &in); err != nil {
 				return nil, err
 			}
-			in.Name, in.Collection = strings.TrimSpace(in.Name), strings.TrimSpace(in.Collection)
-			if in.Name == "" || len(in.Name) > 100 || in.Collection == "" || len(in.Collection) > 64 {
-				return nil, core.BadRequest("name (up to 100 characters) and collection are required")
+			in.Name, in.Collection, in.Function = strings.TrimSpace(in.Name), strings.TrimSpace(in.Collection), strings.Trim(strings.TrimSpace(in.Function), "/")
+			if in.Name == "" || len(in.Name) > 100 || (in.Collection == "") == (in.Function == "") || len(in.Collection) > 64 || len(in.Function) > 200 {
+				return nil, core.BadRequest("a name (up to 100 characters) and either a collection or a function are required")
 			}
 			// Same rule as bunker.db: otherwise every call to the hook fails.
-			if !collRe.MatchString(in.Collection) {
+			if in.Collection != "" && !collRe.MatchString(in.Collection) {
 				return nil, core.BadRequest("collection names use up to 64 letters, numbers, dots, dashes and underscores, and can't start with a symbol")
 			}
 			var n int
@@ -109,13 +112,13 @@ func initHooks(a *core.App) error {
 				return nil, core.Quota("a site can have up to 20 webhooks")
 			}
 			tok := tokenPrefix + core.RandomToken(30)
-			res, err := a.DB.ExecContext(r.Context(), `INSERT INTO hooks(site_id,name,coll,token_hash,prefix,created_by,created_at) VALUES(?,?,?,?,?,?,?)`,
-				s.ID, in.Name, in.Collection, core.HashToken(tok), tok[:10], u.ID, core.Now())
+			res, err := a.DB.ExecContext(r.Context(), `INSERT INTO hooks(site_id,name,coll,fn,token_hash,prefix,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)`,
+				s.ID, in.Name, in.Collection, in.Function, core.HashToken(tok), tok[:10], u.ID, core.Now())
 			if err != nil {
 				return nil, err
 			}
 			id, _ := res.LastInsertId()
-			a.Audit(r.Context(), "hook.create", s.ID, in.Name, map[string]any{"collection": in.Collection})
+			a.Audit(r.Context(), "hook.create", s.ID, in.Name, map[string]any{"collection": in.Collection, "function": in.Function})
 			hookURL := a.Cfg.PublicURL() + "/hooks/" + tok
 			return core.Created{V: map[string]any{
 				"id": id, "url": hookURL,
@@ -176,8 +179,8 @@ func receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id, siteID, creator int64
-	var coll string
-	if app.DB.QueryRowContext(r.Context(), `SELECT id,site_id,created_by,coll FROM hooks WHERE token_hash=?`, core.HashToken(tok)).Scan(&id, &siteID, &creator, &coll) != nil {
+	var coll, fn, hookName string
+	if app.DB.QueryRowContext(r.Context(), `SELECT id,site_id,created_by,coll,fn,name FROM hooks WHERE token_hash=?`, core.HashToken(tok)).Scan(&id, &siteID, &creator, &coll, &fn, &hookName) != nil {
 		core.Err(w, core.NotFound("unknown webhook"))
 		return
 	}
@@ -189,6 +192,10 @@ func receive(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
 		core.Err(w, core.TooLarge("send at most 1 MB per request"))
+		return
+	}
+	if fn != "" {
+		toFunction(w, r, id, siteID, creator, fn, hookName, body)
 		return
 	}
 	// Accept JSON objects, arrays of objects, or form posts.
@@ -262,4 +269,52 @@ func receive(w http.ResponseWriter, r *http.Request) {
 	}
 	app.DB.ExecContext(ctx, `UPDATE hooks SET calls=calls+?, last_used_at=? WHERE id=?`, len(docs), core.Now(), id)
 	core.JSON(w, 201, map[string]any{"ok": true, "added": len(ids), "ids": ids})
+}
+
+// toFunction hands a webhook's body to a server function and answers with
+// whatever the function returns.
+func toFunction(w http.ResponseWriter, r *http.Request, id, siteID, creator int64, fn, hookName string, body []byte) {
+	var input json.RawMessage
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+		v, _ := url.ParseQuery(string(body))
+		d := map[string]any{}
+		for k, vs := range v {
+			if len(vs) == 1 {
+				d[k] = vs[0]
+			} else {
+				d[k] = vs
+			}
+		}
+		input, _ = json.Marshal(d)
+	} else if t := bytes.TrimSpace(body); len(t) > 0 {
+		if !json.Valid(t) {
+			core.Err(w, core.BadRequest("send JSON or a form post"))
+			return
+		}
+		input = t
+	}
+	s, err := sites.GetByID(r.Context(), siteID, false)
+	if err != nil {
+		core.Err(w, core.NotFound("unknown webhook"))
+		return
+	}
+	u, err := auth.LoadUser(r.Context(), creator)
+	if err != nil || u == nil || sites.RoleOf(r.Context(), u, s) < core.RoleEditor {
+		core.Err(w, core.Forbidden("this webhook's owner no longer has edit access"))
+		return
+	}
+	ctx := core.WithIP(core.WithUser(context.WithoutCancel(r.Context()), u), core.IPFrom(r.Context()))
+	out, err := functions.Invoke(ctx, s, fn, input, u, map[string]any{"type": "webhook", "hook": hookName})
+	app.DB.ExecContext(ctx, `UPDATE hooks SET calls=calls+1, last_used_at=? WHERE id=?`, core.Now(), id)
+	if err != nil {
+		core.Err(w, err)
+		return
+	}
+	if len(out) == 0 {
+		out = json.RawMessage("null")
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(200)
+	w.Write(out)
 }
