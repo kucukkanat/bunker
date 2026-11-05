@@ -183,3 +183,15 @@ Pages can't load scripts from the internet. Bunker ships popular libraries and s
 | leaflet | 1.9.4 | `L` (no map tiles offline: use `L.CRS.Simple` with your own image, e.g. a floor plan) |
 
 Web fonts from Google Fonts and similar can't load in the sandbox. Bundle font files with your app, or use system fonts.
+
+## Import from GitHub
+
+Paste a link to a **public** GitHub repository on the Home page (anywhere, not in a text box) and click **Import**. A folder works too: `https://github.com/owner/repo/tree/main/docs`. The files go through the same pipeline as a drop, so a repo with a `dist/` or `build/` folder, a Markdown handbook or a folder of CSVs all become apps.
+
+```sh
+bunker api sites.import_github --url https://github.com/owner/repo/tree/main/site
+# update an existing site instead of creating one
+bunker api sites.import_github --url https://github.com/owner/repo --site my-site
+```
+
+Bunker only downloads from `codeload.github.com`, within the upload size limit. Private repositories need the [CLI](/bunker/docs/cli/reference/) (`bunker deploy` from a clone). Admins can turn importing off with the setting `import.github = false`.
