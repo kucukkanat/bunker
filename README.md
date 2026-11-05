@@ -26,6 +26,7 @@
   <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json"><img src="https://aka.ms/deploytoazurebutton" alt="Deploy to Azure" height="32"></a>
   <a href="https://render.com/deploy?repo=https://github.com/kucukkanat/bunker"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32"></a>
   <a href="DEPLOY.md#railway"><img src="https://railway.com/button.svg" alt="Deploy on Railway" height="32"></a>
+  <a href="https://app.koyeb.com/deploy?type=git&repository=github.com/kucukkanat/bunker&branch=master&builder=dockerfile&name=bunker&ports=8080;http;/"><img src="https://www.koyeb.com/static/images/deploy/button.svg" alt="Deploy to Koyeb" height="32"></a>
 </p>
 
 ```sh
