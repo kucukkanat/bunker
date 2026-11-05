@@ -32,8 +32,8 @@
 # Any Linux server: hardened systemd service + automatic HTTPS
 curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sudo BUNKER_URL=https://bunker.example.com sh
 
-# Just look around: example apps, people and data on your laptop
-bunker demo
+# Have Go? One command, then look around with example apps, people and data
+go install github.com/kucukkanat/bunker/cmd/bunker@latest && bunker demo
 
 # Docker (before the first release, build it: docker build -t ghcr.io/kucukkanat/bunker https://github.com/kucukkanat/bunker.git)
 docker run -p 8080:8080 -v bunker:/data ghcr.io/kucukkanat/bunker
