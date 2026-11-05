@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 function loadPlaywright() {
-  const tries = [import.meta.url, ...(process.env.NODE_PATH || '').split(':').filter(Boolean).map((p) => join(p, 'x.js')), '/home/user/bunker/website/package.json'];
+  const tries = [import.meta.url, ...(process.env.NODE_PATH || '').split(':').filter(Boolean).map((p) => join(p, 'x.js')), '/home/user/bunker/website/package.json', '/opt/node-tools/node_modules/x.js'];
   for (const t of tries) { try { return createRequire(t)('playwright'); } catch {} }
   throw new Error('playwright not found: set NODE_PATH to a node_modules folder that has it');
 }
