@@ -14,7 +14,7 @@ Bunker is one program and one data folder. Pick a button, wait a couple of minut
 | [Deploy to Render](https://render.com/deploy?repo=https://github.com/kucukkanat/bunker) | Web service + 5 GB disk (Starter plan or higher) | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
 | [Deploy on Railway](/bunker/docs/deploy/paas/#railway) | Service + volume at `/data` | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
 | `fly launch --from https://github.com/kucukkanat/bunker --copy-config` | Fly.io: one machine + volume | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
-| [Deploy to Koyeb](https://app.koyeb.com/deploy?type=docker&image=ghcr.io/kucukkanat/bunker:latest&name=bunker&ports=8080;http;/) | Koyeb | Only after you attach a volume at `/data` | |
+| [Deploy to Koyeb](https://app.koyeb.com/deploy?type=git&repository=github.com/kucukkanat/bunker&branch=master&builder=dockerfile&name=bunker&ports=8080;http;/) | Koyeb | Only after you attach a volume at `/data` | |
 | [DigitalOcean App Platform](https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master) | App Platform | **No, demo only**: data resets on every deploy. For real use, a Droplet + the [Linux installer](/bunker/docs/deploy/linux/) | |
 | [Heroku](https://heroku.com/deploy?template=https://github.com/kucukkanat/bunker) | Heroku | **No, demo only**: data resets daily | |
 | [Google Cloud Run](https://deploy.cloud.run/?git_repo=https://github.com/kucukkanat/bunker) | Cloud Run | **No, demo only** | |
