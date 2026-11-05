@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Onboarding checklist</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:900px}
+.me{display:flex;gap:18px;align-items:center;margin-bottom:18px;padding:18px 20px}
+.ring{--p:0;width:78px;height:78px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--moss) calc(var(--p) * 1%),var(--card2) 0)}
+.ring b{width:60px;height:60px;border-radius:50%;background:var(--card);display:grid;place-items:center;font:600 1.15rem var(--serif)}
+.me h2{margin:0 0 2px}.me p{margin:0;color:var(--muted)}
+.phase{margin-bottom:14px;padding:6px 0 4px}
+.phase>header{display:flex;align-items:center;gap:10px;padding:10px 20px 6px}.phase>header h3{margin:0;font-size:1.08rem}
+.phase>header .n{margin-left:auto;font-size:.82rem;color:var(--muted)}
+.tasks{list-style:none;margin:0;padding:0}
+.task{display:grid;grid-template-columns:auto 1fr auto;gap:2px 14px;padding:12px 20px;border-top:1px solid var(--line);align-items:start}
+.task input[type=checkbox]{width:24px;height:24px;margin:1px 0 0;cursor:pointer}
+.task label{margin:0;font-weight:600;cursor:pointer;line-height:1.35}
+.task .d{grid-column:2;color:var(--muted);font-size:.88rem}
+.task .who{font-size:.78rem}
+.task.done label{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line);text-decoration-thickness:2px}
+.task .edit{grid-row:1/3;grid-column:3;display:flex;gap:4px}
+.task .when{grid-column:2;font-size:.78rem;color:var(--ok-t)}
+.party{background:var(--ok-bg);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;font-weight:500}
+.team{box-shadow:none}.team td{vertical-align:middle}.team .meter{min-width:120px}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.tabs-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+@media(max-width:600px){.task{padding:12px 14px}.phase>header{padding:10px 14px 6px}.me{padding:14px}.team .hide-s{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1 id="hello">Welcome aboard</h1><p>Your first weeks, one step at a time. Only you (and the people who run this app) can see your ticks.</p></div>
+  </div>
+  <div class="tabs-row" id="editor-bar" hidden>
+    <div class="seg" role="group" aria-label="View" id="seg"><button aria-pressed="true" data-v="me">My checklist</button><button aria-pressed="false" data-v="team">Team progress</button><button aria-pressed="false" data-v="edit">Edit checklist</button></div>
+  </div>
+  <div id="view"><div class="empty" aria-busy="true">Loading your checklist…</div></div>
+</div>
+
+<dialog id="d-task" aria-labelledby="d-task-h">
+  <form id="f-task">
+    <h2 id="d-task-h">Add a step</h2>
+    <div class="field"><label for="t-title">Step</label><input type="text" id="t-title" required maxlength="160" placeholder="e.g. Set up your laptop"></div>
+    <div class="grid g2"><div class="field"><label for="t-phase">When</label><select id="t-phase"></select></div>
+    <div class="field"><label for="t-who">Who can help <span class="muted">(optional)</span></label><input type="text" id="t-who" maxlength="80" placeholder="e.g. IT desk"></div></div>
+    <div class="field"><label for="t-details">Details <span class="muted">(optional)</span></label><textarea id="t-details" maxlength="1000"></textarea></div>
+    <div class="field"><label for="t-link">Link <span class="muted">(optional)</span></label><input type="text" id="t-link" maxlength="400" placeholder="https://…"></div>
+    <div class="dlg-acts"><button class="btn danger" type="button" id="t-del" hidden>Delete</button><span class="spacer"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div>
+  </form>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var PHASES = ['Before day one', 'Day one', 'First week', 'First month'];
+// The starting checklist. Editors can change it in "Edit checklist".
+var DEFAULT_TASKS = [
+  { key: 'contract', phase: 'Before day one', title: 'Sign and return your contract', who: 'People team' },
+  { key: 'bank', phase: 'Before day one', title: 'Send your bank and tax details', who: 'Payroll' },
+  { key: 'laptop', phase: 'Day one', title: 'Collect your laptop and set your password', who: 'IT desk' },
+  { key: 'tour', phase: 'Day one', title: 'Office tour and coffee with your buddy', details: 'Your buddy shows you around and answers the small questions.' },
+  { key: 'chat', phase: 'Day one', title: 'Join the team chat channels' },
+  { key: 'handbook', phase: 'First week', title: 'Read the employee handbook', details: 'Holidays, expenses, working hours and how we work together.' },
+  { key: 'security', phase: 'First week', title: 'Complete the security awareness training', who: 'IT desk' },
+  { key: 'meet', phase: 'First week', title: 'Meet everyone in your team one-to-one' },
+  { key: 'goals', phase: 'First month', title: 'Agree your first goals with your manager' },
+  { key: 'checkin', phase: 'First month', title: '30-day check-in: what’s going well, what isn’t?' }
+];
+// Data rules (set by the template): "tasks" is maintained by editors;
+// "progress" is private, so each person sees only their own ticks.
+// -------------------
+
+var tasks = BK.col('tasks'), progress = BK.col('progress');
+var T = [], P = [], me = {}, editor = false, view = 'me', mine = null, editing = null, creating = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function list() { return (T.length ? T : DEFAULT_TASKS).slice().sort(function (a, b) { return PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || (a.order || 0) - (b.order || 0); }); }
+function keyOf(t) { return t.key || t._id; }
+function doneMap(p) { return (p && p.done) || {}; }
+function pct(p) { var L = list(), d = doneMap(p), n = L.filter(function (t) { return d[keyOf(t)]; }).length; return { n: n, of: L.length, p: L.length ? Math.round(n / L.length * 100) : 0 }; }
+function first(n) { return String(n || '').split(/\s+/)[0]; }
+function safeLink(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
+
+function render() {
+  $('hello').textContent = me.name ? 'Welcome aboard, ' + first(me.name) : 'Welcome aboard';
+  if (view === 'team') return renderTeam();
+  var L = list(), d = doneMap(mine), s = pct(mine), edit = view === 'edit';
+  var next = L.filter(function (t) { return !d[keyOf(t)]; })[0];
+  var h = edit ? '<div class="row" style="margin-bottom:14px"><p class="muted" style="margin:0;flex:1">Changes apply to everyone’s checklist. Ticks are kept per step.</p><button class="btn primary" data-act="add">+ Add a step</button></div>'
+    : '<div class="card me"><div class="ring" style="--p:' + s.p + '" role="img" aria-label="' + s.p + '% done"><b>' + s.p + '%</b></div><div><h2>' + (s.n === s.of ? 'All done!' : s.n + ' of ' + s.of + ' steps done') + '</h2><p>' +
+      (next ? 'Next up: <b>' + e(next.title) + '</b>' : 'You’ve finished your onboarding. Welcome to the team!') + '</p></div></div>' + (s.n === s.of && s.of ? '<div class="party" role="status">🎉 That’s everything. Thanks for being so thorough!</div>' : '');
+  PHASES.forEach(function (ph) {
+    var items = L.filter(function (t) { return t.phase === ph; });
+    if (!items.length && !edit) return;
+    var n = items.filter(function (t) { return d[keyOf(t)]; }).length;
+    h += '<section class="card phase" style="padding:0" aria-label="' + e(ph) + '"><header><h3>' + e(ph) + '</h3><span class="n">' + (edit ? items.length + ' steps' : n + ' of ' + items.length) + '</span></header><ul class="tasks">' +
+      (items.length ? items.map(function (t) {
+        var k = keyOf(t), id = 'k-' + String(k).replace(/[^a-zA-Z0-9_-]/g, ''), done = !!d[k], link = safeLink(t.link);
+        return '<li class="task' + (done && !edit ? ' done' : '') + '">' + (edit ? '<span aria-hidden="true">•</span>' : '<input type="checkbox" id="' + id + '" data-k="' + e(k) + '"' + (done ? ' checked' : '') + '>') +
+          '<label' + (edit ? '' : ' for="' + id + '"') + '>' + e(t.title) + '</label>' +
+          (edit ? '<span class="edit"><button class="btn small ghost" data-edit="' + e(t._id || '') + '" aria-label="Edit ' + e(t.title) + '">Edit</button></span>' : '') +
+          ((t.details || t.who || link) ? '<span class="d">' + e(t.details || '') + (t.who ? ' <span class="badge who">Ask: ' + e(t.who) + '</span>' : '') + (link ? ' <a href="' + e(link) + '">Open link</a>' : '') + '</span>' : '') +
+          (done && !edit ? '<span class="when">Done ' + e(new Date(d[k]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) + '</span>' : '') + '</li>';
+      }).join('') : '<li class="task muted">No steps here yet.</li>') + '</ul></section>';
+  });
+  $('view').innerHTML = h;
+}
+function renderTeam() {
+  var people = P.filter(function (p) { return p.name || p._authorName; }).sort(function (a, b) { return pct(a).p - pct(b).p; });
+  if (!people.length) { $('view').innerHTML = '<div class="empty"><span class="ico" aria-hidden="true">🧭</span><b>No one has started yet</b>Share this app with your new starters. Their progress shows here as soon as they tick their first step.</div>'; return; }
+  var L = list();
+  $('view').innerHTML = '<div class="card" style="padding:6px 8px"><table class="team"><thead><tr><th scope="col">Person</th><th scope="col">Progress</th><th scope="col" class="hide-s">Next step</th><th scope="col" class="hide-s">Last active</th></tr></thead><tbody>' + people.map(function (p) {
+    var s = pct(p), d = doneMap(p), next = L.filter(function (t) { return !d[keyOf(t)]; })[0];
+    return '<tr><td><b>' + e(p.name || p._authorName) + '</b>' + (p.email ? '<br><span class="muted" style="font-size:.8rem">' + e(p.email) + '</span>' : '') + '</td><td><div class="meter" role="img" aria-label="' + s.p + '% done"><i style="width:' + s.p + '%"></i></div><span class="muted" style="font-size:.8rem">' + s.n + ' of ' + s.of + '</span></td>' +
+      '<td class="hide-s">' + (next ? e(next.title) : '<span class="badge ok">All done</span>') + '</td><td class="hide-s muted">' + e(BK.when(p._updated || p._created)) + '</td></tr>';
+  }).join('') + '</tbody></table></div>';
+}
+
+// One private progress document per person, created on the first tick.
+function save(patch) {
+  if (mine) { Object.assign(mine.done, patch); render(); return progress.update(mine._id, { done: Object.assign({}, mine.done) }).catch(function (err) { BK.err(err); load(); }); }
+  if (!creating) creating = progress.add({ name: me.name || '', email: me.email || '', done: patch }).then(function (doc) { doc.done = doc.done || {}; mine = doc; return doc; });
+  else creating = creating.then(function (doc) { Object.assign(doc.done, patch); return progress.update(doc._id, { done: Object.assign({}, doc.done) }).then(function () { return doc; }); });
+  return creating.then(render).catch(BK.err);
+}
+$('view').addEventListener('change', function (ev) {
+  var c = ev.target.closest('[data-k]'); if (!c) return;
+  var p = {}; p[c.dataset.k] = c.checked ? new Date().toISOString() : null;
+  save(p);
+});
+$('view').addEventListener('click', function (ev) {
+  var a = ev.target.closest('[data-act="add"]'), ed = ev.target.closest('[data-edit]');
+  if (a) openTask(null);
+  if (ed) ensureCustom().then(function () { var t = T.filter(function (x) { return x._id === ed.dataset.edit || x.key === ed.dataset.edit; })[0]; openTask(t || null); });
+});
+// The first edit copies the default checklist into the app, keeping the step keys so ticks survive.
+function ensureCustom() {
+  if (T.length) return Promise.resolve();
+  return Promise.all(DEFAULT_TASKS.map(function (t, i) { return tasks.add(Object.assign({ order: i }, t)); })).then(load);
+}
+function openTask(t) {
+  editing = t; $('d-task-h').textContent = t ? 'Edit step' : 'Add a step';
+  $('t-title').value = t ? t.title : ''; $('t-phase').value = t ? t.phase : PHASES[0]; $('t-who').value = t ? t.who || '' : ''; $('t-details').value = t ? t.details || '' : ''; $('t-link').value = t ? t.link || '' : '';
+  $('t-del').hidden = !t; $('d-task').showModal(); $('t-title').focus();
+}
+$('f-task').onsubmit = function (ev) {
+  ev.preventDefault();
+  var d = { title: $('t-title').value.trim(), phase: $('t-phase').value, who: $('t-who').value.trim(), details: $('t-details').value.trim(), link: $('t-link').value.trim() };
+  var t = editing;
+  ensureCustom().then(function () {
+    if (t && t._id) return tasks.update(t._id, d);
+    return tasks.add(Object.assign(d, { key: 's' + Date.now().toString(36), order: T.length + 1 }));
+  }).then(function () { $('d-task').close(); BK.toast('Checklist updated'); return load(); }).catch(BK.err);
+};
+$('t-del').onclick = function () {
+  if (!editing || !confirm('Delete this step for everyone?')) return;
+  tasks.remove(editing._id).then(function () { $('d-task').close(); return load(); }).catch(BK.err);
+};
+$('t-phase').innerHTML = PHASES.map(function (p) { return '<option>' + e(p) + '</option>'; }).join('');
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+$('seg').onclick = function (ev) { var b = ev.target.closest('button'); if (!b) return; view = b.dataset.v; $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render(); };
+
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 200); }
+function load() {
+  return Promise.all([tasks.all(), progress.all()]).then(function (r) {
+    T = r[0]; P = r[1];
+    var m = P.filter(function (p) { return p._author === me.id; }).sort(function (a, b) { return BK.ms(a._created) - BK.ms(b._created); })[0];
+    if (m) { m.done = m.done || {}; mine = m; }
+    render();
+  }).catch(BK.err);
+}
+BK.me().then(function (u) { me = u; editor = BK.canEdit(u); $('editor-bar').hidden = !editor; BK.banner(); load(); });
+tasks.subscribe(reload); progress.subscribe(reload);
+</script>
+</body>
+</html>

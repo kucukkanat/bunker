@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equipment check-out</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.assets{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.asset{display:flex;flex-direction:column;gap:10px;padding:16px}
+.asset .top{display:flex;gap:12px;align-items:flex-start}
+.asset .ico{width:42px;height:42px;border-radius:12px;background:var(--card2);display:grid;place-items:center;font-size:1.35rem;flex:none}
+.asset h3{margin:0;font-family:var(--sans);font-size:1rem;font-weight:600;word-break:break-word}
+.asset .sub{color:var(--muted);font-size:.83rem}
+.asset .who{display:flex;gap:8px;align-items:center;font-size:.88rem;min-height:30px}
+.asset .acts{display:flex;gap:6px;margin-top:auto;flex-wrap:wrap}
+.asset .acts .btn{flex:1}
+.asset.out{border-left:4px solid var(--moss)}.asset.late{border-left:4px solid var(--bad-t)}
+.hist{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto}
+.hist li{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.hist li:last-child{border:0}.hist .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;background:var(--moss)}.hist .in .dot{background:var(--line)}
+.hist .when{font-size:.8rem;color:var(--muted)}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Equipment check-out</h1><p>Borrow laptops, cameras and other kit, and see who has what until when.</p></div>
+    <div class="row"><button class="btn" id="export" hidden>Export CSV</button><button class="btn primary" id="add" hidden>+ Add equipment</button></div>
+  </div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="toolbar">
+    <label class="sr" for="q">Search equipment</label><input type="search" id="q" placeholder="Search by name, tag or person…">
+    <label class="sr" for="cat">Category</label><select id="cat"></select>
+    <div class="seg" role="group" aria-label="Show" id="seg"><button aria-pressed="true" data-f="all">All</button><button aria-pressed="false" data-f="free">Available</button><button aria-pressed="false" data-f="out">Checked out</button><button aria-pressed="false" data-f="mine">Mine</button></div>
+  </div>
+  <div id="list"><div class="empty" aria-busy="true">Loading equipment…</div></div>
+</div>
+
+<dialog id="d-out" aria-labelledby="d-out-h">
+  <form id="f-out">
+    <h2 id="d-out-h">Check out</h2>
+    <p class="muted" id="out-what" style="margin-top:-6px"></p>
+    <div class="field"><label for="o-who">Who is taking it?</label><input type="text" id="o-who" required maxlength="120"><div class="hint" id="o-who-hint"></div></div>
+    <div class="field"><label for="o-due">Return by</label><input type="date" id="o-due" required></div>
+    <div class="field"><label for="o-note">Note <span class="muted">(optional)</span></label><input type="text" id="o-note" maxlength="300" placeholder="e.g. Client workshop in Leeds"></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Check out</button></div>
+  </form>
+</dialog>
+
+<dialog id="d-asset" aria-labelledby="d-asset-h">
+  <form id="f-asset">
+    <h2 id="d-asset-h">Add equipment</h2>
+    <div class="field"><label for="a-name">Name</label><input type="text" id="a-name" required maxlength="120" placeholder="e.g. MacBook Pro 14″ #3"></div>
+    <div class="grid g2"><div class="field"><label for="a-cat">Category</label><select id="a-cat"></select></div>
+    <div class="field"><label for="a-tag">Asset tag or serial</label><input type="text" id="a-tag" maxlength="80" placeholder="e.g. IT-0142"></div></div>
+    <div class="field"><label for="a-loc">Where it lives</label><input type="text" id="a-loc" maxlength="120" placeholder="e.g. IT cupboard, 2nd floor"></div>
+    <div class="field"><label for="a-notes">Notes</label><textarea id="a-notes" maxlength="1000" placeholder="Charger included, PIN on the sticker…"></textarea></div>
+    <div class="dlg-acts"><button class="btn danger" type="button" id="a-del" hidden>Delete</button><span class="spacer"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="d-hist" aria-labelledby="d-hist-h">
+  <h2 id="d-hist-h">History</h2>
+  <ul class="hist" id="hist"></ul>
+  <div class="dlg-acts"><button class="btn" type="button" data-close>Close</button></div>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var CATEGORIES = [
+  { name: 'Laptop', icon: '💻' }, { name: 'Camera', icon: '📷' }, { name: 'Audio', icon: '🎙️' },
+  { name: 'Display', icon: '🖥️' }, { name: 'Phone & tablet', icon: '📱' }, { name: 'Other', icon: '🧰' }
+];
+var DEFAULT_DAYS = 7; // default loan length
+// Data rules (set by the template): "assets" is read-only for viewers, so
+// only editors add equipment; "loans" lets everyone add check-outs and returns.
+// -------------------
+
+var assets = BK.col('assets'), loans = BK.col('loans');
+var A = [], L = [], me = {}, editor = false, filter = 'all', current = null, editing = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function today() { return ymd(new Date()); }
+function nice(s) { if (!s) return ''; var p = s.split('-'); return new Date(+p[0], p[1] - 1, +p[2]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }); }
+function icon(cat) { var c = CATEGORIES.filter(function (x) { return x.name === cat; })[0]; return c ? c.icon : '🧰'; }
+function order(a, b) { return BK.ms(a._created) - BK.ms(b._created) || String(a._id).localeCompare(String(b._id)); }
+
+// The latest loan event says where an item is.
+function state(a) {
+  var ev = L.filter(function (x) { return x.asset === a._id; }).sort(order), last = ev[ev.length - 1];
+  if (!last || last.action !== 'out') return { free: true, events: ev };
+  return { free: false, who: last.who, whoId: last.whoId, due: last.due, since: last._created, note: last.note, late: last.due && last.due < today(), events: ev };
+}
+function isMine(s) { return !s.free && (s.whoId === me.id || (s.who || '').toLowerCase() === (me.name || '').toLowerCase()); }
+
+function render() {
+  var q = $('q').value.trim().toLowerCase(), cat = $('cat').value, S = {};
+  A.forEach(function (a) { S[a._id] = state(a); });
+  var out = A.filter(function (a) { return !S[a._id].free; }), late = out.filter(function (a) { return S[a._id].late; });
+  $('stats').innerHTML = [['Available', A.length - out.length], ['Checked out', out.length], ['Overdue', late.length], ['Yours', A.filter(function (a) { return isMine(S[a._id]); }).length]]
+    .map(function (s) { return '<div class="stat"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
+  var list = A.filter(function (a) {
+    var s = S[a._id];
+    if (cat && a.category !== cat) return false;
+    if (filter === 'free' && !s.free) return false;
+    if (filter === 'out' && s.free) return false;
+    if (filter === 'mine' && !isMine(s)) return false;
+    return !q || [a.name, a.tag, a.location, a.category, s.who].join(' ').toLowerCase().indexOf(q) >= 0;
+  }).sort(function (a, b) { return (!!S[b._id].late - !!S[a._id].late) || String(a.name).localeCompare(b.name); });
+  var box = $('list');
+  if (!A.length) {
+    box.innerHTML = editor
+      ? '<div class="empty"><span class="ico" aria-hidden="true">💻</span><b>No equipment yet</b>Add the laptops, cameras and other kit people can borrow.<br><button class="btn primary" data-act="add">+ Add equipment</button> <button class="btn" data-act="sample">Add a few examples</button></div>'
+      : '<div class="empty"><span class="ico" aria-hidden="true">💻</span><b>Nothing to borrow yet</b>The people who run this app haven’t added any equipment. Check back soon.</div>';
+    return;
+  }
+  if (!list.length) { box.innerHTML = '<div class="empty"><b>Nothing matches</b>Try another search or filter.</div>'; return; }
+  box.innerHTML = '<h2 class="sr">Equipment</h2><div class="assets">' + list.map(function (a) {
+    var s = S[a._id], mine = isMine(s), canReturn = mine || editor;
+    var who = s.free ? '<span class="badge ok">Available</span>' + (a.location ? '<span class="sub">' + e(a.location) + '</span>' : '')
+      : '<span class="avatar" aria-hidden="true">' + e(BK.initials(s.who)) + '</span><span><b>' + (mine ? 'You' : e(s.who)) + '</b><br><span class="' + (s.late ? 'badge bad' : 'sub') + '">' + (s.late ? 'Overdue · was due ' : 'Back by ') + e(nice(s.due)) + '</span></span>';
+    return '<article class="card asset' + (s.free ? '' : s.late ? ' late' : ' out') + '" aria-label="' + e(a.name) + '">' +
+      '<div class="top"><span class="ico" aria-hidden="true">' + icon(a.category) + '</span><div style="min-width:0;flex:1"><h3>' + e(a.name) + '</h3><div class="sub">' + e([a.category, a.tag].filter(Boolean).join(' · ')) + '</div></div>' +
+      (editor ? '<button class="btn small ghost" data-act="edit" data-id="' + e(a._id) + '" aria-label="Edit ' + e(a.name) + '">Edit</button>' : '') + '</div>' +
+      '<div class="who">' + who + '</div>' +
+      '<div class="acts">' + (s.free ? '<button class="btn primary small" data-act="out" data-id="' + e(a._id) + '">Check out</button>'
+        : canReturn ? '<button class="btn small" data-act="in" data-id="' + e(a._id) + '">Return</button>' : '') +
+      '<button class="btn small ghost" data-act="hist" data-id="' + e(a._id) + '">History' + (s.events.length ? ' (' + s.events.length + ')' : '') + '</button></div></article>';
+  }).join('') + '</div>';
+}
+
+$('list').addEventListener('click', function (ev) {
+  var b = ev.target.closest('[data-act]'); if (!b) return;
+  var a = A.filter(function (x) { return x._id === b.dataset.id; })[0], act = b.dataset.act;
+  if (act === 'add') openAsset(null);
+  if (act === 'sample') sample();
+  if (act === 'edit') openAsset(a);
+  if (act === 'out') openOut(a);
+  if (act === 'in') giveBack(a, b);
+  if (act === 'hist') openHist(a);
+});
+
+function openOut(a) {
+  current = a; $('out-what').textContent = a.name + (a.tag ? ' · ' + a.tag : '');
+  $('o-who').value = me.name || ''; $('o-who').readOnly = !editor;
+  $('o-who-hint').textContent = editor ? 'You can check it out for someone else.' : '';
+  var d = new Date(); d.setDate(d.getDate() + DEFAULT_DAYS); $('o-due').value = ymd(d); $('o-due').min = today(); $('o-note').value = '';
+  $('d-out').showModal(); $('o-due').focus();
+}
+$('f-out').onsubmit = function (ev) {
+  ev.preventDefault();
+  var a = current, btn = ev.submitter || $('f-out').querySelector('[type=submit]'); if (!a) return;
+  btn.disabled = true;
+  var who = $('o-who').value.trim();
+  // Re-check just before saving, in case someone else was quicker.
+  loans.all().then(function (l) {
+    L = l;
+    if (!state(a).free) throw new Error('Someone has just checked this out. The list is up to date now.');
+    return loans.add({ asset: a._id, assetName: a.name, action: 'out', who: who, whoId: who.toLowerCase() === (me.name || '').toLowerCase() ? me.id : null, due: $('o-due').value, note: $('o-note').value.trim() });
+  }).then(function () { $('d-out').close(); BK.toast(a.name + ' is checked out to ' + who + '.'); return load(); })
+    .catch(function (err) { BK.err(err); load(); }).then(function () { btn.disabled = false; });
+};
+function giveBack(a, btn) {
+  var s = state(a); btn.disabled = true;
+  loans.add({ asset: a._id, assetName: a.name, action: 'in', who: s.who, whoId: s.whoId, by: me.name || '' })
+    .then(function () { BK.toast('Thanks! ' + a.name + ' is back.'); return load(); }).catch(function (err) { btn.disabled = false; BK.err(err); });
+}
+function openHist(a) {
+  var ev = state(a).events.slice().reverse();
+  $('d-hist-h').textContent = 'History · ' + a.name;
+  $('hist').innerHTML = ev.length ? ev.map(function (x) {
+    var out = x.action === 'out';
+    return '<li class="' + (out ? 'out' : 'in') + '"><span class="dot" aria-hidden="true"></span><div><b>' + (out ? 'Checked out to ' + e(x.who) : 'Returned' + (x.who ? ' by ' + e(x.by && x.by !== x.who ? x.by + ' for ' + x.who : x.who) : '')) + '</b>' +
+      (out && x.due ? ' <span class="muted">· due ' + e(nice(x.due)) + '</span>' : '') + (x.note ? '<div>' + e(x.note) + '</div>' : '') +
+      '<div class="when">' + e(BK.when(x._created)) + (out && x._authorName && x._authorName !== x.who ? ' · by ' + e(x._authorName) : '') + '</div></div></li>';
+  }).join('') : '<li><span></span><div class="muted">Never checked out yet.</div></li>';
+  $('d-hist').showModal();
+}
+
+function openAsset(a) {
+  editing = a; $('d-asset-h').textContent = a ? 'Edit equipment' : 'Add equipment';
+  $('a-name').value = a ? a.name || '' : ''; $('a-cat').value = a ? a.category || 'Other' : CATEGORIES[0].name;
+  $('a-tag').value = a ? a.tag || '' : ''; $('a-loc').value = a ? a.location || '' : ''; $('a-notes').value = a ? a.notes || '' : '';
+  $('a-del').hidden = !a; $('d-asset').showModal(); $('a-name').focus();
+}
+$('f-asset').onsubmit = function (ev) {
+  ev.preventDefault();
+  var d = { name: $('a-name').value.trim(), category: $('a-cat').value, tag: $('a-tag').value.trim(), location: $('a-loc').value.trim(), notes: $('a-notes').value.trim() };
+  var p = editing ? assets.update(editing._id, d) : assets.add(d);
+  p.then(function () { $('d-asset').close(); BK.toast('Saved'); return load(); }).catch(BK.err);
+};
+$('a-del').onclick = function () {
+  if (!editing || !confirm('Delete “' + editing.name + '”? Its history stays in the data, but it disappears from the list.')) return;
+  assets.remove(editing._id).then(function () { $('d-asset').close(); return load(); }).catch(BK.err);
+};
+function sample() {
+  var list = [
+    { name: 'MacBook Air 13″ (loaner 1)', category: 'Laptop', tag: 'IT-0101', location: 'IT cupboard' },
+    { name: 'Dell XPS 15 (loaner 2)', category: 'Laptop', tag: 'IT-0102', location: 'IT cupboard' },
+    { name: 'Sony ZV-E10 camera kit', category: 'Camera', tag: 'MK-0007', location: 'Marketing shelf' },
+    { name: 'Rode wireless mic pair', category: 'Audio', tag: 'MK-0011', location: 'Marketing shelf' },
+    { name: 'Portable 15″ monitor', category: 'Display', tag: 'IT-0230', location: 'IT cupboard' },
+    { name: 'Test iPhone 15', category: 'Phone & tablet', tag: 'QA-0003', location: 'QA desk' }
+  ];
+  Promise.all(list.map(function (x) { return assets.add(x); })).then(load).catch(BK.err);
+}
+$('export').onclick = function () {
+  var rows = [['Name', 'Category', 'Tag', 'Location', 'Status', 'With', 'Due back']];
+  A.forEach(function (a) { var s = state(a); rows.push([a.name, a.category, a.tag, a.location, s.free ? 'Available' : s.late ? 'Overdue' : 'Checked out', s.who || '', s.due || '']); });
+  BK.download('equipment-' + today() + '.csv', BK.csv(rows), 'text/csv');
+};
+
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+$('seg').onclick = function (ev) {
+  var b = ev.target.closest('button'); if (!b) return; filter = b.dataset.f;
+  $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render();
+};
+$('cat').innerHTML = '<option value="">All categories</option>' + CATEGORIES.map(function (c) { return '<option>' + e(c.name) + '</option>'; }).join('');
+$('a-cat').innerHTML = CATEGORIES.map(function (c) { return '<option>' + e(c.name) + '</option>'; }).join('');
+$('q').oninput = render; $('cat').onchange = render;
+$('add').onclick = function () { openAsset(null); };
+
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 150); }
+function load() { return Promise.all([assets.all(), loans.all()]).then(function (r) { A = r[0]; L = r[1]; render(); }).catch(BK.err); }
+BK.me().then(function (u) {
+  me = u; editor = BK.canEdit(u); $('add').hidden = !editor; $('export').hidden = !editor;
+  BK.banner(); load();
+});
+assets.subscribe(reload); loans.subscribe(reload);
+</script>
+</body>
+</html>

@@ -11,6 +11,8 @@ var BK = (function () {
     mem[n] = mem[n] || [];
     return {
       list: function () { return Promise.resolve(mem[n].slice()); },
+      all: function () { return Promise.resolve(mem[n].slice()); },
+      get: function (id) { return Promise.resolve(mem[n].filter(function (d) { return d._id === id; })[0] || null); },
       add: function (d) { var doc = Object.assign({}, d, { _id: 'd' + (++seq), _author: 0, _authorName: 'You', _created: Date.now() / 1000 | 0 }); mem[n].push(doc); emit(n); return Promise.resolve(doc); },
       update: function (id, p) { mem[n] = mem[n].map(function (d) { return d._id === id ? Object.assign({}, d, p) : d; }); emit(n); return Promise.resolve(); },
       remove: function (id) { mem[n] = mem[n].filter(function (d) { return d._id !== id; }); emit(n); return Promise.resolve(); },
@@ -21,6 +23,9 @@ var BK = (function () {
     var c = sdk.db.collection(n);
     return {
       list: function (opts) { return Promise.resolve(c.list(opts)).then(list); },
+      // all(): every document (pages through big collections).
+      all: function (opts) { return c.all ? Promise.resolve(c.all(opts)) : Promise.resolve(c.list(opts)).then(list); },
+      get: function (id) { return c.get(id); },
       add: function (d) { return c.add(d); },
       update: function (id, p) { return c.update(id, p); },
       remove: function (id) { return (c.delete || c.remove).call(c, id); },
@@ -35,7 +40,29 @@ var BK = (function () {
   function errText(e) { return (e && (e.message || (e.error && e.error.message))) || String(e || 'Something went wrong'); }
   return {
     demo: !real,
-    me: function () { return real ? Promise.resolve(sdk.me()).then(function (u) { return u || {}; }) : Promise.resolve({ id: 0, name: 'You (demo)', email: 'you@example.com', groups: [] }); },
+    me: function () { return real ? Promise.resolve(sdk.me()).then(function (u) { return u || {}; }) : Promise.resolve({ id: 0, name: 'You (demo)', email: 'you@example.com', groups: [], role: 'owner', canEdit: true }); },
+    // canEdit(me): may this person manage the app (editors and owners)?
+    canEdit: function (u) { return !!(u && (u.canEdit || /^(editor|owner|admin)$/.test(u.role || ''))); },
+    // ms(t): a document timestamp (ISO string or unix seconds) in milliseconds.
+    ms: function (t) { if (!t) return 0; if (typeof t === 'number') return t < 1e12 ? t * 1000 : t; var v = Date.parse(t); return isNaN(v) ? 0 : v; },
+    // notify({to, title, body, path}): in-app notification (no-op in demo mode).
+    notify: function (o) { if (!real || !sdk.notify) return Promise.resolve(false); return Promise.resolve(sdk.notify(o)).then(function () { return true; }, function (e) { console.warn(e); return false; }); },
+    download: function (name, text, type) {
+      if (real && sdk.download) return sdk.download(name, text, type);
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' })); a.download = name;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    },
+    // csv(rows): rows (arrays of cells) as CSV text; text that could run as a spreadsheet formula is defused.
+    csv: function (rows) {
+      return rows.map(function (r) {
+        return r.map(function (v) {
+          if (typeof v === 'number') return String(v);
+          v = v == null ? '' : String(v);
+          if (/^[=+\-@\t]/.test(v)) v = "'" + v;
+          return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+        }).join(',');
+      }).join('\r\n');
+    },
     // inGroup(name): is the viewer in this group? (false in demo mode)
     inGroup: function (g) { return real && sdk.me.inGroup ? Promise.resolve(sdk.me.inGroup(g)).catch(function () { return false; }) : Promise.resolve(false); },
     col: function (n) { return real ? realCol(n) : demoCol(n); },

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lunch orders</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1100px}
+.weekbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.weekbar h2{margin:0 6px;font-size:1.1rem}
+.days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:18px}
+.day{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);min-height:0;font-weight:400}
+.day:hover{border-color:var(--moss);background:var(--card);color:var(--text)}
+.day[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--soft)}
+.day b{font-weight:600;white-space:nowrap}.day span{font-size:.78rem;color:var(--muted)}
+.day .mine{color:var(--ok-t);font-weight:600}
+.cols{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+.dishes{display:grid;gap:10px;margin:0 0 14px;border:0;padding:0}
+.dishes label.dish{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:start;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);cursor:pointer;margin:0;font-weight:400}
+.dish:has(input:checked){border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--soft)}
+.dish:has(input:disabled){cursor:default}
+.dish input{margin-top:4px}
+.dish b{font-weight:600}.dish .d{grid-column:2;font-size:.86rem;color:var(--muted)}.dish .p{font-variant-numeric:tabular-nums;font-weight:600}
+.dish .tags{grid-column:2;display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.closed{background:var(--mid-bg);color:var(--mid-t);border-radius:10px;padding:8px 12px;font-weight:500;margin-bottom:12px}
+.tally{list-style:none;margin:0 0 10px;padding:0}.tally li{padding:8px 0;border-bottom:1px solid var(--line)}.tally li:last-child{border:0}
+.tally .top{display:flex;gap:8px;align-items:baseline}.tally .n{margin-left:auto;font:600 1.1rem var(--serif);font-variant-numeric:tabular-nums}
+.tally .meter{margin-top:6px;height:6px}
+.tally .who{font-size:.8rem;color:var(--muted);margin-top:4px}
+.menurow{display:grid;grid-template-columns:1.2fr 1.4fr 90px auto auto;gap:6px;align-items:end;margin-bottom:8px}
+.menurow label{font-size:.75rem;color:var(--muted);margin-bottom:2px}
+.menurow .chk{display:flex;align-items:center;gap:4px;font-size:.85rem;min-height:44px;margin:0;color:var(--text)}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+dialog.wide{max-width:760px}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+@media(max-width:600px){.days{grid-template-columns:repeat(5,minmax(58px,1fr));overflow-x:auto}.day{padding:8px}.day b{font-size:.88rem}.day .sub{display:none}.menurow{grid-template-columns:1fr 1fr}.menurow .f-name,.menurow .f-desc{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Lunch orders</h1><p id="sub">Pick your lunch for each day. One order per person per day.</p></div>
+    <div class="row"><button class="btn" id="export" hidden>Export week (CSV)</button><button class="btn primary" id="menu-btn" hidden>Edit menu</button></div>
+  </div>
+  <div class="weekbar">
+    <button class="btn small" id="wprev" aria-label="Previous week">‹</button>
+    <h2 id="wname" aria-live="polite"></h2>
+    <button class="btn small" id="wnext" aria-label="Next week">›</button>
+    <button class="btn small" id="wthis">This week</button>
+  </div>
+  <div class="days" id="days" role="group" aria-label="Day"></div>
+  <div class="cols">
+    <section class="card" aria-labelledby="order-h"><h2 id="order-h">Your order</h2><div id="order"><div class="empty" aria-busy="true">Loading the menu…</div></div></section>
+    <section class="card" aria-labelledby="tally-h"><h2 id="tally-h">Orders so far</h2><div id="tally"></div></section>
+  </div>
+</div>
+
+<dialog id="d-menu" class="wide" aria-labelledby="d-menu-h">
+  <form id="f-menu">
+    <h2 id="d-menu-h">Menu</h2>
+    <p class="hint" style="margin-top:-6px">Everyone sees this menu and picks one dish.</p>
+    <div id="rows"></div>
+    <div class="row" style="margin-bottom:10px"><button class="btn small" type="button" id="add-row">+ Add dish</button><button class="btn small ghost" type="button" id="copy-last" hidden>Copy last week’s menu</button></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save menu</button></div>
+  </form>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var CUTOFF = '10:30';   // orders for a day close at this time on that day
+var CURRENCY = 'GBP';
+var TAGS = ['Vegetarian', 'Vegan', 'Gluten-free'];
+// Data rules (set by the template): "menu" is maintained by editors (the
+// organisers); "orders" lets everyone place and change their own order.
+// -------------------
+
+var menu = BK.col('menu'), orders = BK.col('orders');
+var MENU = [], ORD = [], me = {}, editor = false;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function parse(s) { var p = s.split('-'); return new Date(+p[0], p[1] - 1, +p[2]); }
+function monday(d) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate()); var w = (d.getDay() + 6) % 7; d.setDate(d.getDate() - w); return d; }
+function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
+function money(n) { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: CURRENCY }).format(n); } catch (x) { return n; } }
+function closed(date) { var c = CUTOFF.split(':'), t = parse(date); t.setHours(+c[0], +c[1], 0, 0); return Date.now() >= t.getTime(); }
+function cutoffLabel() { var c = CUTOFF.split(':'); return new Date(2000, 0, 1, +c[0], +c[1]).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+var now = new Date(), start = ymd(monday(now));
+if (now.getDay() === 6 || now.getDay() === 0) start = addDays(start, 7);
+var day = now.getDay() >= 1 && now.getDay() <= 5 && !closed(ymd(now)) ? ymd(now) : start;
+if (day < ymd(now)) { for (var i = 0; i < 5; i++) { var c = addDays(start, i); if (c >= ymd(now) && !closed(c)) { day = c; break; } } }
+function menuFor(d) { return MENU.filter(function (m) { return m.date === d; }).sort(function (a, b) { return BK.ms(b._updated) - BK.ms(a._updated); })[0]; }
+function ordersFor(d) { return ORD.filter(function (o) { return o.date === d; }); }
+function myOrder(d) { return ORD.filter(function (o) { return o.date === d && o._author === me.id; })[0]; }
+
+function render() {
+  $('sub').textContent = 'Pick your lunch for each day. Orders for a day close at ' + cutoffLabel() + ' that day.';
+  var end = parse(addDays(start, 4));
+  $('wname').textContent = 'Week of ' + parse(start).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  $('days').innerHTML = [0, 1, 2, 3, 4].map(function (i) {
+    var d = addDays(start, i), m = menuFor(d), mine = myOrder(d), n = ordersFor(d).length;
+    return '<button class="day" data-d="' + d + '" aria-pressed="' + (d === day) + '"><b>' + e(parse(d).toLocaleDateString(undefined, { weekday: 'short' })) + ' ' + parse(d).getDate() + '</b>' +
+      '<span class="' + (mine ? 'mine' : 'sub') + '">' + (mine ? '✓ Ordered' : !m ? 'No menu' : closed(d) ? 'Closed' : 'Open') + '</span><span class="sub">' + n + ' order' + (n === 1 ? '' : 's') + '</span></button>';
+  }).join('');
+  void end;
+  renderOrder(); renderTally();
+}
+function renderOrder() {
+  var m = menuFor(day), mine = myOrder(day), isClosed = closed(day), box = $('order');
+  $('order-h').textContent = 'Your order · ' + parse(day).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  if (!m || !(m.dishes || []).length) {
+    box.innerHTML = '<div class="empty"><span class="ico" aria-hidden="true">🥪</span><b>No menu for this day yet</b>' + (editor ? 'Add the dishes people can choose from.<br><button class="btn primary" data-act="menu">Set the menu</button>' : 'Check back later: the organisers will add it.') + '</div>';
+    return;
+  }
+  var h = isClosed ? '<p class="closed">Orders for this day are closed.' + (mine ? ' You ordered <b>' + e(mine.dish) + '</b>.' : '') + '</p>' : '';
+  h += '<form id="f-order"><fieldset class="dishes"><legend class="sr">Choose a dish</legend>' + m.dishes.map(function (d, i) {
+    var id = 'dish' + i;
+    return '<label class="dish" for="' + id + '"><input type="radio" name="dish" id="' + id + '" value="' + e(d.name) + '"' + (mine && mine.dish === d.name ? ' checked' : '') + (isClosed ? ' disabled' : '') + '>' +
+      '<b>' + e(d.name) + '</b><span class="p">' + (d.price ? e(money(d.price)) : '') + '</span>' + (d.desc ? '<span class="d">' + e(d.desc) + '</span>' : '') +
+      ((d.tags || []).length ? '<span class="tags">' + d.tags.map(function (t) { return '<span class="badge ok">' + e(t) + '</span>'; }).join('') + '</span>' : '') + '</label>';
+  }).join('') + '</fieldset>' +
+    '<div class="field"><label for="o-note">Note for the kitchen <span class="muted">(optional)</span></label><input type="text" id="o-note" maxlength="140" placeholder="e.g. No onions, please" value="' + e(mine ? mine.note || '' : '') + '"' + (isClosed ? ' disabled' : '') + '></div>' +
+    (isClosed ? '' : '<div class="row">' + (mine ? '<button class="btn danger" type="button" data-act="cancel">Cancel my order</button>' : '') + '<span class="spacer"></span><button class="btn primary" type="submit">' + (mine ? 'Update order' : 'Place order') + '</button></div>') + '</form>';
+  box.innerHTML = h;
+  var f = $('f-order'); if (f) f.onsubmit = place;
+}
+function renderTally() {
+  var m = menuFor(day), list = ordersFor(day), box = $('tally');
+  if (!list.length) { box.innerHTML = '<p class="muted" style="margin:0">' + (m ? 'No orders for this day yet.' : 'Nothing to count yet.') + '</p>'; return; }
+  var dishes = ((m && m.dishes) || []).map(function (d) { return d.name; });
+  list.forEach(function (o) { if (dishes.indexOf(o.dish) < 0) dishes.push(o.dish); });
+  var total = 0, priced = (m && m.dishes) || [];
+  box.innerHTML = '<ul class="tally">' + dishes.map(function (name) {
+    var os = list.filter(function (o) { return o.dish === name; }), p = priced.filter(function (d) { return d.name === name; })[0];
+    if (p && p.price) total += p.price * os.length;
+    return '<li><div class="top"><b>' + e(name) + '</b><span class="n">' + os.length + '</span></div><div class="meter" aria-hidden="true"><i style="width:' + Math.round(os.length / list.length * 100) + '%"></i></div>' +
+      (os.length ? '<div class="who">' + os.map(function (o) { return e((o._author === me.id ? 'You' : o.who || o._authorName) + (o.note ? ' (' + o.note + ')' : '')); }).join(', ') + '</div>' : '') + '</li>';
+  }).join('') + '</ul><p class="muted" style="margin:0"><b>' + list.length + '</b> order' + (list.length === 1 ? '' : 's') + (total ? ' · about ' + e(money(total)) : '') + '</p>';
+}
+
+function place(ev) {
+  ev.preventDefault();
+  var pick = $('f-order').querySelector('input[name=dish]:checked'); if (!pick) { BK.toast('Choose a dish first.'); return; }
+  if (closed(day)) { BK.toast('Sorry, orders for this day just closed.'); return render(); }
+  var d = { date: day, dish: pick.value, note: $('o-note').value.trim(), who: me.name || '' };
+  // Look again just before saving, so one person never has two orders for a day.
+  orders.all({ where: { date: day, _author: 'me' } }).then(function (l) {
+    var mine = l.filter(function (o) { return o.date === day && o._author === me.id; })[0];
+    return mine ? orders.update(mine._id, d) : orders.add(d);
+  }).then(function () { BK.toast('Order saved: ' + d.dish); return load(); }).catch(BK.err);
+}
+$('order').addEventListener('click', function (ev) {
+  var a = ev.target.closest('[data-act]'); if (!a) return;
+  if (a.dataset.act === 'menu') openMenu();
+  if (a.dataset.act === 'cancel') { var m = myOrder(day); if (m && confirm('Cancel your order for this day?')) orders.remove(m._id).then(load).catch(BK.err); }
+});
+$('days').onclick = function (ev) { var b = ev.target.closest('[data-d]'); if (!b) return; day = b.dataset.d; render(); };
+function week(n) { start = addDays(start, 7 * n); day = start; load(); }
+$('wprev').onclick = function () { week(-1); }; $('wnext').onclick = function () { week(1); };
+$('wthis').onclick = function () { var s = ymd(monday(new Date())); week(Math.round((parse(s) - parse(start)) / (7 * 864e5))); };
+
+function row(d) {
+  var r = document.createElement('div'); r.className = 'menurow'; var u = 'm' + Math.random().toString(36).slice(2, 7);
+  r.innerHTML = '<div class="f-name"><label for="' + u + 'n">Dish</label><input type="text" id="' + u + 'n" data-f="name" maxlength="80" value="' + e(d.name || '') + '" placeholder="e.g. Chicken katsu curry"></div>' +
+    '<div class="f-desc"><label for="' + u + 'd">Description</label><input type="text" id="' + u + 'd" data-f="desc" maxlength="160" value="' + e(d.desc || '') + '"></div>' +
+    '<div><label for="' + u + 'p">Price</label><input type="number" min="0" step="0.01" id="' + u + 'p" data-f="price" value="' + e(d.price == null ? '' : d.price) + '"></div>' +
+    '<label class="chk"><input type="checkbox" data-f="veg"' + ((d.tags || []).indexOf('Vegetarian') >= 0 ? ' checked' : '') + '> Veggie</label>' +
+    '<button class="btn small ghost" type="button" aria-label="Remove dish" data-rm>✕</button>';
+  r.querySelector('[data-rm]').onclick = function () { r.remove(); };
+  r._tags = (d.tags || []).filter(function (t) { return t !== 'Vegetarian'; });
+  return r;
+}
+function openMenu() {
+  var m = menuFor(day), rows = $('rows'); rows.innerHTML = '';
+  $('d-menu-h').textContent = 'Menu for ' + parse(day).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  ((m && m.dishes && m.dishes.length) ? m.dishes : [{}, {}, {}]).forEach(function (d) { rows.appendChild(row(d)); });
+  $('copy-last').hidden = !menuFor(addDays(day, -7));
+  $('d-menu').showModal(); var f = rows.querySelector('input'); if (f) f.focus();
+}
+$('add-row').onclick = function () { var r = row({}); $('rows').appendChild(r); r.querySelector('input').focus(); };
+$('copy-last').onclick = function () { var m = menuFor(addDays(day, -7)); $('rows').innerHTML = ''; m.dishes.forEach(function (d) { $('rows').appendChild(row(d)); }); };
+$('f-menu').onsubmit = function (ev) {
+  ev.preventDefault();
+  var dishes = Array.prototype.map.call($('rows').children, function (r) {
+    var g = function (f) { return r.querySelector('[data-f=' + f + ']'); };
+    var tags = r._tags.slice(); if (g('veg').checked) tags.unshift('Vegetarian');
+    return { name: g('name').value.trim(), desc: g('desc').value.trim(), price: g('price').value === '' ? null : +g('price').value, tags: tags };
+  }).filter(function (d) { return d.name; });
+  var m = menuFor(day), d = { date: day, dishes: dishes };
+  (m ? menu.update(m._id, d) : menu.add(d)).then(function () { $('d-menu').close(); BK.toast('Menu saved'); return load(); }).catch(BK.err);
+};
+$('menu-btn').onclick = openMenu;
+$('export').onclick = function () {
+  var rows = [['Date', 'Day', 'Name', 'Dish', 'Note']];
+  ORD.filter(function (o) { return o.date >= start && o.date <= addDays(start, 4); }).sort(function (a, b) { return a.date.localeCompare(b.date) || String(a.dish).localeCompare(b.dish); })
+    .forEach(function (o) { rows.push([o.date, parse(o.date).toLocaleDateString(undefined, { weekday: 'long' }), o.who || o._authorName, o.dish, o.note]); });
+  BK.download('lunch-orders-' + start + '.csv', BK.csv(rows), 'text/csv');
+};
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 150); }
+function load() {
+  var range = { date: { $gte: addDays(start, -7), $lte: addDays(start, 4) } };
+  return Promise.all([menu.all({ where: range }), orders.all({ where: { date: { $gte: start, $lte: addDays(start, 4) } } })]).then(function (r) {
+    MENU = r[0]; ORD = r[1];
+    var a = document.activeElement; if (a && a.id === 'o-note') { renderTally(); return; }
+    render();
+  }).catch(BK.err);
+}
+BK.me().then(function (u) { me = u; editor = BK.canEdit(u); $('menu-btn').hidden = !editor; $('export').hidden = !editor; BK.banner(); load(); });
+menu.subscribe(reload); orders.subscribe(reload);
+setInterval(function () { var a = document.activeElement; if (!(a && a.closest && a.closest('#f-order'))) render(); }, 60000);
+</script>
+</body>
+</html>

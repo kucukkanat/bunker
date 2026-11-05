@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goals & OKRs</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1000px}
+.qbar{display:flex;align-items:center;gap:6px}
+.qbar h2{margin:0;min-width:7.5ch;text-align:center;font-size:1.15rem}
+.qtime{font-size:.82rem;color:var(--muted);margin:-8px 0 18px}
+.objs{display:flex;flex-direction:column;gap:14px}
+.obj{padding:0;overflow:hidden}
+.obj>header{display:grid;grid-template-columns:1fr auto;gap:6px 14px;padding:16px 20px 12px;align-items:start}
+.obj h3{margin:0;font-size:1.15rem;word-break:break-word}
+.obj .who{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--muted);flex-wrap:wrap}
+.obj .who .avatar{width:24px;height:24px;font-size:.66rem}
+.obj .big{grid-column:1/-1;display:flex;align-items:center;gap:12px}.obj .big .meter{flex:1;height:10px}.obj .big b{font:600 1.05rem var(--serif);min-width:3.2em;text-align:right}
+.obj .desc{grid-column:1/-1;margin:0;color:var(--muted);font-size:.92rem}
+.krs{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.kr{display:grid;grid-template-columns:1fr minmax(120px,200px) auto;gap:4px 16px;padding:12px 20px;border-bottom:1px solid var(--line);align-items:center}
+.kr:last-child{border:0}
+.kr .t{font-weight:500;word-break:break-word}.kr .v{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kr .last{grid-column:1/-1;font-size:.8rem;color:var(--muted)}
+.obj .acts{display:flex;gap:4px}
+.status{white-space:nowrap}
+.krrow{display:grid;grid-template-columns:1fr 80px 80px 80px auto;gap:6px;align-items:end;margin-bottom:8px}
+.krrow label{font-size:.75rem;color:var(--muted);margin-bottom:2px}
+.krrow .btn{min-height:44px}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+dialog.wide{max-width:680px}
+@media(max-width:600px){.kr{grid-template-columns:1fr auto;padding:12px 14px}.kr .meter{grid-column:1/-1;grid-row:2}.obj>header{padding:14px}.krrow{grid-template-columns:1fr 1fr 1fr auto}.krrow .f-title{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Goals & OKRs</h1><p>What we’re aiming for this quarter, who owns it, and how it’s going.</p></div>
+    <div class="row">
+      <div class="qbar"><button class="btn small" id="qprev" aria-label="Previous quarter">‹</button><h2 id="qname" aria-live="polite"></h2><button class="btn small" id="qnext" aria-label="Next quarter">›</button></div>
+      <button class="btn primary" id="add">+ New objective</button>
+    </div>
+  </div>
+  <p class="qtime" id="qtime"></p>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Show" id="seg"><button aria-pressed="true" data-f="all">All</button><button aria-pressed="false" data-f="mine">Mine</button><button aria-pressed="false" data-f="risk">Needs attention</button></div>
+    <label class="sr" for="team">Team</label><select id="team"></select>
+  </div>
+  <div id="list"><div class="empty" aria-busy="true">Loading goals…</div></div>
+</div>
+
+<dialog id="d-obj" class="wide" aria-labelledby="d-obj-h">
+  <form id="f-obj">
+    <h2 id="d-obj-h">New objective</h2>
+    <div class="field"><label for="o-title">Objective</label><input type="text" id="o-title" required maxlength="200" placeholder="e.g. Make onboarding delightful for new customers"><div class="hint">Short and inspiring: where do you want to be by the end of the quarter?</div></div>
+    <div class="grid g2"><div class="field"><label for="o-owner">Owner</label><input type="text" id="o-owner" maxlength="100" required></div>
+    <div class="field"><label for="o-team">Team</label><input type="text" id="o-team" maxlength="60" list="teams" placeholder="e.g. Customer success"><datalist id="teams"></datalist></div></div>
+    <div class="field"><label for="o-desc">Why it matters <span class="muted">(optional)</span></label><textarea id="o-desc" maxlength="1000" style="min-height:60px"></textarea></div>
+    <h3>Key results</h3><p class="hint" style="margin-top:-2px">Measurable outcomes that show you got there. Two to four is plenty.</p>
+    <div id="krs"></div>
+    <button class="btn small" type="button" id="add-kr">+ Add key result</button>
+    <div class="dlg-acts"><button class="btn danger" type="button" id="o-del" hidden>Delete</button><span class="spacer"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="d-ci" aria-labelledby="d-ci-h">
+  <form id="f-ci">
+    <h2 id="d-ci-h">Check in</h2>
+    <p class="muted" id="ci-what" style="margin-top:-6px"></p>
+    <div class="field"><label for="ci-val">Where is it now?</label><input type="number" id="ci-val" step="any" required><div class="hint" id="ci-hint"></div></div>
+    <div class="field"><label for="ci-note">What changed? <span class="muted">(optional)</span></label><textarea id="ci-note" maxlength="600" style="min-height:60px"></textarea></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save check-in</button></div>
+  </form>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+// Data rule (set by the template): "objectives" is open, so anyone with
+// access can check in on any key result.
+// -------------------
+
+var objectives = BK.col('objectives');
+var O = [], me = {}, filter = 'all', editing = null, ci = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function qOf(d) { return d.getFullYear() + '-Q' + (Math.floor(d.getMonth() / 3) + 1); }
+var quarter = qOf(new Date());
+function qRange(q) { var y = +q.slice(0, 4), n = +q.slice(6); return [new Date(y, (n - 1) * 3, 1), new Date(y, n * 3, 1)]; }
+function qShift(q, by) { var r = qRange(q)[0]; r.setMonth(r.getMonth() + by * 3); return qOf(r); }
+function qLabel(q) { return 'Q' + q.slice(6) + ' ' + q.slice(0, 4); }
+function elapsed(q) { var r = qRange(q), t = Date.now(); return Math.min(1, Math.max(0, (t - r[0]) / (r[1] - r[0]))); }
+function krPct(k) { var s = +k.start || 0, t = +k.target, c = k.current == null ? s : +k.current; if (t === s) return c >= t ? 1 : 0; return Math.min(1, Math.max(0, (c - s) / (t - s))); }
+function objPct(o) { var k = o.krs || []; return k.length ? k.reduce(function (a, x) { return a + krPct(x); }, 0) / k.length : 0; }
+function withUnit(n, u) { return num(n) + (!u ? '' : u === '%' ? '%' : ' ' + u); }
+function num(n) { return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(+n || 0); }
+// On track when progress keeps pace with the quarter.
+function health(o) {
+  var p = objPct(o), x = elapsed(o.quarter);
+  if (p >= 1) return { c: 'ok', t: 'Done' };
+  if (o.quarter > qOf(new Date())) return { c: '', t: 'Not started' };
+  if (p >= x - 0.1) return { c: 'ok', t: 'On track' };
+  if (p >= x - 0.3) return { c: 'mid', t: 'At risk' };
+  return { c: 'bad', t: 'Off track' };
+}
+function teams() { var s = {}; O.forEach(function (o) { if (o.team) s[o.team] = 1; }); return Object.keys(s).sort(); }
+
+function render() {
+  $('qname').textContent = qLabel(quarter);
+  var r = qRange(quarter), x = elapsed(quarter), end = new Date(r[1] - 864e5);
+  $('qtime').textContent = r[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' – ' + end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    (x > 0 && x < 1 ? ' · ' + Math.round(x * 100) + '% of the quarter gone' : x >= 1 ? ' · finished' : ' · not started yet');
+  var tsel = $('team'), cur = tsel.value, ts = teams();
+  tsel.innerHTML = '<option value="">All teams</option>' + ts.map(function (t) { return '<option' + (t === cur ? ' selected' : '') + '>' + e(t) + '</option>'; }).join(''); tsel.hidden = !ts.length;
+  $('teams').innerHTML = ts.map(function (t) { return '<option value="' + e(t) + '">'; }).join('');
+  var inQ = O.filter(function (o) { return o.quarter === quarter; });
+  var avg = inQ.length ? inQ.reduce(function (a, o) { return a + objPct(o); }, 0) / inQ.length : 0;
+  var counts = { ok: 0, mid: 0, bad: 0 }; inQ.forEach(function (o) { var h = health(o); if (counts[h.c] != null) counts[h.c]++; });
+  $('stats').innerHTML = [['Objectives', inQ.length], ['Average progress', inQ.length ? Math.round(avg * 100) + '%' : '–'], ['On track or done', counts.ok], ['At risk or off track', counts.mid + counts.bad]]
+    .map(function (s) { return '<div class="stat"><b>' + e(s[1]) + '</b><span>' + s[0] + '</span></div>'; }).join('');
+  var list = inQ.filter(function (o) {
+    if (tsel.value && o.team !== tsel.value) return false;
+    if (filter === 'mine' && (o.owner || '').toLowerCase() !== (me.name || '').toLowerCase() && !(o.krs || []).some(function (k) { return (k.owner || '').toLowerCase() === (me.name || '').toLowerCase(); })) return false;
+    if (filter === 'risk' && /^(ok|)$/.test(health(o).c)) return false;
+    return true;
+  }).sort(function (a, b) { return (a.team || '').localeCompare(b.team || '') || objPct(a) - objPct(b); });
+  var box = $('list');
+  if (!inQ.length) {
+    var prev = O.filter(function (o) { return o.quarter === qShift(quarter, -1) && objPct(o) < 1; }).length;
+    box.innerHTML = '<div class="empty"><span class="ico" aria-hidden="true">🎯</span><b>No goals for ' + e(qLabel(quarter)) + ' yet</b>Start with one objective and two or three key results you can measure.<br>' +
+      '<button class="btn primary" data-act="add">+ New objective</button>' + (prev ? ' <button class="btn" data-act="carry">Carry over ' + prev + ' unfinished from ' + e(qLabel(qShift(quarter, -1))) + '</button>' : ' <button class="btn" data-act="sample">Add an example</button>') + '</div>';
+    return;
+  }
+  if (!list.length) { box.innerHTML = '<div class="empty"><b>Nothing here</b>' + (filter === 'risk' ? 'Everything is on track. 👏' : 'Try another filter.') + '</div>'; return; }
+  box.innerHTML = '<div class="objs">' + list.map(function (o) {
+    var p = Math.round(objPct(o) * 100), h = health(o);
+    return '<article class="card obj" aria-label="' + e(o.title) + '"><header><h3>' + e(o.title) + '</h3><span class="badge status ' + h.c + '">' + h.t + '</span>' +
+      '<div class="who"><span class="avatar" aria-hidden="true">' + e(BK.initials(o.owner)) + '</span><span>' + e(o.owner || 'No owner') + '</span>' + (o.team ? '<span class="badge">' + e(o.team) + '</span>' : '') + '<span class="spacer"></span>' +
+      '<span class="acts"><button class="btn small ghost" data-act="edit" data-id="' + e(o._id) + '" aria-label="Edit ' + e(o.title) + '">Edit</button></span></div>' +
+      '<div class="big"><div class="meter" role="progressbar" aria-label="Objective progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + p + '"><i style="width:' + p + '%"></i></div><b>' + p + '%</b></div>' +
+      (o.description ? '<p class="desc">' + e(o.description) + '</p>' : '') + '</header>' +
+      '<ul class="krs">' + (o.krs || []).map(function (k, i) {
+        var kp = Math.round(krPct(k) * 100), last = (o.checkins || []).filter(function (c) { return c.kr === k.id; }).slice(-1)[0];
+        return '<li class="kr"><div><div class="t">' + e(k.title) + '</div><div class="v">' + e(withUnit(k.current == null ? k.start : k.current, k.unit)) + ' now · target ' + e(withUnit(k.target, k.unit)) + ' · ' + kp + '%</div></div>' +
+          '<div class="meter" role="progressbar" aria-label="' + e(k.title) + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + kp + '"><i style="width:' + kp + '%"></i></div>' +
+          '<button class="btn small" data-act="ci" data-id="' + e(o._id) + '" data-k="' + i + '" aria-label="Check in on ' + e(k.title) + '">Check in</button>' +
+          (last ? '<div class="last">' + e(last.by || '') + ', ' + e(BK.when(last.at)) + ': ' + num(last.from) + ' → ' + num(last.value) + (last.note ? ' · “' + e(last.note) + '”' : '') + '</div>' : '') + '</li>';
+      }).join('') + '</ul></article>';
+  }).join('') + '</div>';
+}
+
+$('list').addEventListener('click', function (ev) {
+  var b = ev.target.closest('[data-act]'); if (!b) return;
+  var o = O.filter(function (x) { return x._id === b.dataset.id; })[0];
+  if (b.dataset.act === 'add') openObj(null);
+  if (b.dataset.act === 'sample') sample();
+  if (b.dataset.act === 'carry') carry();
+  if (b.dataset.act === 'edit') openObj(o);
+  if (b.dataset.act === 'ci') openCi(o, +b.dataset.k);
+});
+
+function krRow(k) {
+  var d = document.createElement('div'); d.className = 'krrow'; d.dataset.id = k.id || ('k' + Math.random().toString(36).slice(2, 8));
+  var u = 'kr' + Math.random().toString(36).slice(2, 7);
+  d.innerHTML = '<div class="f-title"><label for="' + u + 't">Key result</label><input type="text" id="' + u + 't" data-f="title" required maxlength="200" placeholder="e.g. Reply to tickets within 4 hours" value="' + e(k.title || '') + '"></div>' +
+    '<div><label for="' + u + 's">Start</label><input type="number" step="any" id="' + u + 's" data-f="start" value="' + e(k.start == null ? 0 : k.start) + '"></div>' +
+    '<div><label for="' + u + 'g">Target</label><input type="number" step="any" id="' + u + 'g" data-f="target" required value="' + e(k.target == null ? 100 : k.target) + '"></div>' +
+    '<div><label for="' + u + 'u">Unit</label><input type="text" id="' + u + 'u" data-f="unit" maxlength="20" placeholder="%" value="' + e(k.unit || '') + '"></div>' +
+    '<button class="btn small ghost" type="button" aria-label="Remove this key result" data-rm>✕</button>';
+  d.querySelector('[data-rm]').onclick = function () { d.remove(); };
+  d._cur = k.current; return d;
+}
+function openObj(o) {
+  editing = o; $('d-obj-h').textContent = o ? 'Edit objective' : 'New objective';
+  $('o-title').value = o ? o.title : ''; $('o-owner').value = o ? o.owner || '' : me.name || ''; $('o-team').value = o ? o.team || '' : ''; $('o-desc').value = o ? o.description || '' : '';
+  var box = $('krs'); box.innerHTML = '';
+  (o && o.krs && o.krs.length ? o.krs : [{}, {}]).forEach(function (k) { box.appendChild(krRow(k)); });
+  $('o-del').hidden = !o; $('d-obj').showModal(); $('o-title').focus();
+}
+$('add-kr').onclick = function () { var r = krRow({}); $('krs').appendChild(r); r.querySelector('input').focus(); };
+$('f-obj').onsubmit = function (ev) {
+  ev.preventDefault();
+  var krs = Array.prototype.map.call($('krs').children, function (row) {
+    var g = function (f) { return row.querySelector('[data-f=' + f + ']').value; }, prev = editing && (editing.krs || []).filter(function (k) { return k.id === row.dataset.id; })[0];
+    return { id: row.dataset.id, title: g('title').trim(), start: +g('start') || 0, target: +g('target'), unit: g('unit').trim(), current: prev && prev.current != null ? prev.current : +g('start') || 0 };
+  }).filter(function (k) { return k.title; });
+  var d = { title: $('o-title').value.trim(), owner: $('o-owner').value.trim(), team: $('o-team').value.trim(), description: $('o-desc').value.trim(), krs: krs };
+  var p = editing ? objectives.update(editing._id, d) : objectives.add(Object.assign(d, { quarter: quarter, checkins: [] }));
+  p.then(function () { $('d-obj').close(); BK.toast('Saved'); return load(); }).catch(BK.err);
+};
+$('o-del').onclick = function () {
+  if (!editing || !confirm('Delete “' + editing.title + '” and its key results?')) return;
+  objectives.remove(editing._id).then(function () { $('d-obj').close(); return load(); }).catch(BK.err);
+};
+function openCi(o, i) {
+  var k = o.krs[i]; ci = { o: o, i: i };
+  $('ci-what').textContent = k.title; $('ci-val').value = k.current == null ? k.start : k.current;
+  $('ci-hint').textContent = 'Started at ' + withUnit(k.start, k.unit) + ', target ' + withUnit(k.target, k.unit) + '.'; $('ci-note').value = '';
+  $('d-ci').showModal(); $('ci-val').select();
+}
+$('f-ci').onsubmit = function (ev) {
+  ev.preventDefault(); if (!ci) return;
+  var val = +$('ci-val').value, note = $('ci-note').value.trim(), id = ci.o._id, i = ci.i;
+  // Start from the latest saved version so parallel check-ins don't clash.
+  objectives.get(id).then(function (o) {
+    if (!o) throw new Error('This objective was deleted.');
+    var krs = (o.krs || []).slice(), k = Object.assign({}, krs[i]), from = k.current == null ? k.start : k.current;
+    k.current = val; krs[i] = k;
+    var cis = (o.checkins || []).concat([{ kr: k.id, value: val, from: from, note: note, by: me.name || '', at: new Date().toISOString() }]).slice(-200);
+    return objectives.update(id, { krs: krs, checkins: cis });
+  }).then(function () { $('d-ci').close(); BK.toast('Check-in saved'); return load(); }).catch(BK.err);
+};
+function sample() {
+  objectives.add({ quarter: quarter, title: 'Make our customers’ first week effortless', owner: me.name || 'You', team: 'Customer success', description: 'New customers who get value in week one stay with us.',
+    krs: [{ id: 'k1', title: 'Customers live within 5 days of signing', start: 40, target: 80, current: 55, unit: '%' }, { id: 'k2', title: 'Median first reply time', start: 9, target: 4, current: 6, unit: 'hours' }, { id: 'k3', title: 'Publish the getting-started guides', start: 0, target: 6, current: 2, unit: 'guides' }], checkins: [] }).then(load).catch(BK.err);
+}
+function carry() {
+  var prev = O.filter(function (o) { return o.quarter === qShift(quarter, -1) && objPct(o) < 1; });
+  Promise.all(prev.map(function (o) { return objectives.add({ quarter: quarter, title: o.title, owner: o.owner, team: o.team, description: o.description, krs: (o.krs || []).map(function (k) { return Object.assign({}, k); }), checkins: [] }); }))
+    .then(function () { BK.toast('Carried over ' + prev.length); return load(); }).catch(BK.err);
+}
+
+$('qprev').onclick = function () { quarter = qShift(quarter, -1); render(); };
+$('qnext').onclick = function () { quarter = qShift(quarter, 1); render(); };
+$('add').onclick = function () { openObj(null); };
+$('team').onchange = render;
+$('seg').onclick = function (ev) { var b = ev.target.closest('button'); if (!b) return; filter = b.dataset.f; $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render(); };
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 150); }
+function load() { return objectives.all().then(function (l) { O = l; render(); }).catch(BK.err); }
+BK.me().then(function (u) { me = u; BK.banner(); load(); });
+objectives.subscribe(reload);
+</script>
+</body>
+</html>

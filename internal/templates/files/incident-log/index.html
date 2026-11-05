@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incident & issue log</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1200px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
+.ilist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.inc{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:start;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--text);font:inherit;min-height:0;cursor:pointer}
+.inc:hover{border-color:var(--moss);background:var(--card);color:var(--text)}
+.inc[aria-current=true]{border-color:var(--accent);box-shadow:0 0 0 2px var(--soft)}
+.inc .t{font-weight:600;line-height:1.3;word-break:break-word}.inc .m{grid-column:2/-1;font-size:.8rem;color:var(--muted);font-weight:400}
+.sev{font-weight:700;font-size:.72rem;padding:3px 7px;border-radius:7px;letter-spacing:.02em;white-space:nowrap}
+.sev1{background:#A8462A;color:#fff}.sev2{background:var(--bad-bg);color:var(--bad-t)}.sev3{background:var(--mid-bg);color:var(--mid-t)}.sev4{background:var(--card2);color:var(--muted)}
+.detail{position:sticky;top:12px}
+.detail h2{font-size:1.4rem;margin:6px 0 8px;word-break:break-word}
+.facts{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.88rem;color:var(--muted);margin:8px 0 14px}.facts b{color:var(--text);font-weight:600}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.tl{list-style:none;margin:14px 0 0;padding:0;border-left:2px solid var(--line);margin-left:6px}
+.tl li{position:relative;padding:0 0 16px 18px}
+.tl li::before{content:"";position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--card);border:2px solid var(--moss)}
+.tl li.status::before{background:var(--moss)}.tl li.opened::before{background:var(--bad-t);border-color:var(--bad-t)}.tl li.resolved::before{background:var(--ok-t);border-color:var(--ok-t)}
+.tl .when{font-size:.78rem;color:var(--muted)}.tl .txt{white-space:pre-wrap;word-break:break-word}
+.desc{white-space:pre-wrap;background:var(--card2);border-radius:10px;padding:10px 12px;margin:0 0 6px}
+.sevpick{display:grid;gap:8px;border:0;padding:0;margin:0 0 14px}
+.sevpick legend{font-weight:500;font-size:.9rem;margin-bottom:4px}
+.sevpick label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:400;cursor:pointer;margin:0}
+.sevpick label:has(input:checked){border-color:var(--accent);background:var(--soft)}
+.sevpick input{margin-top:4px}
+.dlg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.back{display:none}
+@media(max-width:820px){.layout{grid-template-columns:1fr}.detail{position:static}.layout.has-detail .side{display:none}.layout:not(.has-detail) .detail{display:none}.back{display:inline-flex}}
+</style>
+</head>
+<body>
+<div class="wrap" role="main">
+  <div class="hero">
+    <div><h1>Incident & issue log</h1><p>Report what’s broken, follow the fix live, and keep a record to learn from.</p></div>
+    <button class="btn primary" id="report">Report an issue</button>
+  </div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="layout" id="layout">
+    <section class="side" aria-label="Incidents">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Show" id="seg"><button aria-pressed="true" data-f="open">Open</button><button aria-pressed="false" data-f="resolved">Resolved</button><button aria-pressed="false" data-f="all">All</button></div>
+        <label class="sr" for="q">Search incidents</label><input type="search" id="q" placeholder="Search…">
+      </div>
+      <ul class="ilist" id="list"><li class="empty" aria-busy="true">Loading…</li></ul>
+    </section>
+    <section class="detail card" id="detail" aria-live="polite"></section>
+  </div>
+</div>
+
+<dialog id="d-new" aria-labelledby="d-new-h">
+  <form id="f-new">
+    <h2 id="d-new-h">Report an issue</h2>
+    <div class="field"><label for="n-title">What’s wrong?</label><input type="text" id="n-title" required maxlength="160" placeholder="e.g. Checkout page shows an error"></div>
+    <fieldset class="sevpick" id="n-sev"><legend>How bad is it?</legend></fieldset>
+    <div class="field"><label for="n-sys">What’s affected? <span class="muted">(optional)</span></label><input type="text" id="n-sys" maxlength="120" placeholder="e.g. Website, VPN, payroll"></div>
+    <div class="field"><label for="n-desc">Details <span class="muted">(optional)</span></label><textarea id="n-desc" maxlength="4000" placeholder="What happened, since when, who is affected, error messages…"></textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="n-alert"> <span>Alert the <b id="oncall-name"></b> group now</span></label>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Report</button></div>
+  </form>
+</dialog>
+<dialog id="d-res" aria-labelledby="d-res-h">
+  <form id="f-res">
+    <h2 id="d-res-h">Mark as resolved</h2>
+    <div class="field"><label for="r-text">What fixed it? <span class="muted">(optional, saved in the timeline)</span></label><textarea id="r-text" maxlength="4000" placeholder="e.g. Rolled back the 10:40 deploy; payments are flowing again."></textarea></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Resolve</button></div>
+  </form>
+</dialog>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var ONCALL_GROUP = 'On-call';   // the group to alert. Share this app with it so its members get the alert.
+var ALERT_FROM = 2;             // alert automatically for this severity and worse (1 = only SEV1)
+var SEVERITIES = [
+  { n: 1, name: 'Critical', hint: 'Everyone or a key service is down. Drop everything.' },
+  { n: 2, name: 'Major', hint: 'Many people affected, or a workaround is painful.' },
+  { n: 3, name: 'Minor', hint: 'Some people affected and there’s a workaround.' },
+  { n: 4, name: 'Low', hint: 'Cosmetic or a question. Fix when there’s time.' }
+];
+var STATUSES = ['Investigating', 'Identified', 'Monitoring', 'Resolved'];
+// Data rules (set by the template): "incidents" is open so any responder can
+// change status and owner; "updates" is the timeline (people add their own).
+// -------------------
+
+var incidents = BK.col('incidents'), updates = BK.col('updates');
+var I = [], U = [], me = {}, filter = 'open', sel = null;
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+function sevOf(n) { return SEVERITIES.filter(function (s) { return s.n === +n; })[0] || SEVERITIES[2]; }
+function sevTag(n) { return '<span class="sev sev' + (+n || 3) + '">SEV' + (+n || 3) + '</span>'; }
+function ago(t) {
+  var s = Math.max(0, (Date.now() - BK.ms(t)) / 1000);
+  if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  return Math.floor(s / 86400) + ' d ago';
+}
+function dur(ms) { var m = Math.round(ms / 60000); if (m < 1) return '<1 min'; if (m < 60) return m + ' min'; var h = m / 60; return h < 48 ? h.toFixed(h < 10 ? 1 : 0) + ' h' : Math.round(h / 24) + ' d'; }
+function isOpen(i) { return i.status !== 'Resolved'; }
+function statusBadge(s) { return '<span class="badge ' + (s === 'Resolved' ? 'ok' : s === 'Monitoring' ? '' : 'mid') + '">' + e(s || 'Investigating') + '</span>'; }
+
+function render() {
+  var open = I.filter(isOpen), bad = open.filter(function (i) { return +i.severity <= 2; });
+  var week = Date.now() - 7 * 864e5, done = I.filter(function (i) { return !isOpen(i) && BK.ms(i.resolvedAt) > week; });
+  var times = I.filter(function (i) { return !isOpen(i) && i.resolvedAt; }).map(function (i) { return BK.ms(i.resolvedAt) - BK.ms(i._created); }).sort(function (a, b) { return a - b; });
+  $('stats').innerHTML = [['Open', open.length], ['Critical or major', bad.length], ['Resolved this week', done.length], ['Typical time to fix', times.length ? dur(times[Math.floor(times.length / 2)]) : '–']]
+    .map(function (s) { return '<div class="stat"><b>' + e(s[1]) + '</b><span>' + s[0] + '</span></div>'; }).join('');
+  var q = $('q').value.trim().toLowerCase();
+  var list = I.filter(function (i) { return (filter === 'all' || (filter === 'open') === isOpen(i)) && (!q || [i.title, i.system, i.owner, i.reporter, i.description].join(' ').toLowerCase().indexOf(q) >= 0); })
+    .sort(function (a, b) { return (isOpen(b) - isOpen(a)) || (+a.severity - +b.severity) || BK.ms(b._created) - BK.ms(a._created); });
+  $('list').innerHTML = list.length ? list.map(function (i) {
+    return '<li><button class="inc" data-id="' + e(i._id) + '"' + (sel === i._id ? ' aria-current="true"' : '') + '>' + sevTag(i.severity) + '<span class="t">' + e(i.title) + '</span>' + statusBadge(i.status) +
+      '<span class="m">' + e([i.system, (i.owner ? 'Owner: ' + i.owner : 'No owner yet'), ago(i._created)].filter(Boolean).join(' · ')) + '</span></button></li>';
+  }).join('') : '<li class="empty"><span class="ico" aria-hidden="true">' + (filter === 'open' ? '✅' : '🗂️') + '</span><b>' + (I.length ? (filter === 'open' ? 'All clear' : 'Nothing here') : 'No incidents yet') + '</b>' +
+    (filter === 'open' ? 'Nothing is broken right now. If something is, report it and the on-call group gets an alert.' : 'Nothing matches.') + (I.length ? '' : '<br><button class="btn primary" data-new>Report an issue</button>') + '</li>';
+  renderDetail();
+}
+function renderDetail() {
+  var i = I.filter(function (x) { return x._id === sel; })[0], box = $('detail');
+  $('layout').classList.toggle('has-detail', !!i);
+  if (!i) { box.innerHTML = '<div class="empty" style="border:0"><span class="ico" aria-hidden="true">🚨</span><b>Pick an incident</b>Its details and live timeline show here.</div>'; return; }
+  var tl = U.filter(function (u) { return u.incident === i._id; }).sort(function (a, b) { return BK.ms(b._created) - BK.ms(a._created); });
+  box.innerHTML = '<button class="btn small ghost back" data-back>← All incidents</button>' +
+    '<div class="row">' + sevTag(i.severity) + statusBadge(i.status) + '</div><h2>' + e(i.title) + '</h2>' +
+    '<div class="facts"><span>Reported by <b>' + e(i.reporter || i._authorName) + '</b> · ' + e(BK.when(i._created)) + '</span>' + (i.system ? '<span>Affects <b>' + e(i.system) + '</b></span>' : '') +
+    '<span>Owner <b>' + e(i.owner || 'nobody yet') + '</b></span>' + (i.resolvedAt ? '<span>Fixed in <b>' + e(dur(BK.ms(i.resolvedAt) - BK.ms(i._created))) + '</b></span>' : '') + '</div>' +
+    (i.description ? '<p class="desc">' + e(i.description) + '</p>' : '') +
+    '<div class="controls"><div><label for="c-status">Status</label><select id="c-status">' + STATUSES.map(function (s) { return '<option' + (s === (i.status || 'Investigating') ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
+    '<div><label for="c-sev">Severity</label><select id="c-sev">' + SEVERITIES.map(function (s) { return '<option value="' + s.n + '"' + (s.n === +i.severity ? ' selected' : '') + '>SEV' + s.n + ' · ' + s.name + '</option>'; }).join('') + '</select></div>' +
+    '<div><span style="display:block;font-weight:500;font-size:.9rem;margin-bottom:4px">Owner</span>' + (i.owner === me.name ? '<button class="btn" data-own="">Give it up</button>' : '<button class="btn" data-own="me">Take it</button>') + '</div></div>' +
+    '<form id="f-up"><label for="u-text">Add an update</label><textarea id="u-text" maxlength="4000" placeholder="What did you find or try? What’s next?" style="min-height:70px"></textarea><div class="dlg-acts"><button class="btn primary" type="submit">Post update</button></div></form>' +
+    '<h3 style="margin-top:18px">Timeline</h3><ul class="tl">' + tl.map(function (u) {
+      return '<li class="' + e(u.kind || 'note') + '"><div class="when">' + e(BK.when(u._created)) + ' · ' + e(u._authorName || '') + '</div><div class="txt">' + e(u.text) + '</div></li>';
+    }).join('') + '</ul>';
+  $('c-status').onchange = function () {
+    var s = $('c-status').value;
+    if (s === 'Resolved') { $('r-text').value = ''; $('d-res').showModal(); $('r-text').focus(); return; }
+    setStatus(i, s, '');
+  };
+  $('c-sev').onchange = function () {
+    var n = +$('c-sev').value, worse = n < +i.severity;
+    incidents.update(i._id, { severity: n }).then(function () { return updates.add({ incident: i._id, kind: 'status', text: 'Severity → SEV' + n + ' ' + sevOf(n).name }); })
+      .then(function () { if (worse && n <= ALERT_FROM) return alertOnCall(i.title, n, i._id); }).then(changed).catch(BK.err);
+  };
+  box.querySelector('[data-own]').onclick = function (ev) {
+    var o = ev.currentTarget.dataset.own === 'me' ? me.name || '' : '';
+    incidents.update(i._id, { owner: o }).then(function () { return updates.add({ incident: i._id, kind: 'status', text: o ? o + ' is on it' : 'Owner removed' }); }).then(changed).catch(BK.err);
+  };
+  $('f-up').onsubmit = function (ev) {
+    ev.preventDefault(); var t = $('u-text').value.trim(); if (!t) return $('u-text').focus();
+    updates.add({ incident: i._id, kind: 'note', text: t }).then(function () { $('u-text').value = ''; changed(); }).catch(BK.err);
+  };
+}
+function setStatus(i, s, note) {
+  incidents.update(i._id, { status: s, resolvedAt: s === 'Resolved' ? new Date().toISOString() : null })
+    .then(function () { return updates.add({ incident: i._id, kind: s === 'Resolved' ? 'resolved' : 'status', text: 'Status → ' + s + (note ? '\n' + note : '') }); })
+    .then(changed).catch(BK.err);
+}
+$('f-res').onsubmit = function (ev) {
+  ev.preventDefault(); var i = I.filter(function (x) { return x._id === sel; })[0];
+  $('d-res').close('done'); if (i) setStatus(i, 'Resolved', $('r-text').value.trim());
+};
+$('d-res').addEventListener('close', function () { if ($('d-res').returnValue !== 'done') renderDetail(); $('d-res').returnValue = ''; });
+function alertOnCall(title, sev, id) {
+  return BK.notify({ to: [ONCALL_GROUP], title: 'SEV' + sev + ' ' + sevOf(sev).name + ': ' + title, body: 'Reported by ' + (me.name || 'someone') + '. Open the incident log to help.', path: '/#/i/' + id })
+    .then(function (ok) { BK.toast(ok ? 'The ' + ONCALL_GROUP + ' group has been alerted.' : BK.demo ? 'Demo mode: the ' + ONCALL_GROUP + ' group would be alerted.' : 'Couldn’t alert the ' + ONCALL_GROUP + ' group. Is the app shared with it?'); });
+}
+
+$('list').addEventListener('click', function (ev) {
+  if (ev.target.closest('[data-new]')) return openNew();
+  var b = ev.target.closest('.inc'); if (b) go(b.dataset.id);
+});
+$('detail').addEventListener('click', function (ev) { if (ev.target.closest('[data-back]')) go(null); });
+function go(id) { sel = id; history.replaceState(null, '', id ? '#/i/' + id : '#'); render(); if (id && innerWidth <= 820) scrollTo(0, 0); }
+function fromHash() { var m = location.hash.match(/^#\/i\/(.+)$/); sel = m ? decodeURIComponent(m[1]) : sel; }
+window.addEventListener('hashchange', function () { fromHash(); render(); });
+
+function openNew() {
+  $('n-title').value = ''; $('n-sys').value = ''; $('n-desc').value = '';
+  $('n-sev').querySelectorAll('input')[2].checked = true; $('n-alert').checked = 3 <= ALERT_FROM;
+  $('d-new').showModal(); $('n-title').focus();
+}
+$('n-sev').innerHTML = '<legend>How bad is it?</legend>' + SEVERITIES.map(function (s) {
+  return '<label><input type="radio" name="sev" value="' + s.n + '"><span>' + sevTag(s.n) + ' <b>' + e(s.name) + '</b><br><span class="muted" style="font-size:.85rem">' + e(s.hint) + '</span></span></label>';
+}).join('');
+$('n-sev').addEventListener('change', function (ev) { if (ev.target.name === 'sev') $('n-alert').checked = +ev.target.value <= ALERT_FROM; });
+$('oncall-name').textContent = ONCALL_GROUP;
+$('f-new').onsubmit = function (ev) {
+  ev.preventDefault();
+  var sev = +(($('n-sev').querySelector('input:checked') || {}).value || 3), alertIt = $('n-alert').checked, btn = $('f-new').querySelector('[type=submit]');
+  var d = { title: $('n-title').value.trim(), severity: sev, status: 'Investigating', system: $('n-sys').value.trim(), description: $('n-desc').value.trim(), reporter: me.name || '', owner: '', resolvedAt: null };
+  btn.disabled = true;
+  incidents.add(d).then(function (doc) {
+    $('d-new').close(); sel = doc._id; history.replaceState(null, '', '#/i/' + doc._id);
+    return updates.add({ incident: doc._id, kind: 'opened', text: 'Reported as SEV' + sev + ' ' + sevOf(sev).name }).then(function () { if (alertIt) return alertOnCall(d.title, sev, doc._id); });
+  }).then(changed).catch(BK.err).then(function () { btn.disabled = false; });
+};
+$('report').onclick = openNew;
+document.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { b.closest('dialog').close(); }; });
+$('seg').onclick = function (ev) { var b = ev.target.closest('button'); if (!b) return; filter = b.dataset.f; $('seg').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); render(); };
+$('q').oninput = render;
+
+function changed() { return load(); }
+var timer; function reload() { clearTimeout(timer); timer = setTimeout(load, 150); }
+function load() {
+  return Promise.all([incidents.all(), updates.all()]).then(function (r) {
+    I = r[0]; U = r[1];
+    var a = document.activeElement, typing = a && a.id === 'u-text' && a.value;
+    if (typing) { var keep = a.value; render(); $('u-text').value = keep; $('u-text').focus(); } else render();
+  }).catch(BK.err);
+}
+fromHash();
+BK.me().then(function (u) { me = u; BK.banner(); load(); });
+incidents.subscribe(reload); updates.subscribe(reload);
+setInterval(load, 60000);
+</script>
+</body>
+</html>
