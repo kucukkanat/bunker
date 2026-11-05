@@ -26,6 +26,9 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("data dir: %w", err)
 	}
+	if err := writable(cfg.DataDir); err != nil {
+		return nil, fmt.Errorf("can't write to the data folder %s (%v). Give it to the user Bunker runs as, e.g. `sudo chown -R %d %s`, or in Docker use a named volume (-v bunker-data:/data) instead of a root-owned folder", cfg.DataDir, err, os.Getuid(), cfg.DataDir)
+	}
 	if err := core.LoadSecretKey(cfg.DataDir); err != nil {
 		return nil, fmt.Errorf("secret key: %w", err)
 	}
@@ -74,6 +77,18 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 			return map[string]any{"version": core.Version, "ops": out}, nil
 		}})
 	return a, nil
+}
+
+func writable(dir string) error {
+	f, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return errors.New("permission denied")
+		}
+		return err
+	}
+	f.Close()
+	return os.Remove(f.Name())
 }
 
 // Handler wraps the mux with global middleware.
