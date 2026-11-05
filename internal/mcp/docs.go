@@ -26,7 +26,7 @@ Pages render inside a sandboxed iframe with an opaque origin and a strict CSP:
 - Images: same-site files, data: and blob: URLs only.
 - index.html is required at the root. Relative paths only (e.g. "app.js", not "/app.js").
 - Single-page apps: set the site setting spa=true so unknown paths serve index.html.
-- Secrets (API keys, passwords) in uploaded files are blocked by a scanner; never put credentials in a page.`
+- Secrets (API keys, passwords) in uploaded files are blocked by a scanner; never put credentials in a page. Code that needs a secret goes in a server function (api/*.js) that reads it with bunker.secrets.get.`
 
 // SDKReference documents window.bunker for pages.
 const SDKReference = `## SDK reference (window.bunker, injected automatically into every HTML page)
@@ -86,7 +86,46 @@ const range = await bunker.m365.excel.range(fileUrl, 'Budget!A1:F40');
 const docs  = await bunker.m365.files.list(folderUrl);
 const mgr   = await bunker.m365.graph('/me/manager');
 ` + "```" + `
-The first call may show a consent prompt; declining throws consent_required.`
+The first call may show a consent prompt; declining throws consent_required.
+
+### bunker.fn: call a server function (api/<name>.js, see "Server functions")
+` + "```js" + `
+const { id } = await bunker.fn('contact', { email, text });   // resolves to the function's return value
+` + "```" + `
+Throws functions_off (turned off by an admin), not_found, busy, timeout or function_error. From a ?draft=1 preview it runs the draft code.`
+
+// ServerFunctions documents api/*.js server functions for agents.
+var ServerFunctions = strings.ReplaceAll(`## Server functions (api/*.js, run on the Bunker server)
+Put code that must not run in the browser in ¦api/<name>.js¦ (or .mjs/.ts; folders allowed: api/orders/refund.ts is "orders/refund"). Each file has an ¦export default¦ async function; pages call it with ¦bunker.fn(name, input)¦. Files and folders starting with _ under api/ are shared modules (importable, not callable). Imports are bundled on publish (ESM, TypeScript types stripped, no npm packages). Function files are never served to browsers.
+
+Prefer plain page code. Write a function only when you need one of: a secret (API key), outbound fetch() to another service, rights the viewer doesn't have (config.elevated), a schedule, a trigger on database writes, validation the viewer must not be able to bypass, or a webhook target.
+
+¦¦¦js
+// api/contact.js
+export const config = { elevated: true };   // optional: elevated, schedule, onWrite, timeoutMs
+export default async function (input, ctx) {
+  // ctx = { user:{id,email,name,groups}, site:{slug,title,version,draft}, trigger:{type:"call"|"schedule"|"write"|"webhook"}, elevated }
+  const email = String(input?.email || '').trim();
+  if (!email.includes('@')) throw new Error('Please enter a valid email address.');
+  const msg = await bunker.db.collection('messages').add({ email, text: String(input.text || '').slice(0, 2000), from: ctx.user.email });
+  const hook = await bunker.secrets.get('SLACK_WEBHOOK');   // null until someone sets it
+  if (hook) await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'New message from ' + email }) });
+  return { id: msg._id };                    // any JSON value, up to 1 MB
+}
+¦¦¦
+¦¦¦js
+// in the page
+try { const { id } = await bunker.fn('contact', { email, text }); }
+catch (err) { show(err.message); }  // err.code: functions_off | not_found | busy | timeout | function_error
+¦¦¦
+- Runs as the **caller**, with the caller's own permissions, by default. ¦config.elevated: true¦ runs as the site owner (still only the page-safe features: data, files, storage, AI, Microsoft 365, rooms, notify, connections). Elevated functions must check ¦ctx.user¦ and validate input themselves.
+- ¦config.schedule: "0 8 * * 1"¦: 5-field cron in UTC (at most once a minute); runs as the owner with trigger {type:"schedule", at}.
+- ¦config.onWrite: ["orders"]¦: runs after an add/set/update/delete in those collections with trigger {type:"write", collection, op, doc, id}, as the writer (owner if elevated). Writes made inside it don't trigger again.
+- Schedules and triggers run the published version; calls from a ?draft=1 preview run the draft.
+- Server SDK (global ¦bunker¦, same shapes as the page SDK): db, storage, files (plus upload(name, string|Uint8Array, {type, folder})), ai.chat/json, m365, connections.fetch, rooms(name).send, notify, me(), site; server-only ¦bunker.secrets.get(NAME)¦ (string or null) and ¦fetch(url, init)¦ (public hosts only, subject to the admin's outbound policy). console.log/info/warn/error go to the run logs. setTimeout works; there is no DOM, window, live subscriptions or streaming.
+- Limits (defaults, admins can change them): 30 s per call (120 s for schedules and triggers), 64 MB memory, 1 MB input and output, 64 KB of logs and 1,000 SDK calls per run, 4 concurrent runs per app (then 429 busy).
+- Secrets: never put keys in files (the deploy scanner blocks them). Read them with bunker.secrets.get and ask the person to add them with ¦bunker secrets set <site> NAME¦ (reads the value from stdin or a hidden prompt) or in the dashboard. Names look like STRIPE_KEY.
+- Try and debug: ¦bunker fn ls <site>¦, ¦bunker fn call <site> <name> '{"a":1}' [--draft]¦, ¦bunker fn logs <site> --follow¦. Admins can turn functions off for the whole server, one person or one app; calls then fail with functions_off.`, "¦", "`")
 
 // AuthGuide explains how agents authenticate.
 func AuthGuide(base string) string {
@@ -135,6 +174,7 @@ func AgentGuide(base string, ops []core.Op, full bool) string {
 	b.WriteString(DeployGuide(base) + "\n\n")
 	b.WriteString(SandboxRules + "\n\n")
 	b.WriteString(SDKReference + "\n\n")
+	b.WriteString(ServerFunctions + "\n\n")
 	b.WriteString(OpsList(ops, full))
 	return b.String()
 }
@@ -214,5 +254,5 @@ This folder deploys to Bunker (` + base + `), an internal app cloud, as ` + targ
 - Discover anything else: ` + "`bunker ops`" + ` and ` + "`bunker api <op.name> --param value`" + `. Use ` + "`--json`" + ` for machine-readable output.
 - Full docs for agents: ` + base + `/llms-full.txt
 
-` + SandboxRules + "\n\n" + SDKReference + "\n"
+` + SandboxRules + "\n\n" + SDKReference + "\n\n" + ServerFunctions + "\n"
 }

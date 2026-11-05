@@ -119,6 +119,17 @@ func schemaFor(p core.Param, op core.Op) map[string]any {
 	return s
 }
 
+// opGuidance adds usage notes to generated tools whose summary alone
+// doesn't tell an agent when or how to use them.
+var opGuidance = map[string]string{
+	"fn.list":        "Server functions are api/<name>.js|ts files in the site with an export default async function (input, ctx). Shows each function's name, whether it runs as the owner (elevated), its schedule and onWrite triggers, any bundling error, and whether functions are turned off for this site and why.",
+	"fn.call":        "Runs one server function. `name` is the file path under api/ without the extension (api/orders/refund.ts → orders/refund). `input` is any JSON value passed as the first argument; set draft=true to run the unpublished draft code. Returns {output, durationMs}. Error codes: functions_off, not_found, busy, timeout, function_error (with the stack for editors).",
+	"fn.runs":        "Recent runs of the site's server functions (newest first, last 200 kept) with trigger, user, status, duration, error and console output. Use it to debug a function after calling it.",
+	"secrets.list":   "Lists the NAMES of secrets server functions can read with bunker.secrets.get(NAME). Values are never returned.",
+	"secrets.set":    "Stores a secret (API key, token, webhook URL) for the site's server functions. Names match ^[A-Z][A-Z0-9_]{0,63}$; values up to 16 KB, encrypted at rest and never readable back. Ask the person to provide the value (or to set it themselves with `bunker secrets set <site> NAME`); never invent one and never put secrets in site files.",
+	"secrets.delete": "Functions that read this secret get null afterwards.",
+}
+
 // OpTool converts an op into a tool definition.
 func OpTool(o core.Op) *tool {
 	props := map[string]any{}
@@ -143,6 +154,9 @@ func OpTool(o core.Op) *tool {
 	}
 	if o.Destructive {
 		desc += ". Destructive: confirm with the person first."
+	}
+	if g := opGuidance[o.Name]; g != "" {
+		desc += ". " + g
 	}
 	op := o
 	return &tool{
