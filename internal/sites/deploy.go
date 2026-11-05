@@ -1196,53 +1196,10 @@ func registerDeploy(a *core.App) {
 }
 
 func guessTitle(files map[string][]byte) string {
+	if t := contentTitle(files); t != "" {
+		return t
+	}
 	keys := sortedKeys(files)
-	htmlTitle := func(p string) string {
-		if m := titleRe.FindSubmatch(files[p]); m != nil {
-			t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " ")
-			if t != "" && len(t) < 100 {
-				return t
-			}
-		}
-		return ""
-	}
-	// The start page's <title> wins, then any page's.
-	for _, p := range keys {
-		if b := strings.ToLower(path.Base(p)); (b == "index.html" || b == "index.htm") && strings.Count(p, "/") <= 1 {
-			if t := htmlTitle(p); t != "" {
-				return t
-			}
-		}
-	}
-	for _, p := range keys {
-		if l := strings.ToLower(p); strings.HasSuffix(l, ".html") || strings.HasSuffix(l, ".htm") {
-			if t := htmlTitle(p); t != "" {
-				return t
-			}
-		}
-	}
-	// Markdown: the main document's first "# Heading".
-	mds := 0
-	for _, p := range keys {
-		if l := strings.ToLower(p); strings.HasSuffix(l, ".md") || strings.HasSuffix(l, ".markdown") {
-			mds++
-		}
-	}
-	for _, p := range keys {
-		b := strings.ToLower(path.Base(p))
-		if (mds == 1 && (strings.HasSuffix(b, ".md") || strings.HasSuffix(b, ".markdown"))) || ((b == "readme.md" || b == "index.md") && strings.Count(p, "/") <= 1) {
-			if m := fmTitleRe.FindSubmatch(files[p]); m != nil {
-				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
-					return t
-				}
-			}
-			if m := mdTitleRe.FindSubmatch(files[p]); m != nil {
-				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
-					return t
-				}
-			}
-		}
-	}
 	if len(keys) == 0 {
 		return "Untitled site"
 	}
@@ -1308,6 +1265,60 @@ func firstNonEmpty(v ...string) string {
 	for _, s := range v {
 		if s != "" {
 			return s
+		}
+	}
+	return ""
+}
+
+// contentTitle is the title the files give themselves: the start page's
+// <title>, any page's <title>, or the main Markdown document's title.
+// Empty when they give none.
+func contentTitle(files map[string][]byte) string {
+	keys := sortedKeys(files)
+	htmlTitle := func(p string) string {
+		if m := titleRe.FindSubmatch(files[p]); m != nil {
+			t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " ")
+			if t != "" && len(t) < 100 {
+				return t
+			}
+		}
+		return ""
+	}
+	// The start page's <title> wins, then any page's.
+	for _, p := range keys {
+		if b := strings.ToLower(path.Base(p)); (b == "index.html" || b == "index.htm") && strings.Count(p, "/") <= 1 {
+			if t := htmlTitle(p); t != "" {
+				return t
+			}
+		}
+	}
+	for _, p := range keys {
+		if l := strings.ToLower(p); strings.HasSuffix(l, ".html") || strings.HasSuffix(l, ".htm") {
+			if t := htmlTitle(p); t != "" {
+				return t
+			}
+		}
+	}
+	// Markdown: the main document's first "# Heading".
+	mds := 0
+	for _, p := range keys {
+		if l := strings.ToLower(p); strings.HasSuffix(l, ".md") || strings.HasSuffix(l, ".markdown") {
+			mds++
+		}
+	}
+	for _, p := range keys {
+		b := strings.ToLower(path.Base(p))
+		if (mds == 1 && (strings.HasSuffix(b, ".md") || strings.HasSuffix(b, ".markdown"))) || ((b == "readme.md" || b == "index.md") && strings.Count(p, "/") <= 1) {
+			if m := fmTitleRe.FindSubmatch(files[p]); m != nil {
+				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
+					return t
+				}
+			}
+			if m := mdTitleRe.FindSubmatch(files[p]); m != nil {
+				if t := strings.TrimSpace(string(m[1])); t != "" && len(t) < 100 {
+					return t
+				}
+			}
 		}
 	}
 	return ""

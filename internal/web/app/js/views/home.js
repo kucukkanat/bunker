@@ -63,12 +63,13 @@ export default async function home(root, ctx) {
   // ---- paste HTML to create ----
   const onPaste = (e) => {
     const t = e.target;
-    if (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
     const html = e.clipboardData?.getData('text/plain') || '';
     const gh = html.trim().match(/^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+(\/tree\/[^\s]+)?\/?$/);
+    // A GitHub link pasted into the search box is almost surely meant for import.
+    if (t.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(t.tagName) && !(gh && t === search))) return;
     if (gh) {
       e.preventDefault();
-      toast('Make a site from this GitHub repository?', { action: { label: 'Import', run: () => githubCreate(html.trim()).catch(() => {}) }, timeout: 10000 });
+      toast(gh[2] ? 'Make a site from this GitHub folder?' : 'Make a site from this GitHub repository?', { action: { label: 'Import', run: () => githubCreate(html.trim()).catch(() => {}) }, timeout: 10000 });
       return;
     }
     if (!/<(html|body|div|head|!doctype|section|main|table|style|script|h1|p)[\s>]/i.test(html)) return;
