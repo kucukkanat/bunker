@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/andybalholm/brotli"
 )
 
 // Blobs is a content-addressed file store. Identical files across
@@ -131,6 +134,58 @@ func (b *Blobs) Gzip(hash string) string {
 	return gz
 }
 
+// Brotli returns the path of a cached brotli variant, creating it lazily.
+func (b *Blobs) Brotli(hash string) string {
+	if len(hash) != 64 {
+		return ""
+	}
+	br := b.path(hash) + ".br"
+	if _, err := os.Stat(br); err == nil {
+		return br
+	}
+	src, err := os.ReadFile(b.path(hash))
+	if err != nil {
+		return ""
+	}
+	out := CompressBrotli(src)
+	if out == nil || len(out) > len(src)*9/10 {
+		return ""
+	}
+	tmp, err := os.CreateTemp(filepath.Join(b.Dir, "tmp"), "br-*")
+	if err != nil {
+		return ""
+	}
+	tmp.Write(out)
+	tmp.Close()
+	if err := os.Rename(tmp.Name(), br); err != nil {
+		os.Remove(tmp.Name())
+		return ""
+	}
+	return br
+}
+
+// CompressBrotli compresses data in memory (quality 9: near-max ratio, fast enough for lazy use).
+func CompressBrotli(data []byte) []byte {
+	var buf bytes.Buffer
+	w := brotli.NewWriterLevel(&buf, 9)
+	if _, err := w.Write(data); err != nil {
+		return nil
+	}
+	if w.Close() != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+// CompressGzip compresses data in memory.
+func CompressGzip(data []byte) []byte {
+	var buf bytes.Buffer
+	w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	w.Write(data)
+	w.Close()
+	return buf.Bytes()
+}
+
 // Remove deletes a blob (and its compressed variants).
 func (b *Blobs) Remove(hash string) {
 	if len(hash) != 64 {
@@ -138,4 +193,5 @@ func (b *Blobs) Remove(hash string) {
 	}
 	os.Remove(b.path(hash))
 	os.Remove(b.path(hash) + ".gz")
+	os.Remove(b.path(hash) + ".br")
 }

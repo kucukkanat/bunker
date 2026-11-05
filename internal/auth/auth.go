@@ -72,6 +72,9 @@ var app *core.App
 
 func initAuth(a *core.App) error {
 	app = a
+	cacheMu.Lock()
+	cache = map[string]cached{}
+	cacheMu.Unlock()
 	a.Authn = authenticate
 	a.Public("/auth/")
 	a.Public("/setup")
@@ -210,7 +213,7 @@ func upsertUser(ctx context.Context, subject, email, name string, groups []core.
 		var n int
 		app.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE subject NOT LIKE 'dev:%'`).Scan(&n)
 		admin := 0
-		if n == 0 && app.Setting("admins") == "" {
+		if n == 0 && app.Setting("admins") == "" && !strings.HasPrefix(subject, "dev:") {
 			admin = 1
 		}
 		res, err := app.DB.ExecContext(ctx, `INSERT INTO users(subject,email,name,is_admin,groups_json,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)`, subject, email, name, admin, string(gj), now, now)

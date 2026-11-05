@@ -160,6 +160,19 @@ func Run(a *core.App) error {
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
+	// Speak HTTP/2 without TLS too (h2c) so reverse proxies that support it
+	// can multiplex SSE streams and many small assets over one connection.
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetHTTP2(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
+	go func() {
+		t := time.NewTicker(3 * time.Hour)
+		defer t.Stop()
+		for range t.C {
+			a.DB.Exec(`PRAGMA optimize`)
+		}
+	}()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errc := make(chan error, 1)
@@ -189,6 +202,7 @@ func Run(a *core.App) error {
 	defer cancel()
 	a.Emit(sctx, "shutdown", nil)
 	err := srv.Shutdown(sctx)
+	a.DB.Exec(`PRAGMA optimize`)
 	a.DB.Close()
 	return err
 }

@@ -119,6 +119,13 @@ type Person struct {
 
 func initSites(a *core.App) error {
 	app = a
+	invalidateAll()
+	mcMu.Lock()
+	mCache = map[string]Manifest{}
+	mcMu.Unlock()
+	rawMu.Lock()
+	rawCache = map[string]rawEntry{}
+	rawMu.Unlock()
 	a.Sites = resolver{}
 	registerOps(a)
 	registerDeploy(a)

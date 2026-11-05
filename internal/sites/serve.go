@@ -272,8 +272,8 @@ func simplePage(w io.Writer, title, msg, href, cta string) {
 
 // rawCache caches transformed HTML/CSS (SDK injection + root path rewrite).
 type rawEntry struct {
-	b   []byte
-	exp time.Time
+	b, br, gz []byte
+	exp       time.Time
 }
 
 var (
@@ -375,6 +375,9 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 				b = rewriteCSS(b, prefix)
 			}
 			e = rawEntry{b: b, exp: time.Now().Add(10 * time.Minute)}
+			if len(b) > 1024 {
+				e.br, e.gz = core.CompressBrotli(b), core.CompressGzip(b)
+			}
 			rawMu.Lock()
 			if len(rawCache) > 2000 {
 				rawCache = map[string]rawEntry{}
@@ -382,18 +385,38 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 			rawCache[key] = e
 			rawMu.Unlock()
 		}
-		h.Set("Content-Length", strconv.Itoa(len(e.b)))
+		body := e.b
+		ae := r.Header.Get("Accept-Encoding")
+		h.Add("Vary", "Accept-Encoding")
+		if e.br != nil && strings.Contains(ae, "br") {
+			body = e.br
+			h.Set("Content-Encoding", "br")
+		} else if e.gz != nil && strings.Contains(ae, "gzip") {
+			body = e.gz
+			h.Set("Content-Encoding", "gzip")
+		}
+		h.Set("Content-Length", strconv.Itoa(len(body)))
 		w.WriteHeader(status)
 		if r.Method != http.MethodHead {
-			w.Write(e.b)
+			w.Write(body)
 		}
 		return
 	}
-	if compressible(ct) && f.Size > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && r.Header.Get("Range") == "" {
-		if gz := app.Blobs.Gzip(f.Hash); gz != "" {
+	ae := r.Header.Get("Accept-Encoding")
+	if compressible(ct) && f.Size > 1024 && r.Header.Get("Range") == "" && (strings.Contains(ae, "gzip") || strings.Contains(ae, "br")) {
+		enc, variant := "gzip", ""
+		if strings.Contains(ae, "br") {
+			if variant = app.Blobs.Brotli(f.Hash); variant != "" {
+				enc = "br"
+			}
+		}
+		if variant == "" && strings.Contains(ae, "gzip") {
+			variant = app.Blobs.Gzip(f.Hash)
+		}
+		if gz := variant; gz != "" {
 			if fh, err := os.Open(gz); err == nil {
 				defer fh.Close()
-				h.Set("Content-Encoding", "gzip")
+				h.Set("Content-Encoding", enc)
 				h.Add("Vary", "Accept-Encoding")
 				if st, err := fh.Stat(); err == nil {
 					h.Set("Content-Length", strconv.FormatInt(st.Size(), 10))
