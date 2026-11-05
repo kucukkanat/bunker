@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"net/url"
 	"path"
 	"regexp"
 	"sort"
@@ -52,6 +54,8 @@ var builderTools = []Tool{
 			"new_text":    str("Text to put in its place"),
 			"replace_all": map[string]any{"type": "boolean", "description": "Replace every occurrence. Optional."},
 		}, "path", "old_text", "new_text")},
+	{Name: "set_collection_rule", Description: "Set who can read and change a bunker.db collection (pages can't do this themselves). Rules: own (default), private, read, append, open, group:<Name>. Takes effect immediately, also before publishing.",
+		Schema: obj(map[string]any{"collection": str("Collection name, e.g. requests"), "rule": str("own | private | read | append | open | group:<Name>")}, "collection", "rule")},
 	{Name: "delete_file", Description: "Delete a file from the draft.", Schema: obj(map[string]any{"path": str("File path")}, "path")},
 	{Name: "search_files", Description: "Find text across all text files. Returns matching lines as path:line: text.",
 		Schema: obj(map[string]any{
@@ -204,6 +208,8 @@ type toolInput struct {
 	Limit      int     `json:"limit"`
 	Pattern    string  `json:"pattern"`
 	Regex      bool    `json:"regex"`
+	Collection string  `json:"collection"`
+	Rule       string  `json:"rule"`
 	Invalid    bool    `json:"__invalid_json"`
 }
 
@@ -226,6 +232,25 @@ func (w *workspace) run(call ToolCall) (string, error) {
 		return cleanToolPath(in.Path)
 	}
 	switch call.Name {
+	case "set_collection_rule":
+		if in.Collection == "" || in.Rule == "" {
+			return "", errors.New("collection and rule are required")
+		}
+		w.status("Setting who can use " + in.Collection)
+		body, _ := json.Marshal(map[string]string{"rule": in.Rule})
+		req := httptest.NewRequest("PUT", "/api/v1/sites/"+w.s.Slug+"/db/"+url.PathEscape(in.Collection)+"/_rule", bytes.NewReader(body)).WithContext(w.ctx)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		app.Mux.ServeHTTP(rec, req)
+		if rec.Code >= 300 {
+			var e struct {
+				Error struct{ Message string } `json:"error"`
+			}
+			json.Unmarshal(rec.Body.Bytes(), &e)
+			return "", errors.New("couldn't set the rule: " + e.Error.Message)
+		}
+		return "Rule for " + in.Collection + " is now " + in.Rule + ".", nil
+
 	case "list_files":
 		w.status("Looking at the files")
 		m, err := w.manifest()

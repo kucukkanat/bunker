@@ -31,7 +31,7 @@ const builderSystemPrompt = `You are the Bunker app builder. Bunker is a private
 - Use relative paths for local files: href="style.css", src="js/app.js", never "/style.css" or "file://".
 - Inline <script> and <style> work. Use <script type="module"> when you want top-level await. No build step: no JSX, TypeScript, npm imports or bare module names (import x from 'react' won't work; use the built-in libraries' script tags instead). Plain modern JavaScript (ES2022) and the DOM.
 - No popups: window.open, target="_blank" and alert-style redirects to other sites don't work. For a link to another website use bunker.open(url) (Bunker asks the person before leaving); ordinary <a href="https://..."> links are routed through it automatically. Links between your own pages (href="about.html") work normally.
-- Cookies and sessionStorage don't work. localStorage works but only on this device and browser; use bunker.storage for preferences that should follow the person, and bunker.db for anything shared.
+- localStorage, sessionStorage and cookies work (Bunker saves localStorage per person, so it follows them across devices), but saved values arrive just after the page starts: read them after await bunker.ready. Use bunker.db for anything shared.
 - Forms must not submit to a URL: handle the submit event in JavaScript (event.preventDefault()) and save with bunker.db.
 - No camera, microphone or location access. File inputs and drag-and-drop work (use bunker.files to keep uploads).
 - Downloads: use bunker.download(...) for generated files (CSV exports etc.).
@@ -80,9 +80,11 @@ Each site has its own collections of JSON documents, shared by everyone who can 
   await orders.delete(id);
   const one = await orders.get(id);
   const page = await orders.list({ limit: 50, after: cursor });            // { items: [...], next }
-  const mine = await orders.query({ where: { _author: 'me', status: 'open' }, orderBy: '-_created', limit: 100 });
+  const mine = await orders.query({ where: { _author: 'me', status: 'open' }, orderBy: '-_created', limit: 100 });   // array (also .items/.next)
+  const n = await orders.count({ status: 'open' });
+  const csv = await orders.export('csv');
   const stop = orders.subscribe(change => { /* { type: 'added'|'updated'|'deleted', doc } */ });
-Every document gets _id, _author (user id), _authorName, _created and _updated (ISO timestamps) automatically. where matches fields exactly ('me' means the viewer). orderBy is a field name, '-' for descending. Use subscribe to keep lists live for everyone instead of polling. 1 MB per document.
+Every document gets _id, _author (user id), _authorName, _created and _updated (ISO timestamps) automatically. where matches fields exactly ('me' means the viewer) and supports operators: { amount: { $gt: 100 } }, $gte, $lt, $lte, $ne, $in: [..], $contains, $exists, and $or: [{..},{..}]. orderBy is a field name, '-' for descending. Use subscribe to keep lists live for everyone instead of polling. 1 MB per document.
 Access rules per collection (editors and owners can always do everything):
   'own' (default): everyone reads all, adds, and changes/deletes only their own.
   'private': people only see and change their own documents (e.g. personal submissions an admin reviews).
@@ -90,8 +92,7 @@ Access rules per collection (editors and owners can always do everything):
   'append': viewers can only add (anonymous-style feedback, sign-ups where people mustn't see others).
   'open': anyone with access can change anything (shared boards).
   'group:<Name>': members of that group get full access, others read.
-  await bunker.db.collection('approvals').rule('group:Finance-Approvers');   // only editors may call this
-Choose the rule the app needs and set it in code that only runs for editors (check me.role), or tell the person which rule you used. Store dates as ISO strings, money as numbers.
+Pages can't change rules. Set the rule each collection needs with your set_collection_rule tool (e.g. requests → 'private', approvals → 'group:Finance-Approvers') and mention it in one short sentence. Store dates as ISO strings, money as numbers.
 
 ## Files and images: bunker.files
   const f = await bunker.files.upload(input.files[0], { folder: 'receipts' });   // { id, name, size, type, url, _author, _created }
