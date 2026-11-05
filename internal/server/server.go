@@ -59,6 +59,8 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 			}
 			return map[string]any{"ok": true, "version": core.Version}, nil
 		}})
+	a.Mux.HandleFunc("GET /metrics", metricsHandler(a))
+	a.Public("/metrics")
 	a.Handle(core.Op{Name: "system.openapi", Method: "GET", Path: "/api/v1/openapi.json", Summary: "OpenAPI document", Access: core.AccessPublic, Hidden: true,
 		Fn: func(r *http.Request) (any, error) { return a.OpenAPI(), nil }})
 	a.Handle(core.Op{Name: "system.ops", Method: "GET", Path: "/api/v1/ops", Summary: "List every API operation (used by the CLI and MCP)", Access: core.AccessPublic, Hidden: true,
@@ -134,7 +136,10 @@ func Handler(a *core.App) http.Handler {
 			}
 		}
 		sw := &statusWriter{ResponseWriter: w, status: 200}
+		mInflight.Add(1)
 		a.Mux.ServeHTTP(sw, r)
+		mInflight.Add(-1)
+		observe(sw.status, time.Since(start))
 		if d := time.Since(start); d > 2*time.Second && !strings.Contains(r.URL.Path, "/events") && !strings.HasPrefix(r.URL.Path, "/mcp") {
 			a.Log.Warn("slow request", "path", r.URL.Path, "ms", d.Milliseconds(), "status", sw.status)
 		}
