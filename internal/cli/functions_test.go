@@ -140,9 +140,9 @@ func TestDeployPrintsFunctions(t *testing.T) {
 	var x App
 	var errb strings.Builder
 	x.Stderr = &errb
-	x.printDeployedFunctions(&deployResult{Functions: []fnInfo{{Name: "orders"}, {Name: "nightly", Elevated: true, Schedule: "0 2 * * *"}, {Name: "bad", Error: "SyntaxError"}}})
+	x.printDeployedFunctions(&deployResult{Functions: []fnInfo{{Name: "orders", Path: "api/orders.js"}, {Name: "nightly", Elevated: true, Schedule: "0 2 * * *"}, {Name: "bad", Error: "SyntaxError"}}})
 	s := errb.String()
-	for _, want := range []string{"3 server functions", "orders", "called by pages", "runs as the owner", "schedule 0 2 * * *", "SyntaxError", "won't run"} {
+	for _, want := range []string{"3 server functions", "orders", "api/orders.js", "runs as the owner", "schedule 0 2 * * *", "SyntaxError", "won't run"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("missing %q in %s", want, s)
 		}

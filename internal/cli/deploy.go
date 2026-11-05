@@ -516,12 +516,21 @@ func (x *App) printDeployedFunctions(res *deployResult) {
 	broken := false
 	for _, f := range res.Functions {
 		line := "  " + x.errSt.bold(f.Name)
+		// Deploy replies list name and path; triggers only when the
+		// server includes them (see `bunker fn ls` for the full picture).
 		var notes []string
+		if f.Path != "" {
+			notes = append(notes, f.Path)
+		}
 		if f.Elevated {
 			notes = append(notes, "runs as the owner")
 		}
-		notes = append(notes, f.triggers())
-		line += " " + x.errSt.dim("("+strings.Join(notes, "; ")+")")
+		if f.Schedule != "" || len(f.OnWrite) > 0 {
+			notes = append(notes, f.triggers())
+		}
+		if len(notes) > 0 {
+			line += " " + x.errSt.dim("("+strings.Join(notes, "; ")+")")
+		}
 		if f.Error != "" {
 			broken = true
 			line += " " + x.errSt.red(f.Error)
