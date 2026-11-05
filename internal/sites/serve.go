@@ -189,7 +189,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 		role = RoleOf(r.Context(), u, s)
 	}
 	if err != nil || role == core.RoleNone {
-		renderNotFound(w, r, u)
+		renderNotFound(w, r, u, r.PathValue("site"))
 		return
 	}
 	draft := r.URL.Query().Get("draft") == "1" && role >= core.RoleEditor
@@ -247,11 +247,19 @@ var shellTmpl = template.Must(template.New("shell").Parse(`<!doctype html>
 <script src="/_/shell.js"></script>
 </body></html>`))
 
-func renderNotFound(w http.ResponseWriter, r *http.Request, u *core.User) {
+func renderNotFound(w http.ResponseWriter, r *http.Request, u *core.User, slug string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'")
 	w.WriteHeader(http.StatusNotFound)
-	simplePage(w, "Nothing here", "This site doesn't exist, or it hasn't been shared with you. Ask the owner to share it with "+u.Email+".", "/", "Go to Bunker")
+	// Same page whether or not the site exists, so addresses can't be probed.
+	tok := core.MAC(fmt.Sprintf("access:%d:%s", u.ID, slug))
+	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>You need access</title><link rel=stylesheet href="/_/kit.css">
+<main class="bk-center"><form class="bk-card" method="post" action="/access-request"><img src="/_/icon.svg" width=40 height=40 alt=""><h1>You need access</h1>
+<p>This site is private, or the address is wrong. Ask the owner and they can let you in with one click.</p>
+<input type="hidden" name="site" value="%s"><input type="hidden" name="t" value="%s">
+<p><textarea name="message" rows="2" maxlength="500" placeholder="Add a note (optional)" style="width:100%%;box-sizing:border-box;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--bk-line);background:transparent;color:inherit"></textarea></p>
+<p><button class="bk-btn" type="submit" style="border:0;cursor:pointer;font:inherit;font-weight:600">Ask for access</button></p>
+<p style="font-size:14px;opacity:.75">Signed in as %s · <a href="/">Go to Bunker</a></p></form></main>`, htmlEscape(slug), htmlEscape(tok), htmlEscape(u.Email))
 }
 
 func renderEmpty(w http.ResponseWriter, r *http.Request, s *SiteRecord, role core.Role) {
