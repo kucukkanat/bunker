@@ -288,6 +288,8 @@ try {
     await shot(p2, 'setup-1');
     await p2.getByRole('button', { name: /Company sign-in/ }).click();
     await p2.getByRole('button', { name: /Microsoft Entra ID/ }).click();
+    await p2.getByRole('button', { name: /Set up automatically with Microsoft/ }).waitFor();
+    await p2.getByText('Do it by hand instead').click();
     await p2.getByTestId('redirect-uri').waitFor();
     assert.match(await p2.getByTestId('redirect-uri').innerText(), /\/auth\/callback$/);
     await shot(p2, 'setup-entra');
@@ -300,8 +302,12 @@ try {
     await p2.getByLabel('Type the password again').fill('a long enough password');
     await shot(p2, 'setup-local');
     await p2.getByRole('button', { name: 'Create my account' }).click();
-    await p2.getByRole('heading', { name: 'You’re ready' }).waitFor();
+    await p2.getByRole('heading', { name: 'You’re all set' }).waitFor();
     await shot(p2, 'setup-done');
+    // Signed in right away: no second password prompt.
+    await p2.getByRole('link', { name: /Open Bunker/ }).click();
+    await p2.waitForURL(/\/welcome$/);
+    await p2.getByRole('heading', { name: 'Welcome to Bunker' }).waitFor();
     await p2.close();
   });
 
