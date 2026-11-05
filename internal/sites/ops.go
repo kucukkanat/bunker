@@ -259,6 +259,30 @@ func registerOps(a *core.App) {
 			return map[string]any{"ok": true, "starred": in.Starred}, nil
 		}})
 
+	a.Handle(core.Op{Name: "sites.transfer_all", Method: "POST", Path: "/api/v1/admin/transfer-sites", Summary: "Move every site from one person to another (e.g. when someone leaves)", Access: core.AccessAdmin,
+		Params: []core.Param{{Name: "from", In: "body", Required: true, Desc: "Current owner's email"}, {Name: "to", In: "body", Required: true, Desc: "New owner's email"}},
+		Fn: func(r *http.Request) (any, error) {
+			var in struct{ From, To string }
+			if err := core.Decode(r, &in); err != nil {
+				return nil, err
+			}
+			var fromID, toID int64
+			if a.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?)`, in.From).Scan(&fromID) != nil {
+				return nil, core.NotFound("no user " + in.From)
+			}
+			if a.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?) AND disabled=0`, in.To).Scan(&toID) != nil {
+				return nil, core.NotFound(in.To + " hasn't signed in to Bunker yet")
+			}
+			res, err := a.DB.ExecContext(r.Context(), `UPDATE sites SET owner_id=?, updated_at=? WHERE owner_id=?`, toID, core.Now(), fromID)
+			if err != nil {
+				return nil, err
+			}
+			n, _ := res.RowsAffected()
+			invalidateAll()
+			a.Audit(r.Context(), "admin.transfer_sites", 0, in.From+" -> "+in.To, map[string]any{"count": n})
+			return map[string]any{"ok": true, "moved": n}, nil
+		}})
+
 	// ---- sharing ----
 	a.Handle(core.Op{Name: "sharing.list", Method: "GET", Path: "/api/v1/sites/{site}/members", Summary: "Who has access to a site", Params: []core.Param{siteParam},
 		Fn: func(r *http.Request) (any, error) {
