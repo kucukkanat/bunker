@@ -20,15 +20,15 @@ Turning it back on resumes everything, with no redeploy.
 
 ## Limits
 
-| Setting | Default | |
-|---|---|---|
-| `memoryMb` | `64` | Memory per run |
-| `timeoutMs` | `30000` | Time per call from a page or the CLI |
-| `triggerTimeoutMs` | `120000` | Time per schedule, write trigger or webhook run |
-| `siteConcurrency` | `4` | Runs at once for one app |
-| `globalConcurrency` | 4 or twice the CPU count, whichever is more | Runs at once on the whole server |
+| Setting | Default | Range | |
+|---|---|---|---|
+| `memoryMb` | `64` | 16–1024 | Memory per run |
+| `timeoutMs` | `30000` | 1000–300000 | Time per call from a page, the CLI or a webhook |
+| `triggerTimeoutMs` | `120000` | 1000–900000 | Time per schedule or write trigger run |
+| `siteConcurrency` | `4` | 1–256 | Runs at once for one app |
+| `globalConcurrency` | 4 or twice the CPU count, whichever is more | 1–1024 | Runs at once on the whole server |
 
-Over capacity, calls fail fast with `429 busy` instead of queueing, so one busy app can't slow down the rest. These are fixed for every run: input and output 1 MB each, 64 KB of logs and 1,000 calls to Bunker per run, and the last 200 runs kept per app.
+Over capacity, calls wait at most 150 ms and then fail with `429 busy` instead of queueing, so one busy app can't slow down the rest. These are fixed for every run: input and output 1 MB each, 64 KB of logs (the first 8 KB is kept in the run history), 1,000 calls to Bunker and `fetch` responses up to 5 MB. Each app keeps its last 200 runs and up to 100 secrets of 16 KB each.
 
 ## Outbound policy
 
@@ -40,7 +40,7 @@ Functions have a `fetch` for calling other services. You choose what it can reac
 | `allowlist` | Only the hosts in `allowlist`: exact names (`api.stripe.com`) or a suffix (`*.example.com`). Private addresses are refused even when listed |
 | `off` | Nothing. Functions can still use [connections](/bunker/docs/admin/connections/) you define |
 
-Every refused request is audited as `functions.outbound.refused` with the app, the person and the host.
+Every request the policy refuses is audited as `functions.outbound.refused` with the app, the person and the host. (Requests to private addresses are refused too, with an error, but not audited.)
 
 `internet` is the default because the most common reason to write a function is calling a public API with a key. If your network policy says servers mustn't call out freely, choose `allowlist` or `off`. Connections are always the better fit for internal APIs: you keep the key and the base URL, and they work the same from pages.
 
@@ -90,7 +90,7 @@ Every setting here can be pinned from the environment, like any saved setting ([
 | `functions.secret.set`, `functions.secret.delete` | An editor stored, replaced or removed a secret (the name only, never the value) |
 | `functions.settings` | An admin changed the switch, limits or outbound policy |
 | `functions.block`, `functions.unblock` | An admin blocked or unblocked a person or an app, with the reason |
-| `functions.outbound.refused` | A function's `fetch` was refused by the outbound policy |
+| `functions.outbound.refused` | A function's `fetch` was refused by the outbound policy (`meta.policy`) |
 
 Search them with `event=functions.*` in the [audit log](/bunker/docs/admin/audit/).
 

@@ -40,7 +40,7 @@ Internal, self-hosted app platform. Like eze.page, but built for non-technical p
 - `bunker.storage`: a localStorage replacement, because opaque-origin iframes have no storage
 - `bunker.fn(name, input)`: call one of the app's server functions
 
-Inside server functions the global `bunker` has the same shapes (db, storage, files, ai chat/json, m365, connections, rooms send, notify, me), plus server-only `bunker.secrets.get(NAME)`, `fetch` (outbound policy), `console` → run logs and `setTimeout`. Triggers: `config.schedule` (cron, UTC, as owner), `config.onWrite` (after commits, depth 1) and webhooks that target a function. Schedules and triggers run the live version; `?draft=1` calls run the draft.
+Inside server functions the global `bunker` has the same shapes (db, storage, files, ai chat/json, m365, connections, rooms send, notify, me), plus server-only `bunker.secrets.get(NAME)`, `fetch` (outbound policy), `console` → run logs and `setTimeout`/`setInterval`. Triggers: `config.schedule` (cron, UTC, as owner), `config.onWrite` (after commits, depth 1) and webhooks that target a function. Schedules and triggers run the live version; `?draft=1` calls run the draft.
 
 ## Product surfaces
 - **Home:** my sites, shared with me, templates

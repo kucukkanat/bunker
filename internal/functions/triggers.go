@@ -98,8 +98,11 @@ func parseCron(s string) (*cron, error) {
 	if c.mon, err = parseField(f[3], 1, 12); err != nil {
 		return nil, err
 	}
-	if c.dow, err = parseField(strings.ReplaceAll(f[4], "7", "0"), 0, 6); err != nil {
+	if c.dow, err = parseField(f[4], 0, 7); err != nil {
 		return nil, err
+	}
+	if c.dow&(1<<7) != 0 { // 7 is Sunday too
+		c.dow = c.dow&^(1<<7) | 1
 	}
 	c.anyDom, c.anyDow = f[2] == "*", f[4] == "*"
 	return &c, nil

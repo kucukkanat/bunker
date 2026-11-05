@@ -54,16 +54,17 @@ bunker deploy --draft
 
 ### Server functions
 
-See [Server functions](/bunker/docs/build/server-functions/#cli). All take `--site/-s`, or use the folder's `bunker.json`.
+See [Server functions](/bunker/docs/build/server-functions/#cli). The app's address comes first (`bunker fn ls team-lunch`); inside a folder with `bunker.json` you can leave it out.
 
 | Command | |
 |---|---|
-| `bunker fn [ls]` | List the app's functions with their triggers, elevated flag and any bundling error |
-| `bunker fn call <name> [json\|@file\|-]` | Call a function and print what it returns. `--draft` runs the draft code |
-| `bunker fn logs [name]` | Recent runs with status, time, trigger and logs. `--follow/-f` streams live logs; `--limit n` |
-| `bunker secrets [ls]` | List the app's secret names (values can't be read back) |
-| `bunker secrets set <NAME> [value]` | Store or replace a secret. Without a value it's read from the terminal or stdin, so it stays out of your shell history |
-| `bunker secrets rm <NAME>` | Delete a secret |
+| `bunker fn [ls] [site]` | List the app's functions with their triggers, elevated flag and any bundling error |
+| `bunker fn call [site] <name> [json\|@file\|-]` | Call a function and print what it returns. `--draft` runs the draft code |
+| `bunker fn runs [site]` | Recent runs with status, time, trigger, user and error. `--name/-n fn` for one function; `--limit n` (default 20) |
+| `bunker fn logs [site]` | Recent runs with their logs, oldest first. `--follow/-f` streams live logs; `--name/-n fn`; `--limit n` |
+| `bunker secrets [ls] [site]` | List the app's secret names (values can't be read back) |
+| `bunker secrets set [site] <NAME>` | Store or replace a secret. The value is never an argument: it's read from a hidden prompt, from stdin, or with `--from-file path`, so it stays out of your shell history |
+| `bunker secrets rm [site] <NAME>` | Delete a secret |
 
 ### Agents and automation
 

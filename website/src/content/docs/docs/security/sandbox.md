@@ -125,13 +125,13 @@ The SDK, injected as the first script of every HTML file, also:
 | | |
 |---|---|
 | Memory | Its own WebAssembly linear memory, capped (64 MB by default). Bunker's memory isn't addressable from inside |
-| Files | None. No directories are mounted |
+| Files | Nothing from the server's disk. Only a read-only in-memory `/fn` folder with the runner, the bundled code, the input and `ctx` |
 | Network | None directly. `fetch` is a message to Bunker, which applies the [outbound policy](/bunker/docs/admin/server-functions/#outbound-policy) |
-| Environment, arguments | Empty |
+| Environment, arguments | No environment variables; the only arguments are Bunker's own (the runner and its mode) |
 | Time | Wall-clock deadline per run (30 s calls, 120 s triggers). On timeout the instance is closed |
 | Bunker | One line-based JSON channel (stdin/stdout; stderr is the log). Requests: `api` (dispatched in-process as the run-as person with `X-Bunker-Page: 1`, so only page-safe operations of this app work), `secret` (this app's secrets) and `fetch` |
 
-**Caps per run:** input and output 1 MB, logs 64 KB, 1,000 host calls. Concurrency: 4 runs per app, `max(4, 2 × CPUs)` per server; beyond that calls get `429 busy`.
+**Caps per run:** input and output 1 MB, logs 64 KB (8 KB kept in the run history), 1,000 host calls, `fetch` responses 5 MB. Concurrency: 4 runs per app, `max(4, 2 × CPUs)` per server; beyond that calls get `429 busy`.
 
 **Outbound `fetch`.** Only `http`/`https`. The host is resolved by Bunker and the **dialed** IP is checked: loopback, private (RFC 1918, unique-local), link-local and cloud-metadata addresses are always refused, every redirect is checked the same way, and proxies from the environment are ignored (the same guard as [connections](/bunker/docs/admin/connections/)). With the `allowlist` policy the host must also match an entry; with `off` every request is refused.
 

@@ -230,6 +230,8 @@ func build(ctx context.Context, m sites.Manifest) *Catalog {
 	return cat
 }
 
+var dynImportRe = regexp.MustCompile(`\bimport\s*\(`)
+
 var collRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 
 // bundle turns one function file and its relative imports into a single
@@ -291,7 +293,13 @@ func bundle(files map[string][]byte, entry string) ([]byte, error) {
 	if len(res.OutputFiles) == 0 {
 		return nil, fmt.Errorf("nothing to run")
 	}
-	return res.OutputFiles[0].Contents, nil
+	out := res.OutputFiles[0].Contents
+	// Static imports are bundled above; a dynamic import() of a computed
+	// name could reach the engine's built-in modules, so it isn't allowed.
+	if dynImportRe.Match(out) {
+		return nil, fmt.Errorf("import() with a computed name isn't supported in server functions; use static imports of files in api/")
+	}
+	return out, nil
 }
 
 // hidden is registered with sites so function code is never served.

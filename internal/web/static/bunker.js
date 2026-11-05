@@ -434,7 +434,7 @@
   // bunker.fn('orders/refund', input) runs the function on the server and
   // resolves to its return value. Draft previews run the draft code.
   function fn(name, input) {
-    name = String(name || '').replace(/^\/+|\/+$/g, '').replace(/\.(js|mjs|ts)$/, '').replace(/^api\//, '');
+    name = String(name || '').replace(/^\/+|\/+$/g, '').replace(/\.(js|mjs|mts|ts)$/, '').replace(/^api\//, '');
     if (!name) return Promise.reject(new BunkerError('invalid', 'fn(name) needs a function name, like "orders" for api/orders.js'));
     var path = '/functions/' + name.split('/').map(enc).join('/');
     var body = { input: input === undefined ? null : input };

@@ -494,15 +494,18 @@ func isTextPath(p string) bool {
 // isFunctionFile reports whether p is server code under api/ (a server
 // function or a shared _module), which runs on the server, not in pages.
 func isFunctionFile(p string) bool {
-	if !strings.HasPrefix(p, "api/") {
+	if !strings.HasPrefix(p, "api/") || strings.HasSuffix(p, ".d.ts") {
 		return false
 	}
 	switch strings.ToLower(path.Ext(p)) {
-	case ".js", ".mjs", ".ts":
+	case ".js", ".mjs", ".ts", ".mts":
 		return true
 	}
 	return false
 }
+
+// defaultExportRe matches what internal/functions treats as a function.
+var defaultExportRe = regexp.MustCompile(`\bexport\s+default\b|\bexport\s*\{[^}]*\bas\s+default\b`)
 
 // functionNote checks a server function file for the mistakes that stop
 // it from running, so the builder can fix them right away.
@@ -516,7 +519,7 @@ func functionNote(p string, b []byte) string {
 	}
 	src := string(b)
 	var warn []string
-	if !shared && !strings.Contains(src, "export default") {
+	if !shared && !defaultExportRe.MatchString(src) {
 		warn = append(warn, "it has no `export default` function, so it can't be called")
 	}
 	for _, bad := range []string{"document.", "window.", "localStorage"} {

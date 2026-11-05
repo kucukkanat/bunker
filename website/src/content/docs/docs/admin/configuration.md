@@ -121,11 +121,11 @@ See [Server functions](/bunker/docs/admin/server-functions/). All of these can a
 | Variable | Default | |
 |---|---|---|
 | `BUNKER_FUNCTIONS_ENABLED` | `true` | `false` turns server functions off for everyone. Apps still load |
-| `BUNKER_FUNCTIONS_MEMORY_MB` | `64` | Memory per run |
-| `BUNKER_FUNCTIONS_TIMEOUT_MS` | `30000` | Time per call |
-| `BUNKER_FUNCTIONS_TRIGGER_TIMEOUT_MS` | `120000` | Time per schedule, write trigger or webhook run |
-| `BUNKER_FUNCTIONS_SITE_CONCURRENCY` | `4` | Runs at once per app |
-| `BUNKER_FUNCTIONS_GLOBAL_CONCURRENCY` | `max(4, 2 × CPUs)` | Runs at once on the server |
+| `BUNKER_FUNCTIONS_MEMORY_MB` | `64` | Memory per run (16–1024) |
+| `BUNKER_FUNCTIONS_TIMEOUT_MS` | `30000` | Time per call from a page, the CLI or a webhook (1000–300000) |
+| `BUNKER_FUNCTIONS_TRIGGER_TIMEOUT_MS` | `120000` | Time per schedule or write trigger run (1000–900000) |
+| `BUNKER_FUNCTIONS_SITE_CONCURRENCY` | `4` | Runs at once per app (1–256) |
+| `BUNKER_FUNCTIONS_GLOBAL_CONCURRENCY` | `max(4, 2 × CPUs)` | Runs at once on the server (1–1024) |
 | `BUNKER_FUNCTIONS_OUTBOUND` | `internet` | `internet` (public hosts only), `allowlist` or `off` |
 | `BUNKER_FUNCTIONS_ALLOWLIST` | | Hosts for `allowlist`, comma separated (`api.stripe.com,*.example.com`) |
 

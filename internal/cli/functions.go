@@ -95,7 +95,7 @@ func (f fnInfo) triggers() string {
 
 func fnPath(site, name string) string {
 	name = strings.Trim(strings.TrimPrefix(strings.Trim(name, "/"), "api/"), "/")
-	for _, ext := range []string{".js", ".mjs", ".ts"} {
+	for _, ext := range []string{".js", ".mjs", ".mts", ".ts"} {
 		name = strings.TrimSuffix(name, ext)
 	}
 	return "/api/v1/sites/" + pathEsc(site) + "/functions/" + escSegments(name)

@@ -66,14 +66,14 @@ await bunker.fn('orders/place', { meal: 'Pasta', qty: 2 });
 |---|---|
 | `api/hello.js` | Function `hello` |
 | `api/orders/refund.ts` | Function `orders/refund` (folders are fine) |
-| `api/report.mjs` | Function `report` |
+| `api/report.mjs`, `api/report.mts` | Function `report` |
 | `api/_shared.js`, `api/_lib/money.ts` | **Shared modules**: anything starting with `_` can be imported but not called |
 | `api/prices.json` | Not a function: an ordinary static file, served as before |
 
-- A function is a `.js`, `.mjs` or `.ts` file under `api/` with an **`export default`** function. It receives `(input, ctx)` and returns any JSON value (up to 1 MB), or a Promise of one.
-- Function files and `_` modules are **never served to browsers**. Opening `/s/<app>/api/hello.js` gives a 404, so the code and anything in it stay on the server.
+- A function is a `.js`, `.mjs`, `.ts` or `.mts` file under `api/` with an **`export default`** (or `export { x as default }`) function. `.d.ts` files are ignored. A code file without a default export isn't a function and is served like any other file. It receives `(input, ctx)` and returns any JSON value (up to 1 MB), or a Promise of one.
+- Function files, and the `_` modules of an app that has at least one function, are **never served to browsers**. Opening `/s/<app>/api/hello.js` gives a 404, so the code and anything in it stay on the server.
 - **TypeScript** works as is. Types are stripped when you publish; nothing is type-checked.
-- **Imports** of your own files work, relative to the file: `import { total } from './_lib/money.ts'`. Bunker bundles each function when you publish (ES modules, ES2023). There's **no npm**: bare imports like `import dayjs from 'dayjs'` are refused. Copy a small library into `api/_lib/` if you need one.
+- **Imports** of your own files work, relative to the file: `import { total } from './_lib/money.ts'`. Bunker bundles each function when you publish (ES modules, ES2023). There's **no npm**: bare imports like `import dayjs from 'dayjs'` are refused. Copy a small library into `api/_lib/` if you need one. `import()` with a computed name (like `import(name)`) isn't allowed either.
 - If a function can't be bundled (a syntax error, a missing import), the publish still goes through and the dashboard shows the error next to that function. Calls to it fail with `function_error` until you fix it.
 
 ## The `ctx` argument
@@ -102,7 +102,7 @@ export const config = {
 };
 ```
 
-`config` must be a plain object literal: Bunker reads it when you publish, without calling your function.
+`config` must be plain JSON data (no functions or other values that don't survive `JSON.stringify`). Bunker reads it when you publish by loading the module for up to 1 second, without calling your function and without access to `bunker` or `fetch`.
 
 ## Viewer or owner
 
@@ -141,13 +141,14 @@ Calls from a draft preview (`?draft=1`, editors only) run the **draft** code, so
 export const config = { schedule: '0 2 * * *' };   // every day at 02:00 UTC
 
 export default async function (input, ctx) {
-  // ctx.trigger = { type: 'schedule', at: '2026-11-05T02:00:00Z' }
+  // ctx.trigger = { type: 'schedule', at: '2026-11-05T02:00:00Z', schedule: '0 2 * * *' }
   const open = await bunker.db.collection('requests').all({ where: { status: 'open' } });
   if (open.length) await bunker.notify({ to: [ctx.user.email], title: `${open.length} open requests` });
 }
 ```
 
-- Standard 5-field cron (`minute hour day month weekday`), always in **UTC**. The most often is every minute.
+- Standard 5-field cron (`minute hour day month weekday`, with `*`, lists, ranges and `/` steps), or `@hourly`, `@daily`, `@weekly` and `@monthly`. Always in **UTC**. The most often is every minute.
+- `input` is the same object as `ctx.trigger`.
 - Runs as the **owner**, with the longer trigger time limit (120 s by default).
 
 ### After a write
@@ -163,14 +164,15 @@ export default async function (input, ctx) {
 }
 ```
 
+- `input` is the same object as `ctx.trigger`. `op` is `add`, `update` or `delete` (a `set` reports `add` for a new record and `update` for an existing one); `doc` is left out for deletes.
 - Runs **after** the add, set, update or delete is saved, in the background. It can't stop or change the write; the person who wrote doesn't wait for it.
 - Runs as **the person who wrote** (or the owner, when elevated).
 - Writes made inside a write trigger **don't fire triggers again**, so a function can't loop on itself.
-- Writes from pages, functions, webhooks and the CLI all count.
+- Writes from pages, other functions, webhooks and the CLI all count, as long as they go through the single-record API (add, set, update, delete). Bulk imports (`db.import`, `POST /db/{coll}/_import`) **don't** fire write triggers.
 
 ### From a webhook
 
-An [inbound webhook](/bunker/docs/build/webhooks/) can target a function instead of a collection. The JSON body becomes `input`, `ctx.trigger` is `{ type: 'webhook', hook }`, it runs as the person who created the webhook, and the function's return value is sent back as the HTTP response.
+An [inbound webhook](/bunker/docs/build/webhooks/) can target a function instead of a collection. The JSON body (or a form post, as an object) becomes `input`, `ctx.trigger` is `{ type: 'webhook', hook }`, it runs as the person who created the webhook with the normal call time limit (30 s by default), and the function's return value is sent back as the HTTP response.
 
 ```js
 // api/github.js
@@ -219,7 +221,7 @@ What it can reach depends on your admin's **outbound policy**:
 | `allowlist` | Only the hosts your admin listed |
 | `off` | Nothing. Use [`bunker.connections`](/bunker/docs/sdk/connections/) for company APIs |
 
-For company-internal APIs, [connections](/bunker/docs/admin/connections/) are still the right tool: the admin keeps the key and the base URL, and they work from pages too. A refused fetch throws an error that says why, and is audited as `functions.outbound.refused`.
+For company-internal APIs, [connections](/bunker/docs/admin/connections/) are still the right tool: the admin keeps the key and the base URL, and they work from pages too. A refused fetch throws an error that says why. Requests the outbound policy refuses are audited as `functions.outbound.refused`.
 
 See the [server SDK reference](/bunker/docs/sdk/server/) for everything that's available inside a function.
 
@@ -240,14 +242,15 @@ Only editors see logs, errors and stack traces. Viewers get a plain message.
 bunker fn                                   # list this app's functions
 bunker fn call hello '{"color":"green"}'    # call one and print the output
 bunker fn call orders/place @order.json --draft
-bunker fn logs                              # recent runs with logs
-bunker fn logs nightly --follow             # stream live logs
+bunker fn runs --name nightly               # recent runs of one function
+bunker fn logs                              # recent runs with their logs
+bunker fn logs --follow                     # stream live logs
 bunker secrets                              # list secret names (never values)
 bunker secrets set STRIPE_KEY               # prompts for the value (or pipe it in)
 bunker secrets rm STRIPE_KEY
 ```
 
-Inside a folder with `bunker.json` the app is picked automatically; elsewhere pass `--site`. The same operations are available as `bunker api fn.list`, `fn.call`, `fn.runs`, `secrets.list`, `secrets.set` and `secrets.delete`, and as [MCP tools](/bunker/docs/agents/mcp/).
+Inside a folder with `bunker.json` the app is picked automatically; elsewhere pass the app's address first (`bunker fn ls team-lunch`, `bunker fn call team-lunch hello`, `bunker secrets set team-lunch STRIPE_KEY`). The same operations are available as `bunker api fn.list`, `fn.call`, `fn.runs`, `secrets.list`, `secrets.set` and `secrets.delete`, and as [MCP tools](/bunker/docs/agents/mcp/).
 
 ## Limits
 
@@ -257,10 +260,13 @@ Your admin can change these. A function can ask for a shorter time limit with `c
 |---|---|
 | Memory per run | 64 MB |
 | Time per call | 30 s |
-| Time per schedule, write trigger or webhook run | 120 s |
+| Time per schedule or write trigger run | 120 s (webhook runs use the call limit) |
 | Input and return value | 1 MB each |
-| Logs per run | 64 KB (the rest is cut) |
+| Logs per run | 64 KB streamed live (the rest is cut); the first 8 KB is kept in the run history |
 | Bunker calls per run (`bunker.*`, `fetch`, secrets) | 1,000 |
+| `fetch` response body | 5 MB |
+| Runs kept in the history | The last 200 per app |
+| Secrets | 100 per app, 16 KB each |
 | Runs at once, per app | 4 |
 | Runs at once, whole server | 4 or twice the CPU count, whichever is more |
 
@@ -270,6 +276,8 @@ Your admin can change these. A function can ask for a shorter time limit with `c
 
 | `code` | Status | Meaning |
 |---|---|---|
+| `unauthorized` | 401 | Not signed in. Signed-out visitors of a public link can't call functions |
+| `too_large` | 413 | The input is more than 1 MB |
 | `functions_off` | 403 | Server functions are turned off for this server, this app or its owner. The message says why |
 | `not_found` | 404 | No function with that name in this version |
 | `busy` | 429 | Too many runs at once. Try again in a moment |
@@ -285,7 +293,7 @@ When your function throws an `Error`, its message is what viewers see, so write 
 | `not_found` for a function you just added | Did you publish? Live pages only see published functions. In a draft preview, check the file has an `export default` |
 | My file is served as text, or is now a 404 | Files in `api/` with `export default` are functions and are no longer served. Move static files elsewhere or rename them to `.json` |
 | `functions_off` | An admin turned functions off for the server, for you or for this app. The message and the dashboard banner give the reason |
-| A bare import fails at publish | There's no npm. Copy the library into `api/_lib/` and import it with a relative path |
+| A bare import fails at publish | There's no npm, and functions can't call each other through the API: share code with `_` modules. Copy the library into `api/_lib/` and import it with a relative path |
 | `fetch` is refused | The outbound policy doesn't allow that host, or it's a private address. Ask your admin, or use a [connection](/bunker/docs/sdk/connections/) |
 | A schedule never runs | It uses the **live** version and **UTC**. Check the app is published and the cron line in the Functions tab |
 | My write trigger doesn't fire for writes made by another trigger | That's on purpose: triggers only go one level deep |

@@ -209,8 +209,11 @@ func offError(b *Block) error {
 		msg += " for this app"
 	}
 	msg += "."
-	if b.Reason != "" && b.Scope != "global" {
-		msg += " Reason: " + b.Reason
+	if r := strings.TrimSpace(b.Reason); r != "" && b.Scope != "global" {
+		msg += " Reason: " + r
+		if !strings.ContainsAny(r[len(r)-1:], ".!?") {
+			msg += "."
+		}
 	}
 	msg += " Ask a Bunker admin to turn them back on."
 	return core.NewErr(http.StatusForbidden, "functions_off", msg)
@@ -337,12 +340,18 @@ func run(ctx context.Context, c Call) (*Result, error) {
 	if trig["type"] == "write" {
 		rctx = context.WithValue(rctx, triggerDepthKey, 1)
 	}
-	groups := make([]string, 0, len(as.Groups))
-	for _, g := range as.Groups {
+	// ctx.user is who asked, even when an elevated function acts as the
+	// owner (schedules have no caller, so they report the owner).
+	caller := c.As
+	if caller == nil {
+		caller = as
+	}
+	groups := make([]string, 0, len(caller.Groups))
+	for _, g := range caller.Groups {
 		groups = append(groups, g.Name)
 	}
 	cctx, _ := json.Marshal(map[string]any{
-		"user":     map[string]any{"id": as.ID, "email": as.Email, "name": as.Name, "groups": groups},
+		"user":     map[string]any{"id": caller.ID, "email": caller.Email, "name": caller.Name, "groups": groups},
 		"site":     map[string]any{"slug": c.Site.Slug, "title": c.Site.Title, "version": c.Site.Version, "draft": c.Draft},
 		"trigger":  trig,
 		"elevated": def.Config.Elevated,

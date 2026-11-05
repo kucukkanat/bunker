@@ -41,8 +41,8 @@ A webhook can target one of the app's [server functions](/bunker/docs/build/serv
 bunker api hooks.create hires --name "GitHub: new issues" --function github
 ```
 
-- The JSON body becomes the function's `input`; `ctx.trigger` is `{ type: 'webhook', hook }`.
-- It runs as the person who created the webhook (or the owner, if the function is elevated), with the longer trigger time limit.
+- The JSON body (or a form post, as an object) becomes the function's `input`; `ctx.trigger` is `{ type: 'webhook', hook }` with the webhook's name.
+- It runs as the person who created the webhook (or the owner, if the function is elevated), with the normal call time limit (30 s by default), since the sender is waiting for the answer.
 - Whatever the function returns is sent back as the HTTP response body, as JSON. If it throws, the caller gets an error status with the message.
 - It always runs the **live** version of the function.
 

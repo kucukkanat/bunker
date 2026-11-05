@@ -47,6 +47,8 @@ func TestCallAsViewerAndElevated(t *testing.T) {
 		"api/add.js":    `export default async (input) => (await bunker.db.collection("orders").add(input))._id;`,
 		"api/count.js":  `export const config = { elevated: true }; export default async () => bunker.db.collection("orders").count();`,
 		"api/mine.js":   `export default async () => bunker.db.collection("orders").count();`,
+		"api/who.js":    "export const config = { elevated: true }; export default async (i, ctx) => ({ caller: ctx.user.email, actingAs: (await bunker.me()).email });",
+		"api/dyn.js":    `export default async () => { const m = ["qjs", "std"].join(":"); return (await import(m)).loadFile("/fn/input.json"); };`,
 		"api/client.js": `console.log("not a function")`,
 		"api/data.json": `{"static":true}`,
 	})
@@ -73,10 +75,21 @@ func TestCallAsViewerAndElevated(t *testing.T) {
 	if n := call(bob, "shop", "count", nil).JSON()["output"]; n != 2.0 {
 		t.Fatalf("elevated count = %v, want 2", n)
 	}
+	wr := call(bob, "shop", "who", nil)
+	who, _ := wr.JSON()["output"].(map[string]any)
+	if who == nil {
+		t.Fatalf("who: %d %s", wr.Status, wr.Body)
+	}
+	if who["caller"] != "bob@corp.com" || who["actingAs"] != "ada@corp.com" {
+		t.Fatalf("elevated identity: %v", who)
+	}
+	if r := call(ada, "shop", "dyn", nil); r.Status != 500 || !strings.Contains(string(r.Body), "computed name") {
+		t.Fatalf("dynamic import: %d %s", r.Status, r.Body)
+	}
 	// Code never reaches browsers; static files under api/ still do.
 	list := ada.Must("GET", "/api/v1/sites/shop/functions", nil)
 	fns := list["functions"].([]any)
-	if len(fns) != 4 {
+	if len(fns) != 6 {
 		t.Fatalf("functions: %v", fns)
 	}
 	if call(ada, "shop", "client", nil).Status != 404 || call(ada, "shop", "_lib", nil).Status != 404 {

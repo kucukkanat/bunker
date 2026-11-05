@@ -552,7 +552,7 @@ async function serverFunctions(el, ctx) {
     return h('label.field', h('span.label', label), h('div.row', inp, unit && h('span.small.muted', unit)), hint && h('span.hint', hint));
   };
   const limits = h('div.fn-grid',
-    num('memoryMb', 'Memory per run', 'How much memory one run can use. Default 64 MB.', { unit: 'MB', min: 8 }),
+    num('memoryMb', 'Memory per run', 'How much memory one run can use, from 16 to 1024 MB. Default 64 MB.', { unit: 'MB', min: 16 }),
     num('timeoutMs', 'Time limit for a call', 'How long a page or webhook waits for a function. Default 30 seconds.', { unit: 'seconds', scale: 1000, step: 0.5 }),
     num('triggerTimeoutMs', 'Time limit for schedules and triggers', 'Runs nobody is waiting on can take longer. Default 120 seconds.', { unit: 'seconds', scale: 1000, step: 0.5 }),
     num('siteConcurrency', 'Runs at once per app', 'More than this and callers are told to try again. Default 4.', { unit: 'runs' }),

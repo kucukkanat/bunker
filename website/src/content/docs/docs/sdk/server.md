@@ -15,30 +15,31 @@ const out = await bunker.fn('orders/refund', { orderId: 'a1b2', reason: 'Late' }
 - The name is the path under `api/` without the extension: `api/orders/refund.ts` → `'orders/refund'`.
 - `input` is any JSON value (up to 1 MB). The Promise resolves to whatever the function returned.
 - In a draft preview (`?draft=1`) it runs the draft code automatically.
-- Failures throw a `BunkerError` with `code` `functions_off`, `not_found`, `busy`, `timeout` or `function_error` ([what each means](/bunker/docs/build/server-functions/#errors)). For editors, `err.stack` holds the function's stack trace.
+- Failures throw a `BunkerError` with `code` `unauthorized`, `too_large`, `functions_off`, `not_found`, `busy`, `timeout` or `function_error` ([what each means](/bunker/docs/build/server-functions/#errors)). For editors, `err.stack` holds the function's stack trace.
 
-Operation `fn.call`: `POST /api/v1/sites/{site}/functions/{name}` with `{ input, draft? }` → `{ output, durationMs }`. Any viewer of the app can call it; it's page-safe.
+Operation `fn.call`: `POST /api/v1/sites/{site}/functions/{name}` with `{ input, draft? }` → `{ output, durationMs }`. Any signed-in viewer of the app can call it; it's page-safe. Signed-out visitors of a public link get `401 unauthorized`.
 
 ## What's available in a function
 
 | | Same as the page? | Notes |
 |---|---|---|
-| [`bunker.db`](/bunker/docs/sdk/db/) | Yes | `collection(name)` with `add`, `get`, `set`, `update`, `delete`, `list`, `query`, `all`, `count`, `export`. No `subscribe` |
+| [`bunker.db`](/bunker/docs/sdk/db/) | Yes | `collection(name)` with `add`, `get`, `set`, `update`, `delete` (or `remove`), `list`, `query`, `all`, `count`, `export`, and `bunker.db.list()`. `subscribe`/`onChange` reject with `unsupported`; `rule` rejects with `forbidden` |
 | [`bunker.storage`](/bunker/docs/sdk/storage/) | Yes | The run-as person's own key/value storage for this app |
-| [`bunker.files`](/bunker/docs/sdk/files/) | Mostly | `list`, `get`, `read`, `delete`, and `upload(name, data, { type, folder })` where `data` is a string or a `Uint8Array` |
-| [`bunker.ai`](/bunker/docs/sdk/ai/) | Mostly | `chat` and `json`. No `stream` |
+| [`bunker.files`](/bunker/docs/sdk/files/) | Mostly | `list`, `get`, `read`, `delete`, `url`, and `upload(name, data, { type, folder })` where `data` is a string, a `Uint8Array` or an `ArrayBuffer` |
+| [`bunker.ai`](/bunker/docs/sdk/ai/) | Mostly | `chat` and `json`. `stream` throws `unsupported` |
 | [`bunker.m365`](/bunker/docs/sdk/m365/) | Yes | As the run-as person. Needs Microsoft Entra sign-in |
-| [`bunker.connections`](/bunker/docs/sdk/connections/) | Yes | `fetch(name, { method, path, query, body })` |
-| [`bunker.rooms(name).send(data)`](/bunker/docs/sdk/rooms/) | Send only | Broadcast to open pages. No subscribing or presence |
+| [`bunker.connections`](/bunker/docs/sdk/connections/) | Yes | `fetch(name, { method, path, query, body, headers })` |
+| [`bunker.rooms(name)`](/bunker/docs/sdk/rooms/) | Mostly | `send(data)` broadcasts to open pages; `members()` lists who's there. `subscribe` rejects with `unsupported` |
 | [`bunker.notify`](/bunker/docs/sdk/ui/#bunkernotify) | Yes | Same rules: only people who can open the app receive it |
-| [`bunker.me()`](/bunker/docs/sdk/me/) | Yes | The person whose rights the function is using (the owner when elevated or scheduled) |
+| [`bunker.me()`](/bunker/docs/sdk/me/) | Yes | The person whose rights the function is using (the owner when elevated or scheduled). `bunker.me.inGroup(name)` works too |
 | `bunker.site` | Yes | `{ slug, title, version, draft }` |
 | `bunker.secrets.get(name)` | **Server only** | The secret's value as a string, or `null` |
 | `fetch(url, init)` | **Server only** | Outbound HTTP, [subject to the admin's policy](#fetch) |
-| `console.log/info/warn/error` | Different | Goes to the run's logs in the dashboard |
-| `setTimeout`, `clearTimeout` | Yes | Within the run's time limit |
+| `console.log/info/warn/error/debug` | Different | Goes to the run's logs in the dashboard |
+| `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval` | Yes | Within the run's time limit |
+| `TextEncoder`, `TextDecoder`, `Headers`, `atob`, `btoa` | Yes | UTF-8 only |
 
-Not available: `window`, `document`, the DOM, `localStorage`, `bunker.toast`, `bunker.download`, `bunker.open`, `bunker.fn` (functions don't call each other; share code through `_` modules instead), live subscriptions and streaming answers. There's no Node.js or Deno API either: no `require`, `process`, `fs` or `Buffer`. Standard modern JavaScript (ES2023) is all there: `JSON`, `Date`, `Math`, typed arrays, `async`/`await` and so on.
+Not available: `window`, `document`, the DOM, `localStorage`, `bunker.toast`, `bunker.download`, `bunker.open`, `bunker.fn` (functions don't call each other; share code through `_` modules instead), live subscriptions and streaming answers (those throw or reject with `unsupported`). There's no Node.js or Deno API either: no `require`, `process`, `fs` or `Buffer`. Standard modern JavaScript (ES2023) is all there: `JSON`, `Date`, `Math`, typed arrays, `async`/`await` and so on.
 
 ## Differences from the page SDK
 
@@ -62,17 +63,18 @@ const repo = await res.json();
 |---|---|
 | `ok`, `status` | As in the browser |
 | `headers.get(name)` | One response header |
-| `text()`, `json()`, `arrayBuffer()` | The body |
+| `statusText`, `url` | As in the browser |
+| `text()`, `json()`, `arrayBuffer()`, `bytes()` | The body, up to 5 MB (larger responses fail with `too_large`) |
 
-`body` may be a string or a `Uint8Array` (use `JSON.stringify` for JSON). Only `http` and `https` URLs are allowed, and which hosts are reachable depends on the admin's [outbound policy](/bunker/docs/admin/server-functions/#outbound-policy): any public host by default, only listed hosts with an allowlist, or nothing. Private, loopback and cloud-metadata addresses are always refused, checked on the address actually dialed after DNS. A refused call throws an error that names the host and the reason, and is audited as `functions.outbound.refused`.
+`body` may be a string, a `Uint8Array` or an `ArrayBuffer` (use `JSON.stringify` for JSON). Only `http` and `https` URLs are allowed, and which hosts are reachable depends on the admin's [outbound policy](/bunker/docs/admin/server-functions/#outbound-policy): any public host by default, only listed hosts with an allowlist, or nothing. Private, loopback and cloud-metadata addresses are always refused, checked on the address actually dialed after DNS. A refused call throws a `BunkerError` (`forbidden`) that names the host and the reason; calls the policy refuses are audited as `functions.outbound.refused`. Network failures throw `fetch_failed`.
 
 ## console
 
-`console.log`, `info`, `warn` and `error` write a line to the run's log, with its level. Editors see logs in the app's **Functions** tab (also live) and with `bunker fn logs`. Each run keeps up to 64 KB of logs. Never log secrets.
+`console.log`, `info`, `warn` and `error` write a line to the run's log, with its level. Editors see logs in the app's **Functions** tab (also live) and with `bunker fn logs`. Each run streams up to 64 KB of logs; the run history keeps the first 8 KB. Never log secrets.
 
 ## Timers
 
-`setTimeout(fn, ms)` and `clearTimeout(id)` work as usual, and `await new Promise(r => setTimeout(r, 500))` is a fine way to wait between retries. The run ends when your function's Promise settles: timers still pending then don't fire. `setInterval` is not available.
+`setTimeout(fn, ms)` and `clearTimeout(id)` work as usual, and `await new Promise(r => setTimeout(r, 500))` is a fine way to wait between retries. `setInterval` and `clearInterval` work too. The run ends when your function's Promise settles: timers still pending then don't fire.
 
 ## Operations
 

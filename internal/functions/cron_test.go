@@ -18,6 +18,8 @@ func TestCron(t *testing.T) {
 		{"0 12 * * 7", "2026-11-08T12:00:00Z"},
 		{"0 0 13 * 5", "2026-11-06T00:00:00Z"}, // either day field may match
 		{"0 0 29 2 *", "2028-02-29T00:00:00Z"},
+		{"0 6 * * 6-7", "2026-11-07T06:00:00Z"},
+		{"0 6 * * */7", "2026-11-08T06:00:00Z"},
 	}
 	for _, c := range cases {
 		cr, err := parseCron(c.spec)

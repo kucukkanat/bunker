@@ -124,9 +124,10 @@ func registerOps(a *core.App) {
 				return nil, err
 			}
 			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-			if limit <= 0 || limit > keepRuns {
+			if limit <= 0 {
 				limit = 50
 			}
+			limit = min(limit, keepRuns)
 			q := `SELECT f.id,f.name,f.trigger,COALESCE(u.name,''),COALESCE(u.email,''),f.status,f.duration_ms,f.error,f.logs,f.at FROM fn_runs f LEFT JOIN users u ON u.id=f.user_id WHERE f.site_id=?`
 			args := []any{s.ID}
 			if n := r.URL.Query().Get("name"); n != "" {
