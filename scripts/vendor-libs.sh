@@ -7,8 +7,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
 get() { # pkg@ver src-path dest-dir dest-file
-	npm pack -q "$1" >/dev/null
-	tgz=$(ls -t ./*.tgz | head -1)
+	tgz=$(npm pack -q "$1" | tail -n 1)
 	mkdir -p x && tar xzf "$tgz" -C x
 	mkdir -p "$OUT/$3"
 	cp "x/package/$2" "$OUT/$3/$4"
