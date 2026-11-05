@@ -304,7 +304,7 @@ func registerLocal(a *core.App) {
 			}
 			a.Audit(r.Context(), "auth.invite", 0, in.Email, map[string]any{"admin": in.IsAdmin})
 			by := core.MustUser(r).Name
-			emailed := mail.Send(mail.Message{To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
+			emailed := mail.Send(mail.Message{Transactional: true, To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
 				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in " + inviteDays(in.Days) + ".", ButtonText: "Join Bunker", ButtonURL: absLink(r, link)})
 			note := "Send this link to them. It works once."
 			if emailed {
@@ -347,7 +347,7 @@ func registerLocal(a *core.App) {
 				return nil, err
 			}
 			a.Audit(r.Context(), "auth.reset_link", 0, email, nil)
-			emailed := mail.Send(mail.Message{To: email, Subject: "Choose a new Bunker password",
+			emailed := mail.Send(mail.Message{Transactional: true, To: email, Subject: "Choose a new Bunker password",
 				Text: "Your Bunker admin made a link for you to choose a new password.\n\nIt works once and expires in 2 days. If you didn't ask for this, you can ignore this email.", ButtonText: "Choose a new password", ButtonURL: absLink(r, link)})
 			return map[string]any{"link": link, "emailed": emailed}, nil
 		}})

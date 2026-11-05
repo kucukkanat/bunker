@@ -306,13 +306,13 @@ async function ai(el, ctx) {
       opts.map((o) => h('button.btn.sm', { type: 'button', style: { margin: '4px 8px 0 0' }, onclick: (ev) => busy(ev.currentTarget, async () => {
         const body = { provider: o.provider };
         if (o.endpoint) body.endpoint = o.endpoint;
-        if (o.models?.length) { body.builderModel = o.models[0]; body.pageModel = o.models[0]; }
+        if (o.models?.length) { const best = o.models.find((m) => /coder|code/i.test(m)) || o.models[0]; body.builderModel = best; body.pageModel = best; }
         const n = await put('/api/v1/admin/ai', body);
         state.ai = undefined;
         toast('AI is on: ' + o.name + '.', { type: 'ok' });
         if (n) paintStatus(n);
         ai(el, ctx);
-      }) }, 'Use ' + o.name + (o.models?.length ? ' (' + o.models[0] + ')' : ''))))));
+      }) }, 'Use ' + o.name + (o.models?.length ? ' (' + (o.models.find((m) => /coder|code/i.test(m)) || o.models[0]) + ')' : ''))))));
   }).catch(() => {});
   const result = h('div');
   const test = h('button.btn', { type: 'button', onclick: () => busy(test, async () => {

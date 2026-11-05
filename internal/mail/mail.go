@@ -49,6 +49,9 @@ type Message struct {
 	Text    string
 	// Button adds a call-to-action link to the HTML version.
 	ButtonText, ButtonURL string
+	// Transactional emails (invites, resets) aren't notifications, so they
+	// don't mention the notification opt-out.
+	Transactional bool
 }
 
 type config struct {
@@ -232,7 +235,11 @@ func build(from string, m Message) ([]byte, error) {
 	if strings.HasPrefix(m.ButtonURL, "https://") || strings.HasPrefix(m.ButtonURL, "http://") {
 		text += "\n\n" + m.ButtonText + ": " + m.ButtonURL
 	}
-	text += "\n\n-- \nSent by Bunker. You can turn off email notifications in Bunker → Settings.\n"
+	footer := "Sent by Bunker. You can turn off email notifications in Bunker → Settings."
+	if m.Transactional {
+		footer = "Sent by Bunker because someone asked for this link. If you didn't expect it, you can ignore this email."
+	}
+	text += "\n\n-- \n" + footer + "\n"
 	h.Set("Content-Type", "text/plain; charset=utf-8")
 	h.Set("Content-Transfer-Encoding", "quoted-printable")
 	pw, _ := mw.CreatePart(h)
@@ -256,8 +263,8 @@ func build(from string, m Message) ([]byte, error) {
 <div style="max-width:520px;margin:0 auto;background:#fffdf8;border:1px solid #ddd6c4;border-radius:16px;padding:28px">
 <div style="font:600 20px Georgia,serif;color:#1f3a2e;margin-bottom:12px">bunker</div>
 <h1 style="font:600 22px/1.3 Georgia,serif;color:#1f3a2e;margin:0 0 12px">%s</h1>%s%s
-<p style="color:#5a635d;font-size:13px;margin-top:28px">Sent by Bunker. You can turn off email notifications in Bunker → Settings.</p></div></body></html>`,
-		html.EscapeString(m.Subject), paras, btn)
+<p style="color:#5a635d;font-size:13px;margin-top:28px">%s</p></div></body></html>`,
+		html.EscapeString(m.Subject), paras, btn, html.EscapeString(footer))
 	hw.Close()
 	mw.Close()
 	return b.Bytes(), nil
