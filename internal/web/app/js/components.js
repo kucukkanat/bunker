@@ -34,6 +34,7 @@ export function siteCard(s, i = 0, onStar) {
     h('div.meta',
       role && h('span.badge' + (role === 'Owner' ? '.ok' : ''), role),
       !s.version && h('span.badge.draft', 'Not published'),
+      s.public && h('span.badge.draft', { title: 'Anyone with the link can view it' }, icon('globe', 12), 'Public'),
       h('span.by', when + (owner !== 'you' ? ' · ' + owner : ''))),
   );
 }

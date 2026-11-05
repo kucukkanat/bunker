@@ -232,6 +232,21 @@ try {
     await page.locator('.tab-panel .empty').waitFor();
   });
 
+  await check('data tab: a webhook shows its full URL once and adds rows', async () => {
+    await page.getByRole('button', { name: 'New webhook' }).click();
+    await page.locator('.dialog input').first().fill('Script: test');
+    await page.getByRole('button', { name: 'Create webhook' }).click();
+    const url = await page.getByTestId('hook-url').innerText();
+    assert.match(url, /^https?:\/\/[^/]+\/hooks\//);
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"Ada"}' });
+    assert.equal(r.status, 201);
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('tab', { name: 'Build' }).click();
+    await page.getByRole('tab', { name: 'Data' }).click();
+    await page.locator('.tab-panel').getByText('1 call, last just now').waitFor();
+    await page.locator('.tab-panel td', { hasText: 'just now' }).first().waitFor(); // dates in data rows render
+  });
+
   await check('device size toggles resize the preview', async () => {
     await page.getByRole('button', { name: 'Phone size' }).click();
     await page.waitForTimeout(450);

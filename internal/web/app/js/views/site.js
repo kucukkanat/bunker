@@ -72,6 +72,7 @@ export default async function workspace(root, ctx) {
   const addrEl = h('div.addr');
   const iconSlot = h('span');
   const statusEl = h('span.badge');
+  const publicEl = h('span.badge.draft.hidden', { title: 'Anyone with the link can view it, without signing in' }, icon('globe', 12), 'Public');
   const publishBtn = h('button.btn.primary.publish', { 'aria-label': 'Publish', onclick: () => publish() }, icon('upload', 16), h('span.label', 'Publish'));
   const discardBtn = h('button.btn.ghost', { onclick: () => discard() }, h('span.label', 'Discard'), h('span.sr-only', ' changes'));
   const shareBtn = h('button.btn', { 'aria-label': 'Share', onclick: () => openShare() }, icon('share', 16), h('span.label', 'Share'));
@@ -89,7 +90,7 @@ export default async function workspace(root, ctx) {
   const top = h('header.ws-top',
     h('a.btn.ghost.icon', { href: '/', 'aria-label': 'Back to Home' }, icon('left', 20)),
     h('div.title', iconSlot, h('div', titleEl, addrEl)),
-    statusEl,
+    statusEl, publicEl,
     h('div.acts', viewSwitch, bell(), discardBtn, moreBtn, shareBtn, publishBtn));
 
   // ---------- left: tabs ----------
@@ -189,6 +190,7 @@ export default async function workspace(root, ctx) {
     publishBtn.disabled = !draft;
     publishBtn.title = draft ? 'Make your changes live for everyone you’ve shared with' : 'Nothing new to publish';
     discardBtn.classList.toggle('hidden', !draft);
+    publicEl.classList.toggle('hidden', !s.public);
   }
 
   function previewSrc() {
