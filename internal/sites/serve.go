@@ -318,7 +318,7 @@ func renderEmpty(w http.ResponseWriter, r *http.Request, s *SiteRecord, role cor
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'")
 	if role >= core.RoleEditor {
-		simplePage(w, s.Title, "This site hasn't been published yet.", "/sites/"+s.Slug, "Open the editor")
+		simplePage(w, s.Title, "Nothing here yet. Drop files on the workspace, create an index.html, or describe the app to the AI builder: this preview updates as soon as there's a page.", "/sites/"+s.Slug, "Open the workspace")
 		return
 	}
 	simplePage(w, s.Title, "This site hasn't been published yet. Check back soon.", "/", "Go to Bunker")
