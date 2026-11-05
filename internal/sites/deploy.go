@@ -570,7 +570,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 		if err != nil {
 			return core.BadRequest(name + " isn't a valid zip file")
 		}
-		var total int64
+		var total, read int64
 		max := siteMaxBytes()
 		dir := path.Dir(strings.ReplaceAll(name, "\\", "/"))
 		for _, f := range zr.File {
@@ -585,10 +585,15 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			if err != nil {
 				return core.BadRequest("can't read " + f.Name)
 			}
-			b, err := io.ReadAll(io.LimitReader(rc, max+1))
+			// Count real bytes: declared sizes in a zip can lie (zip bombs).
+			b, err := io.ReadAll(io.LimitReader(rc, max-read+1))
 			rc.Close()
 			if err != nil {
 				return core.BadRequest("can't read " + f.Name)
+			}
+			read += int64(len(b))
+			if read > max {
+				return core.TooLarge("the zip expands beyond the site size limit")
 			}
 			p := f.Name
 			if dir != "." && dir != "" {

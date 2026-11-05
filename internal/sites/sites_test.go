@@ -1,6 +1,8 @@
 package sites_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"strings"
 	"testing"
 
@@ -220,5 +222,22 @@ func TestTicketRoundTrip(t *testing.T) {
 		if !ok || got.Site != i || got.Ver != i%7 || got.User != i*3 {
 			t.Fatalf("ticket %q failed: %+v %v", tk, got, ok)
 		}
+	}
+}
+
+func TestZipBombRejected(t *testing.T) {
+	t.Setenv("BUNKER_SITE_MAX_MB", "1")
+	k := testkit.New(t)
+	ada := k.As("ada@corp.com", "")
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := 0; i < 3; i++ {
+		w, _ := zw.Create("f" + string(rune('a'+i)) + ".txt")
+		w.Write(bytes.Repeat([]byte("A"), 600<<10))
+	}
+	zw.Close()
+	r := ada.Do("POST", "/api/v1/drop?filename=x.zip", buf.Bytes(), "Content-Type", "application/zip")
+	if r.Status != 413 {
+		t.Fatalf("zip bomb: %d %s", r.Status, r.Body)
 	}
 }
