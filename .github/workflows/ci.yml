@@ -23,6 +23,11 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go vet ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Module installs with go install
+        # Go drops directories named vendor/ from module zips, which would break go:embed.
+        run: test -z "$(find cmd internal -type d -name vendor)"
       - run: go test ./...
       - name: Build
         run: CGO_ENABLED=0 go build -trimpath -o bunker ./cmd/bunker && ./bunker version
