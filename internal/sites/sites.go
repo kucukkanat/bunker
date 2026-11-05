@@ -146,6 +146,7 @@ func initSites(a *core.App) error {
 		extraOps(a)
 	}
 	registerDeploy(a)
+	registerImport(a)
 	registerServing(a)
 	go purgeLoop(a)
 	registerLifecycle(a)
