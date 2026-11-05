@@ -110,10 +110,14 @@ func LoadConfig() *Config {
 	}
 	c.TrustProxy = EnvBool("TRUST_PROXY", port != "" || c.TLS == "off")
 	if c.URL == "" && c.Dev {
-		c.URL = "http://" + strings.Replace(c.Listen, "0.0.0.0", "localhost", 1)
-		if strings.HasPrefix(c.Listen, ":") {
-			c.URL = "http://localhost" + c.Listen
+		host, port := "localhost", "8080"
+		if i := strings.LastIndex(c.Listen, ":"); i >= 0 {
+			port = c.Listen[i+1:]
+			if h := c.Listen[:i]; h != "" && h != "127.0.0.1" && h != "0.0.0.0" && h != "[::]" {
+				host = h
+			}
 		}
+		c.URL = "http://" + host + ":" + port
 	}
 	return c
 }
