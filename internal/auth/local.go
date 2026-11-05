@@ -295,18 +295,24 @@ func registerLocal(a *core.App) {
 		}})
 	a.Handle(core.Op{Name: "invites.list", Method: "GET", Path: "/api/v1/admin/invites", Summary: "Pending invites", Access: core.AccessAdmin,
 		Fn: func(r *http.Request) (any, error) {
-			rows, err := a.DB.QueryContext(r.Context(), `SELECT email,name,is_admin,kind,created_at,expires_at FROM invites WHERE used_at IS NULL AND expires_at>? ORDER BY created_at DESC`, core.Now())
+			rows, err := a.DB.QueryContext(r.Context(), `SELECT email,name,is_admin,kind,created_at,expires_at,groups_json FROM invites WHERE used_at IS NULL AND expires_at>? ORDER BY created_at DESC`, core.Now())
 			if err != nil {
 				return nil, err
 			}
 			defer rows.Close()
 			out := []map[string]any{}
 			for rows.Next() {
-				var e, n, k string
+				var e, n, k, gj string
 				var adm int
 				var c, x int64
-				rows.Scan(&e, &n, &adm, &k, &c, &x)
-				out = append(out, map[string]any{"email": e, "name": n, "isAdmin": adm == 1, "kind": k, "createdAt": c, "expiresAt": x})
+				rows.Scan(&e, &n, &adm, &k, &c, &x, &gj)
+				var gs []core.Group
+				jsonUnmarshal([]byte(gj), &gs)
+				names := []string{}
+				for _, g := range gs {
+					names = append(names, g.Name)
+				}
+				out = append(out, map[string]any{"email": e, "name": n, "isAdmin": adm == 1, "kind": k, "createdAt": c, "expiresAt": x, "groups": names})
 			}
 			return map[string]any{"invites": out}, nil
 		}})

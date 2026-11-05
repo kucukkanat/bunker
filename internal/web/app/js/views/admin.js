@@ -94,7 +94,12 @@ async function people(el, ctx) {
     clear(invitesEl, inv.length > 0 && h('div', { style: { marginBottom: '20px' } }, h('h3', { style: { marginBottom: '8px' } }, 'Waiting to join'),
       h('div.list', inv.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('mail', 16)),
         h('div.n', h('b', x.name || x.email), h('span', x.email + ' · invited ' + relTime(x.createdAt) + ' · link works for ' + plural(Math.max(1, Math.round((x.expiresAt - Date.now() / 1000) / 86400)), 'more day'))),
-        x.isAdmin && h('span.badge.ok', 'Admin'))))));
+        x.isAdmin && h('span.badge.ok', 'Admin'),
+        h('button.btn.sm', { type: 'button', title: 'Make a fresh link (the old one stops working)', onclick: async (ev) => busy(ev.currentTarget, async () => {
+          const r = await post('/api/v1/admin/invites', { email: x.email, name: x.name, isAdmin: x.isAdmin, groups: x.groups || [] });
+          linkDialog('New link for ' + (x.name || x.email), 'The previous link no longer works. This one works once and expires in 7 days.', r.link);
+          loadInvites();
+        }) }, 'New link'))))));
   }
   loadInvites();
   async function resetLink(u) {
