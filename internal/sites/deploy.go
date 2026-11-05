@@ -443,7 +443,17 @@ func SetKind(ctx context.Context, siteID int64, kind string) {
 // readUpload parses a deploy request body into files: multipart (files
 // with relative paths in filename or a "path" field), a zip, a single
 // file, or JSON {files:{path:{content|base64}}}.
+// uploadSem bounds memory: uploads are parsed in memory, so only a few
+// run at once (others wait their turn).
+var uploadSem = make(chan struct{}, core.EnvInt("UPLOAD_CONCURRENCY", 4))
+
 func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
+	select {
+	case uploadSem <- struct{}{}:
+		defer func() { <-uploadSem }()
+	case <-r.Context().Done():
+		return nil, nil, core.Unavailable("upload cancelled")
+	}
 	max := int64(core.EnvInt("UPLOAD_MAX_MB", 100)) << 20
 	r.Body = http.MaxBytesReader(nil, r.Body, max)
 	meta := map[string]string{}
