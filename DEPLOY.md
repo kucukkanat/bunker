@@ -29,6 +29,12 @@ docker run -d --name bunker -p 8080:8080 -v bunker-data:/data --restart unless-s
 docker logs bunker   # → open the URL it prints and enter the setup code
 ```
 
+No image published yet, or you want the latest code? Build it straight from GitHub (no clone needed):
+
+```sh
+docker build -t ghcr.io/kucukkanat/bunker https://github.com/kucukkanat/bunker.git
+```
+
 Or `docker compose up -d` with [`docker-compose.yml`](docker-compose.yml). Want HTTPS on your own domain? Use [`deploy/compose-with-caddy/`](deploy/compose-with-caddy/): `DOMAIN=bunker.example.com docker compose up -d`.
 
 ## Any Linux server (or a Mac)
