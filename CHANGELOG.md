@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (unreleased): first release
+## v0.1.0 (2026-11-05): first release
 
 Your own private app cloud: drop a file or describe an app, get a private, shareable, sandboxed web app. One Go binary, one data folder.
 
