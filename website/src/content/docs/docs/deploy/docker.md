@@ -6,6 +6,10 @@ sidebar: { order: 2 }
 
 The image is `ghcr.io/kucukkanat/bunker` (multi-arch, distroless, runs as uid 65532). Everything Bunker stores lives in `/data` inside the container.
 
+:::tip[Before the first release]
+If the image isn't published yet, build it straight from GitHub: `docker build -t ghcr.io/kucukkanat/bunker https://github.com/kucukkanat/bunker.git`. The Compose files do this for you automatically when the pull fails.
+:::
+
 ## docker run
 
 ```sh
