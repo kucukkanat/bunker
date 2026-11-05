@@ -194,7 +194,18 @@ func originOf(s string) string {
 // clientIP returns the caller's address. Behind a proxy, only the last
 // X-Forwarded-For entry (the one our proxy appended) is trustworthy: the
 // rest is whatever the client sent.
+var trustAlways = core.Env("TRUST_PROXY", "") != ""
+
 func clientIP(r *http.Request, trust bool) string {
+	// By default only believe forwarding headers when the connection itself
+	// comes from a proxy-like address (loopback or private network). A server
+	// exposed directly to the internet then can't be fooled by a forged
+	// X-Forwarded-For. BUNKER_TRUST_PROXY=true trusts them from anywhere.
+	if trust && !trustAlways {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := net.ParseIP(host)
+		trust = ip != nil && (ip.IsLoopback() || ip.IsPrivate())
+	}
 	if trust {
 		if vs := r.Header.Values("X-Forwarded-For"); len(vs) > 0 {
 			parts := strings.Split(vs[len(vs)-1], ",")
