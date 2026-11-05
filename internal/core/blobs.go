@@ -7,9 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"math/bits"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync"
 
 	"github.com/andybalholm/brotli"
 )
@@ -17,7 +18,14 @@ import (
 // Blobs is a content-addressed file store. Identical files across
 // versions and sites are stored once, which keeps disk usage low and
 // makes deploys of unchanged files free.
-type Blobs struct{ Dir string }
+type Blobs struct {
+	Dir string
+
+	// noBr remembers blobs that brotli doesn't shrink enough, so they
+	// aren't recompressed on every request (bounded; reset when full).
+	noBrMu sync.Mutex
+	noBr   map[string]struct{}
+}
 
 func NewBlobs(dir string) (*Blobs, error) {
 	if err := os.MkdirAll(filepath.Join(dir, "tmp"), 0o700); err != nil {
@@ -71,7 +79,7 @@ func (b *Blobs) Put(r io.Reader, max int64) (string, int64, error) {
 
 // PutBytes stores data.
 func (b *Blobs) PutBytes(data []byte) (string, int64, error) {
-	return b.Put(strings.NewReader(string(data)), 0)
+	return b.Put(bytes.NewReader(data), 0)
 }
 
 // Open opens a blob for reading.
@@ -118,7 +126,8 @@ func (b *Blobs) Gzip(hash string) string {
 	if err != nil {
 		return ""
 	}
-	zw, _ := gzip.NewWriterLevel(tmp, gzip.BestCompression)
+	zw := getGzip(tmp)
+	defer gzipPool.Put(zw)
 	if _, err := io.Copy(zw, src); err != nil {
 		zw.Close()
 		tmp.Close()
@@ -143,12 +152,24 @@ func (b *Blobs) Brotli(hash string) string {
 	if _, err := os.Stat(br); err == nil {
 		return br
 	}
+	b.noBrMu.Lock()
+	_, skip := b.noBr[hash]
+	b.noBrMu.Unlock()
+	if skip {
+		return ""
+	}
 	src, err := os.ReadFile(b.path(hash))
 	if err != nil {
 		return ""
 	}
 	out := CompressBrotli(src)
 	if out == nil || len(out) > len(src)*9/10 {
+		b.noBrMu.Lock()
+		if b.noBr == nil || len(b.noBr) >= 10000 {
+			b.noBr = map[string]struct{}{}
+		}
+		b.noBr[hash] = struct{}{}
+		b.noBrMu.Unlock()
 		return ""
 	}
 	tmp, err := os.CreateTemp(filepath.Join(b.Dir, "tmp"), "br-*")
@@ -167,7 +188,15 @@ func (b *Blobs) Brotli(hash string) string {
 // CompressBrotli compresses data in memory (quality 9: near-max ratio, fast enough for lazy use).
 func CompressBrotli(data []byte) []byte {
 	var buf bytes.Buffer
-	w := brotli.NewWriterLevel(&buf, 9)
+	// Size the window to the input: with the default 4 MB window, quality 9
+	// allocates a 32 MB hash table even for a 5 KB page. A window that still
+	// covers the whole input compresses just as well (same output size in
+	// practice) at a fraction of the time and memory.
+	opts := brotli.WriterOptions{Quality: 9}
+	if len(data) <= 1<<16 {
+		opts.LGWin = max(10, bits.Len(uint(len(data))))
+	}
+	w := brotli.NewWriterOptions(&buf, opts)
 	if _, err := w.Write(data); err != nil {
 		return nil
 	}
@@ -180,10 +209,24 @@ func CompressBrotli(data []byte) []byte {
 // CompressGzip compresses data in memory.
 func CompressGzip(data []byte) []byte {
 	var buf bytes.Buffer
-	w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	w := getGzip(&buf)
 	w.Write(data)
 	w.Close()
+	gzipPool.Put(w)
 	return buf.Bytes()
+}
+
+// gzipPool reuses best-compression writers (each allocates ~800 KB of
+// compressor state).
+var gzipPool sync.Pool
+
+func getGzip(dst io.Writer) *gzip.Writer {
+	if w, ok := gzipPool.Get().(*gzip.Writer); ok {
+		w.Reset(dst)
+		return w
+	}
+	w, _ := gzip.NewWriterLevel(dst, gzip.BestCompression)
+	return w
 }
 
 // Remove deletes a blob (and its compressed variants).
