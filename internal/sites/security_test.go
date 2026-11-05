@@ -52,7 +52,7 @@ func TestOnlyOwnerOffersTemplate(t *testing.T) {
 		t.Fatalf("outsider copied a private site: %d %s", r.Status, r.Body)
 	}
 	ada.Must("PATCH", "/api/v1/sites/"+slug, map[string]any{"isTemplate": true})
-	carol.Must("POST", "/api/v1/sites", map[string]any{"title": "copy", "template": slug})
+	bob.Must("POST", "/api/v1/sites", map[string]any{"title": "copy", "template": slug}) // members can start from it
 }
 
 // Trashing a site renames it to trash-<id>-<slug>. If anyone could take
@@ -74,4 +74,3 @@ func TestTrashAddressesAreReserved(t *testing.T) {
 		t.Fatalf("site still there after delete: %d", r.Status)
 	}
 }
-
