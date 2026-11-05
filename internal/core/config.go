@@ -10,13 +10,13 @@ import (
 // Runtime settings that admins change in the UI live in the settings
 // table (see Settings).
 type Config struct {
-	URL        string // public base URL, e.g. https://bunker.corp.com (no trailing slash)
-	Listen     string // listen address
-	DataDir    string
-	TLS        string // auto | off | file
-	TLSCert    string
-	TLSKey     string
-	Dev        bool // local single-user development mode
+	URL     string // public base URL, e.g. https://bunker.corp.com (no trailing slash)
+	Listen  string // listen address
+	DataDir string
+	TLS     string // auto | off | file
+	TLSCert string
+	TLSKey  string
+	Dev     bool // local single-user development mode
 	// ContentURL optionally serves user content from a separate origin
 	// (e.g. https://usercontent.bunker.corp.com) for defense in depth.
 	ContentURL string
@@ -61,12 +61,12 @@ func EnvInt(name string, def int) int {
 // platform-friendly defaults (PORT from PaaS providers, etc).
 func LoadConfig() *Config {
 	c := &Config{
-		URL:     strings.TrimRight(Env("URL", ""), "/"),
-		DataDir: Env("DATA_DIR", ""),
-		TLS:     Env("TLS", ""),
-		TLSCert: Env("TLS_CERT", ""),
-		TLSKey:  Env("TLS_KEY", ""),
-		Dev:     EnvBool("DEV", false),
+		URL:        strings.TrimRight(Env("URL", ""), "/"),
+		DataDir:    Env("DATA_DIR", ""),
+		TLS:        Env("TLS", ""),
+		TLSCert:    Env("TLS_CERT", ""),
+		TLSKey:     Env("TLS_KEY", ""),
+		Dev:        EnvBool("DEV", false),
 		ContentURL: strings.TrimRight(Env("CONTENT_URL", ""), "/"),
 	}
 	if c.DataDir == "" {
