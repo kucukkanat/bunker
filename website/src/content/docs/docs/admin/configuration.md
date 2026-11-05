@@ -66,6 +66,7 @@ All configuration is environment variables. You usually need none: Bunker picks 
 | `BUNKER_SMTP_URL` | (off) | SMTP server for emailing invites, resets and notifications: `smtp://user:pass@host:587` or `smtps://...:465`. See [Email](/bunker/docs/admin/email/) |
 | `BUNKER_SMTP_FROM` | (from the SMTP user) | From address, e.g. `Bunker <bunker@corp.com>` |
 | `BUNKER_NO_BROWSER` | `false` | Don't open the setup page in a browser on first run on a desktop |
+| `BUNKER_UPDATE_CHECK` | `true` | When an admin opens Admin, check GitHub (at most every 12 hours) for a newer release. `false` makes Bunker never contact GitHub |
 | `BUNKER_SITE_MAX_MB` | `100` | Largest app (all files of one version) |
 | `BUNKER_MAX_SITES_PER_USER` | `500` | Apps per person |
 | `BUNKER_TRASH_DAYS` | `30` | Days before trashed apps are purged |
@@ -154,6 +155,7 @@ See [Backups and upgrades](/bunker/docs/admin/backups/#scheduled-snapshots).
 | `BUNKER_PROFILE` | Which saved login to use |
 | `BUNKER_CONFIG` | Config file path (default `~/.config/bunker/config.json`, honouring `XDG_CONFIG_HOME`) |
 | `BUNKER_NO_BROWSER` | Don't open the browser |
+| `BUNKER_UPDATE_CHECK` | `true` | When an admin opens Admin, check GitHub (at most every 12 hours) for a newer release. `false` makes Bunker never contact GitHub |
 | `BUNKER_NO_CLIPBOARD` | Don't copy URLs to the clipboard |
 | `BUNKER_UPDATE_REPO`, `BUNKER_UPDATE_API` | Where `bunker update` looks for releases (mirrors) |
 | `NO_COLOR`, `FORCE_COLOR` | Output colors |
