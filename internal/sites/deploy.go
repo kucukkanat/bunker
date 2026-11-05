@@ -502,7 +502,11 @@ func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
 			if err != nil {
 				return nil, nil, tooLargeOr(err, "upload failed")
 			}
-			data, err := io.ReadAll(part)
+			var hint int64
+			if strings.HasSuffix(strings.ToLower(part.FileName()), ".zip") {
+				hint = min(r.ContentLength, max, 32<<20) // a zip is usually the whole body
+			}
+			data, err := readAllSized(part, hint)
 			if err != nil {
 				return nil, nil, tooLargeOr(err, "upload failed")
 			}
@@ -630,7 +634,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 				return core.BadRequest("can't read " + f.Name)
 			}
 			// Count real bytes: declared sizes in a zip can lie (zip bombs).
-			b, err := io.ReadAll(io.LimitReader(rc, max-read+1))
+			b, err := readAllSized(io.LimitReader(rc, max-read+1), min(int64(f.UncompressedSize64), max-read, 16<<20))
 			rc.Close()
 			if err != nil {
 				return core.BadRequest("can't read " + f.Name)
@@ -649,6 +653,30 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 	}
 	files[name] = data
 	return nil
+}
+
+// readAllSized is io.ReadAll starting from a buffer of hint bytes (when
+// 0 < hint <= 256 MB), so a large upload isn't copied through a series
+// of growing buffers. hint is only a capacity (callers cap it, so a lying
+// size costs little): the data read decides.
+func readAllSized(r io.Reader, hint int64) ([]byte, error) {
+	if hint <= 0 || hint > 256<<20 {
+		return io.ReadAll(r)
+	}
+	b := make([]byte, 0, hint+1) // +1: reaching EOF needs no growth
+	for {
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err == io.EOF {
+			return b, nil
+		}
+		if err != nil {
+			return b, err
+		}
+		if len(b) == cap(b) {
+			b = append(b, 0)[:len(b)]
+		}
+	}
 }
 
 // deployFiles runs the full pipeline for uploaded files.

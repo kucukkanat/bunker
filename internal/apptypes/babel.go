@@ -40,7 +40,7 @@ func transpileBabelPages(files map[string][]byte) (bool, error) {
 		if !strings.HasSuffix(lp, ".html") && !strings.HasSuffix(lp, ".htm") {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(string(b)), "text/babel") && !strings.Contains(strings.ToLower(string(b)), "text/jsx") {
+		if !containsASCIIFold(b, "text/babel") && !containsASCIIFold(b, "text/jsx") {
 			continue
 		}
 		out, ok, err := transpileBabelHTML(files, p, b)
@@ -140,6 +140,29 @@ func transpileBabelHTML(files map[string][]byte, name string, b []byte) ([]byte,
 func hasBabelType(attrs string) bool {
 	for _, tm := range typeAttrRe.FindAllStringSubmatch(attrs, -1) {
 		if isBabelType(tm[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsASCIIFold reports whether b contains the lowercase ASCII needle,
+// ignoring ASCII case: what strings.Contains(strings.ToLower(string(b)),
+// needle) answers, without copying the page twice.
+func containsASCIIFold(b []byte, needle string) bool {
+	n := len(needle)
+	for i := 0; i+n <= len(b); i++ {
+		j := 0
+		for ; j < n; j++ {
+			c := b[i+j]
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != needle[j] {
+				break
+			}
+		}
+		if j == n {
 			return true
 		}
 	}

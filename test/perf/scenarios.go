@@ -258,6 +258,7 @@ func (h *harness) scenSSE(nConns, nEvents, rate int) {
 		Note: fmt.Sprintf("open in %s, RSS %.0f→%.0f MB (+%.1f KB/conn), %s", openTime.Round(time.Millisecond), float64(rssBefore)/1e6, float64(rssAfter)/1e6, rssPer, perConnNote)})
 
 	// Publish nEvents document changes at rate/s from a few writers.
+	stopProf := h.startProfile("sse-fanout", time.Duration(nEvents)*time.Second/time.Duration(rate))
 	pubBefore := h.stats(false)
 	interval := time.Second / time.Duration(rate)
 	pc := newClient(8)
@@ -289,6 +290,7 @@ func (h *harness) scenSSE(nConns, nEvents, rate int) {
 	}
 	fanTime := time.Since(pubStart)
 	pubAfter := h.stats(false)
+	stopProf()
 	for _, c := range conns {
 		if c != nil {
 			c.c.Close()
@@ -328,6 +330,7 @@ func (h *harness) scenUpload(n int) {
 	}
 	size := float64(len(zips[0])) / 1e6
 	for _, conc := range []int{1, 4} {
+		stopProf := h.startProfile(fmt.Sprintf("upload-c%d", conc), 3*time.Second)
 		before := h.stats(false)
 		var lats []time.Duration
 		var mu sync.Mutex
@@ -346,6 +349,7 @@ func (h *harness) scenUpload(n int) {
 		})
 		el := time.Since(start)
 		after := h.stats(false)
+		stopProf()
 		r := result{Name: fmt.Sprintf("drop %.1f MB zip (concurrency %d)", size, conc), Requests: int64(n), Errors: errs.Load(), Elapsed: el}
 		r.P50, r.P99 = percentiles([][]time.Duration{lats})
 		if before != nil && after != nil {
