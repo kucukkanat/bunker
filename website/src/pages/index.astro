@@ -117,6 +117,12 @@ const shots: Shot[] = [
 
 const extras = [
   {
+    t: 'A backend when you need one',
+    d: 'Drop api/hello.js next to your pages and call it with bunker.fn. Run it on a schedule, after a change or from a webhook, with secrets and outbound fetch. Each call gets its own WebAssembly sandbox. No build step, no containers.',
+    link: ['docs/build/server-functions/', 'Server functions'],
+    icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01',
+  },
+  {
     t: 'Data from your other tools',
     d: 'Power Automate, Zapier, a form or a nightly script can post JSON to a secret webhook URL. It lands in the app’s data and open pages update live.',
     link: ['docs/build/webhooks/', 'Inbound webhooks'],
@@ -179,6 +185,7 @@ const security = [
   { t: 'Connection-Allowlist', d: 'CSP can’t stop WebRTC. On Chromium and Edge 152+ this header also blocks WebRTC, navigations and prefetch to anywhere but Bunker.', code: 'Connection-Allowlist: (response-origin)' },
   { t: 'Viewer-scoped Microsoft 365', d: 'An app sees SharePoint, Excel and OneDrive only with the viewer’s own rights, and only for scopes your admin allowed.', code: 'delegated · admin allowlist' },
   { t: 'Audit everything', d: 'Sign-ins, publishes, shares, views, data-rule and admin changes land in an indexed audit table, with every agent action marked as a token.', code: 'site.share · site.view · auth.login' },
+  { t: 'Sandboxed server code', d: 'Server functions run in a fresh QuickJS-on-WebAssembly instance per call, with a memory cap, a time limit and the caller’s own rights. Admins choose where they may connect.', code: '64 MB · 30 s · outbound: internet | allowlist | off' },
   { t: 'SSRF-safe connections', d: 'Apps reach internal APIs only through named connections an admin defines. Private and metadata addresses are blocked by default.', code: 'bunker.connections.fetch("hr", { path: "/people" })' },
   { t: 'Your sign-in, your rules', d: 'Built-in accounts use argon2id and one-time invite links. Company sign-in is single-tenant only, and Bunker refuses settings that would let personal accounts in.', code: 'argon2id · tenant ≠ common' },
 ];
@@ -190,6 +197,7 @@ const compare: [string, string, string, string][] = [
   ['Share each app with people and groups', 'yes', 'yes', 'no'],
   ['Apps sandboxed from each other and the internet', 'yes', 'varies', 'no'],
   ['Database, files and live updates built in', 'yes', 'yes', 'no'],
+  ['Server code, schedules and secrets, no extra service', 'yes', 'partly', 'no'],
   ['Agents deploy through CLI and MCP', 'yes', 'rarely', 'partly'],
   ['Plain HTML you can take with you', 'yes', 'lock-in', 'yes'],
   ['Audit log', 'yes', 'paid tier', 'no'],
@@ -207,7 +215,7 @@ const faq = [
   },
   {
     q: 'Is Bunker ready for production?',
-    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. So are the dashboard, app types from Markdown to notebooks, templates, Microsoft 365 data, connections, webhooks, public links, MCP Apps, audit streaming and backups. Anything unfinished is marked Preview in the docs. Try it with a small group first.',
+    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. So are the dashboard, app types from Markdown to notebooks, templates, server functions, Microsoft 365 data, connections, webhooks, public links, MCP Apps, audit streaming and backups. Anything unfinished is marked Preview in the docs. Try it with a small group first.',
   },
   {
     q: 'Do we need wildcard DNS or a wildcard certificate?',

@@ -8,7 +8,7 @@ Agents don't need these docs. They can ask Bunker directly.
 
 | URL | What |
 |---|---|
-| `/llms.txt` | A short guide for agents: how to authenticate, deploy, the sandbox rules and the SDK |
+| `/llms.txt` | A short guide for agents: how to authenticate, deploy, the sandbox rules, the SDK and server functions (`api/<name>.js`, the server `bunker` object, secrets, triggers) |
 | `/llms-full.txt` | The same, plus every API operation with its parameters |
 | `/api/v1/agent-guide` | The full agent guide (authentication, deploy, sandbox, SDK, operations) |
 | `/api/v1/ops` | Every operation as JSON: name, method, path, summary, parameters, and whether it's page-safe or destructive |

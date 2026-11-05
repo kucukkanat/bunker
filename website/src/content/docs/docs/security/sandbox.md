@@ -4,7 +4,7 @@ description: Exactly how Bunker isolates app content, with the sandbox flags and
 sidebar: { order: 2 }
 ---
 
-These values are copied from the code (`internal/sites/serve.go`, `internal/server/server.go`). If they ever differ, the code wins: please [tell us](/bunker/docs/security/reporting/).
+These values are copied from the code (`internal/sites/serve.go`, `internal/server/server.go`, `internal/fnrt`). If they ever differ, the code wins: please [tell us](/bunker/docs/security/reporting/).
 
 ## Two documents per app
 
@@ -113,6 +113,31 @@ The SDK, injected as the first script of every HTML file, also:
 - removes `RTCPeerConnection`, `RTCDataChannel` and related constructors (a speed bump for browsers without Connection-Allowlist; a determined page can get them back from a fresh frame, so this is not relied on),
 - routes external links, `target="_blank"` and `window.open()` through a "Leave Bunker?" confirmation,
 - installs in-memory `localStorage`, `sessionStorage` and `document.cookie` so libraries don't crash.
+
+## Server functions
+
+[Server functions](/bunker/docs/build/server-functions/) run on the server, not in the browser, so none of the headers above apply. They have their own sandbox.
+
+**Engine.** QuickJS (quickjs-ng v0.17.0, the upstream `qjs-wasi.wasm` build, vendored and checked by SHA-256) compiled to WebAssembly and run by [wazero](https://wazero.io), a pure-Go runtime. Compiled once per server, then **a fresh instance for every run**: no state carries over between runs, apps or people.
+
+**What a run can touch.**
+
+| | |
+|---|---|
+| Memory | Its own WebAssembly linear memory, capped (64 MB by default). Bunker's memory isn't addressable from inside |
+| Files | None. No directories are mounted |
+| Network | None directly. `fetch` is a message to Bunker, which applies the [outbound policy](/bunker/docs/admin/server-functions/#outbound-policy) |
+| Environment, arguments | Empty |
+| Time | Wall-clock deadline per run (30 s calls, 120 s triggers). On timeout the instance is closed |
+| Bunker | One line-based JSON channel (stdin/stdout; stderr is the log). Requests: `api` (dispatched in-process as the run-as person with `X-Bunker-Page: 1`, so only page-safe operations of this app work), `secret` (this app's secrets) and `fetch` |
+
+**Caps per run:** input and output 1 MB, logs 64 KB, 1,000 host calls. Concurrency: 4 runs per app, `max(4, 2 × CPUs)` per server; beyond that calls get `429 busy`.
+
+**Outbound `fetch`.** Only `http`/`https`. The host is resolved by Bunker and the **dialed** IP is checked: loopback, private (RFC 1918, unique-local), link-local and cloud-metadata addresses are always refused, every redirect is checked the same way, and proxies from the environment are ignored (the same guard as [connections](/bunker/docs/admin/connections/)). With the `allowlist` policy the host must also match an entry; with `off` every request is refused.
+
+**Code.** Bundled at publish by the embedded esbuild into one ES module per function (ES2023, TypeScript stripped). Imports of `qjs:*`, `std` and `os` are refused, so QuickJS's own file and process APIs are never reachable. Function files and `_` modules return 404 from `/s/<app>/...`.
+
+**Secrets.** Stored per app with AES-GCM under the server's secret key; there is no operation that returns a value. A running function receives a value only when it asks for it by name.
 
 ## Session and CSRF
 

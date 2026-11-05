@@ -29,6 +29,7 @@ Internal, self-hosted app platform. Like eze.page, but built for non-technical p
 6. **AI:** rate limits per user and per site, a prompt/response size cap, and audit entries (metadata by default, full content optional).
 7. **Audit log** covering create, deploy, share, delete, view, Graph and AI calls. Exportable as CSV or JSON, or as a syslog stream.
 8. **Hardening:** upload type/size limits, a zip-slip guard, CSRF on the app, secure cookies, and secret-scanning of uploads (blocks pasted API keys).
+9. **Server functions** (`api/<name>.js|ts`): untrusted code on the server, so it gets its own wall. Every call runs in a fresh QuickJS instance compiled to WASI, inside wazero (pure Go, no CGO, no containers), with a memory cap (64 MB), a wall-clock limit (30 s calls, 120 s triggers), input/output/log caps and a host-call budget. Its only way out is a JSON channel to Bunker that allows page-safe ops of that one app (as the caller, or the owner when `elevated`), its own secrets, and `fetch` under the admin's outbound policy (`internet` with the SSRF guard by default, `allowlist`, or `off`). Secrets are per app, write-only, AES-GCM at rest. Admins can turn functions off globally, per person (every app they own, with a reason the person sees) or per app. Deploys of function sets, secret changes, blocks and refused outbound calls are audited.
 
 ## SDK (`window.bunker`)
 - `bunker.me()`: name, email, groups
@@ -37,6 +38,9 @@ Internal, self-hosted app platform. Like eze.page, but built for non-technical p
 - `bunker.ai.chat(messages)`: goes through the admin-configured provider
 - `bunker.m365`: `lists.get`, `excel.range`, `files.list` (delegated)
 - `bunker.storage`: a localStorage replacement, because opaque-origin iframes have no storage
+- `bunker.fn(name, input)`: call one of the app's server functions
+
+Inside server functions the global `bunker` has the same shapes (db, storage, files, ai chat/json, m365, connections, rooms send, notify, me), plus server-only `bunker.secrets.get(NAME)`, `fetch` (outbound policy), `console` → run logs and `setTimeout`. Triggers: `config.schedule` (cron, UTC, as owner), `config.onWrite` (after commits, depth 1) and webhooks that target a function. Schedules and triggers run the live version; `?draft=1` calls run the draft.
 
 ## Product surfaces
 - **Home:** my sites, shared with me, templates

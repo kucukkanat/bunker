@@ -55,6 +55,8 @@ claude mcp add bunker -- bunker mcp
 | `build_with_ai` | Ask Bunker's AI builder to build or change an app |
 | `get_sdk_docs` | The SDK, sandbox and deploy rules |
 | One tool per API operation | Generated from `GET /api/v1/ops`: list, share, versions, restore, data, stats... |
+| `fn_list`, `fn_call`, `fn_runs` | List an app's [server functions](/bunker/docs/build/server-functions/), call one, and read recent runs with their logs (handy for an agent fixing its own function) |
+| `secrets_list`, `secrets_set`, `secrets_delete` | Manage an app's function secrets. Values can be set, never read |
 
 Destructive operations (delete, unshare, discard) are marked so clients can ask you first.
 
@@ -63,5 +65,6 @@ Destructive operations (delete, unshare, discard) are marked so clients can ask 
 ## Safety
 
 - The agent acts as you. It can't see apps you can't see.
-- Page-only limits still apply: an app's code can never deploy or share; only you, through the agent, can.
+- Page-only limits still apply: an app's code can never deploy or share; only you, through the agent, can. The same goes for server functions.
+- An agent can store a secret you give it, but can never read one back.
 - Every action is in the [audit log](/bunker/docs/admin/audit/), marked as coming from a token.

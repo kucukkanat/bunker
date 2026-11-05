@@ -37,6 +37,10 @@ When someone opens `/s/<address>/`, Bunker sends a small **shell** page. The she
 
 Inside the sandbox, `window.bunker` (the SDK) is how an app gets things done: who is viewing, saving data, uploading files, using AI, reading Microsoft 365. Each call goes to the shell, which forwards it to Bunker with the viewer's session. Bunker checks the site, the viewer and their role every time. See the [SDK reference](/bunker/docs/sdk/overview/).
 
+## Server functions
+
+A **server function** is a file in your app's `api/` folder, like `api/orders.js`, that runs on the server instead of in the browser. Pages call it with `bunker.fn('orders', input)`; it can also run on a schedule, after a change to a collection, or when a webhook arrives. It uses the same `bunker` calls as a page, plus secrets and `fetch`, and by default it acts with the rights of the person who called it. Each call runs in its own short-lived sandbox. See [Server functions](/bunker/docs/build/server-functions/).
+
 ## Operations
 
 Every action in Bunker, from "publish" to "share" to "restore", is an **operation** with a name like `sites.deploy` and a route like `POST /api/v1/sites/{site}/deploy`. The dashboard, the [CLI](/bunker/docs/cli/reference/) and the [MCP tools](/bunker/docs/agents/mcp/) all use the same list, from `GET /api/v1/ops`. There are no hidden dashboard-only actions.

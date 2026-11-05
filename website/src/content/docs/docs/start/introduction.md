@@ -19,6 +19,7 @@ It runs on your own machine as **one Go binary and one data folder**, under the 
 - A shared tracker made from a spreadsheet someone already keeps.
 - A dashboard a data analyst exported as HTML or a notebook.
 - A one-page report, a slide deck, a PDF handbook.
+- An app with a little backend: a nightly digest, a call to a payment or ticketing API, a check viewers can't skip.
 - A personal tool, a family meal planner, a club sign-up sheet.
 - Anything a coding agent wrote that "just needs to be online, privately".
 
@@ -36,8 +37,9 @@ It runs on your own machine as **one Go binary and one data folder**, under the 
 1. **Only people you let in.** Built-in accounts exist only by invite. Company sign-in is single-tenant for Entra, needs your Workspace domain for Google, and Bunker refuses settings that would let personal accounts in.
 2. **Private by default.** A new app is visible to its owner. Share it with people or groups as viewer or editor.
 3. **Every app is sandboxed.** Apps run in an iframe with an opaque origin. They can't read the Bunker session, other apps or the internet.
-4. **Pages never hold keys.** Data, AI and Microsoft 365 calls go through Bunker with the viewer's own session. Uploads that contain API keys are refused.
-5. **Everything is recorded.** Sign-ins, publishes, shares, views and admin changes go to the audit log.
+4. **Pages never hold keys.** Data, AI and Microsoft 365 calls go through Bunker with the viewer's own session. Uploads that contain API keys are refused. Keys for outside services live in write-only secrets that only the app's server functions can use.
+5. **Server code is sandboxed too.** [Server functions](/bunker/docs/build/server-functions/) run in a fresh WebAssembly sandbox for each call, with memory and time limits and the caller's own rights. Admins can turn them off, or limit where they can connect.
+6. **Everything is recorded.** Sign-ins, publishes, shares, views and admin changes go to the audit log.
 
 ## What works today
 
@@ -52,6 +54,7 @@ Bunker is young and built in the open. Everything below is in the code now. If a
 | [Templates](/bunker/docs/build/templates/) | Eight built-in starters, and any app can be offered as a template |
 | Sharing | People, groups or everyone; access requests; notifications |
 | SDK | `window.bunker`: data with rules and live updates, files, storage, rooms, AI, notify, [Microsoft 365](/bunker/docs/sdk/m365/), [connections](/bunker/docs/sdk/connections/) |
+| Backend | [Server functions](/bunker/docs/build/server-functions/) in `api/`: called from pages, on a schedule, after writes or from webhooks, with secrets and outbound `fetch` |
 | AI | Anthropic, OpenAI, Azure OpenAI, OpenAI-compatible; daily quotas; the AI builder |
 | Agents | CLI, local and remote MCP with OAuth, `/llms.txt` |
 | Admin | Usage stats, policy, [audit search, export and SIEM streaming](/bunker/docs/admin/audit/), retention, [backups and scheduled snapshots](/bunker/docs/admin/backups/) |

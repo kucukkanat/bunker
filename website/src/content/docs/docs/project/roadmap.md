@@ -17,7 +17,8 @@ Bunker is built in the open. Pages for features that aren't finished carry a **P
 - **Agents:** the CLI, local stdio MCP and remote MCP with OAuth, MCP Apps (Bunker apps open inside Claude, VS Code Copilot and Microsoft 365 Copilot), `/llms.txt`, `/api/v1/ops`, OpenAPI.
 - **Security:** opaque-origin sandbox, signed content tickets, CSP, Connection-Allowlist, secret scanning, optional separate content domain, audit log with search, CSV/JSON export, webhook and syslog streaming, and retention.
 - **Dashboard:** home with drag and drop, the builder chat with live preview, data, files, versions and settings tabs, the share dialog, people and AI admin.
-- **Data in:** inbound webhooks that add JSON or form posts to an app's collection (Power Automate, Zapier, scripts).
+- **Data in:** inbound webhooks that add JSON or form posts to an app's collection (Power Automate, Zapier, scripts), or hand them to a server function.
+- **Server functions:** `api/<name>.js|ts` next to the pages, run per call in a fresh QuickJS-on-WebAssembly sandbox (pure Go, no containers, no build step); viewer or elevated rights; schedules, write triggers and webhook targets; write-only per-app secrets; outbound `fetch` under an admin policy; logs and test runs in the dashboard; `bunker fn` and `bunker secrets`; admin switch, limits and per-person and per-app blocks.
 - **Admin:** usage stats, sharing and size policy, moving someone's sites when they leave, idle-app archiving, Microsoft 365 settings (scope allowlist, per-app approval, SharePoint site list), connections.
 - **Operations:** single binary, SQLite, one-click deploys (Azure, Render, Railway, Fly, Docker, Linux installer), automatic HTTPS, Prometheus metrics, backup download, scheduled snapshots, `bunker backup` and `bunker restore`; on a desktop the first start opens the setup page in the browser.
 

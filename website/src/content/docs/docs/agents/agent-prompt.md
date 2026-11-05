@@ -40,6 +40,15 @@ https://bunker.example.com/s/<app>/ inside a sandbox. Deploy with
 - Errors: err.code (forbidden, not_found, invalid, quota_exceeded,
   consent_required, unavailable) and a human err.message. Show the message.
 
+## Server functions (only when the page can't do it)
+- api/<name>.js or .ts with `export default async (input, ctx) => value` runs on the server.
+  Call it from a page with `await bunker.fn('<name>', input)`. Files starting with _ are shared modules.
+- Inside: the same bunker.* calls (no DOM), plus bunker.secrets.get(NAME) and fetch(url).
+  Runs as the caller; `export const config = { elevated: true }` runs as the owner.
+- Triggers: config.schedule (cron, UTC), config.onWrite: ['collection'], or a webhook targeting it.
+- Secrets: `bunker secrets set NAME` (never write keys into files). Logs: `bunker fn logs`.
+- No npm or bare imports. Relative imports are bundled at publish.
+
 ## Style
 - <link rel="stylesheet" href="/_/kit.css"> for clean defaults (light and dark).
 - Mobile first, readable at 360px, accessible labels and focus states.
