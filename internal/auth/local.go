@@ -153,7 +153,16 @@ func tooMany(keys ...string) bool {
 	defer attemptMu.Unlock()
 	now := time.Now()
 	if len(attempts) > 100000 {
-		attempts = map[string][]time.Time{}
+		// Evict stale entries, then per-IP keys (cheap to spoof), but
+		// never per-email lockouts: a flood of other keys must not reset them.
+		for k, ts := range attempts {
+			if len(ts) == 0 || now.Sub(ts[len(ts)-1]) >= 15*time.Minute || strings.HasPrefix(k, "ip:") {
+				delete(attempts, k)
+			}
+		}
+		if len(attempts) > 200000 { // hard memory cap
+			attempts = map[string][]time.Time{}
+		}
 	}
 	limited := false
 	for _, k := range keys {
