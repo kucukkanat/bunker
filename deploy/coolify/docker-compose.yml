@@ -6,6 +6,9 @@
 services:
   bunker:
     image: ghcr.io/kucukkanat/bunker:latest
+    # No published image yet (or offline registry)? Compose builds it from GitHub.
+    build:
+      context: https://github.com/kucukkanat/bunker.git
     environment:
       # Coolify generates the public URL and routes it to port 8080.
       - SERVICE_FQDN_BUNKER_8080

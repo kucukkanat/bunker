@@ -9,6 +9,9 @@
 services:
   bunker:
     image: ghcr.io/kucukkanat/bunker:latest
+    # No published image yet (or offline registry)? Compose builds it from GitHub.
+    build:
+      context: https://github.com/kucukkanat/bunker.git
     # build: .                       # or build from this checkout
     container_name: bunker
     restart: unless-stopped
