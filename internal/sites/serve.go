@@ -82,8 +82,16 @@ const SandboxFlags = "allow-scripts allow-forms allow-modals allow-downloads"
 func ContentCSP() string {
 	return "sandbox " + SandboxFlags + "; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; " +
 		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; " +
-		"worker-src 'self' blob:; connect-src 'self'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'; " +
+		"worker-src 'self' blob:; connect-src 'self'; form-action 'none'; frame-ancestors " + appOrigin() + "; base-uri 'none'; " +
 		"frame-src 'self' blob: data:; object-src 'none'"
+}
+
+// appOrigin is who may frame user content: Bunker's own origin.
+func appOrigin() string {
+	if app != nil && app.Cfg.ContentURL != "" && app.Cfg.URL != "" {
+		return app.Cfg.URL
+	}
+	return "'self'"
 }
 
 // ContentHeaders sets the isolation headers on every user-content response.
@@ -213,7 +221,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	markVisit(r.Context(), u.ID, s.ID)
 	t := MakeTicket(s.ID, ver, u.ID)
 	base := "/s/" + s.Slug + "/~r/" + t + "/"
-	src := base + rest
+	src := app.Cfg.ContentURL + base + rest
 	q := r.URL.Query()
 	q.Del("draft")
 	q.Del("v")
@@ -222,7 +230,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self' "+app.Cfg.ContentURL+"; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	shellTmpl.Execute(w, map[string]any{
 		"Title": s.Title, "Slug": s.Slug, "Src": src, "Base": base, "Role": role.String(),
@@ -346,7 +354,7 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 	isCSS := strings.HasPrefix(ct, "text/css")
 	// Session cookie required for documents (not for subresources, which
 	// sandboxed frames can't send cookies with).
-	if isHTML && r.Header.Get("Sec-Fetch-Dest") != "iframe" && r.Header.Get("Sec-Fetch-Dest") != "" && core.UserFrom(ctx) == nil {
+	if isHTML && !IsContentHost(r) && r.Header.Get("Sec-Fetch-Dest") != "iframe" && r.Header.Get("Sec-Fetch-Dest") != "" && core.UserFrom(ctx) == nil {
 		rawError(w, http.StatusForbidden, "Open this page through Bunker.")
 		return
 	}
@@ -446,6 +454,14 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 		return
 	}
 	http.ServeContent(w, r, "", time.Time{}, fh) // handles Range for video/audio
+}
+
+// IsContentHost reports whether r arrived on the separate user-content origin.
+func IsContentHost(r *http.Request) bool {
+	if app.Cfg.ContentURL == "" {
+		return false
+	}
+	return strings.HasSuffix(app.Cfg.ContentURL, "://"+r.Host)
 }
 
 func loadTicketUser(ctx context.Context, id int64) *core.User {

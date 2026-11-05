@@ -17,6 +17,9 @@ type Config struct {
 	TLSCert    string
 	TLSKey     string
 	Dev        bool // local single-user development mode
+	// ContentURL optionally serves user content from a separate origin
+	// (e.g. https://usercontent.bunker.corp.com) for defense in depth.
+	ContentURL string
 	TrustProxy bool
 }
 
@@ -64,6 +67,7 @@ func LoadConfig() *Config {
 		TLSCert: Env("TLS_CERT", ""),
 		TLSKey:  Env("TLS_KEY", ""),
 		Dev:     EnvBool("DEV", false),
+		ContentURL: strings.TrimRight(Env("CONTENT_URL", ""), "/"),
 	}
 	if c.DataDir == "" {
 		if _, err := os.Stat("/data"); err == nil {

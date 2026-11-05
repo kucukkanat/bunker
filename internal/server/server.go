@@ -97,6 +97,17 @@ func Handler(a *core.App) http.Handler {
 		ctx := core.WithIP(r.Context(), ip)
 		r = r.WithContext(ctx)
 
+		// The optional user-content origin only serves ticketed content and
+		// platform assets: no sessions, no API, no dashboard.
+		if a.Cfg.ContentURL != "" && strings.HasSuffix(a.Cfg.ContentURL, "://"+r.Host) {
+			p := r.URL.Path
+			if !(strings.HasPrefix(p, "/_/") || (strings.HasPrefix(p, "/s/") && (strings.Contains(p, "/~r/") || strings.Contains(p, "/~f/")))) {
+				http.NotFound(w, r)
+				return
+			}
+			a.Mux.ServeHTTP(w, r)
+			return
+		}
 		var u *core.User
 		if a.Authn != nil {
 			u = a.Authn(r)
