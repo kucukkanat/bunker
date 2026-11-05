@@ -410,7 +410,8 @@ func RoleOf(ctx context.Context, u *core.User, s *SiteRecord) core.Role {
 }
 
 func baseRole(s *SiteRecord) core.Role {
-	if s.OrgView {
+	// Turning org-wide sharing off in the policy closes existing org-wide shares too.
+	if s.OrgView && app.Setting("sharing.org_wide") != "false" && core.EnvBool("ORG_WIDE_SHARING", true) {
 		return core.RoleViewer
 	}
 	return core.RoleNone

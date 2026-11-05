@@ -268,6 +268,7 @@ func registerPolicy(a *core.App) {
 				if err := set(kOrgWide, strconv.FormatBool(*in.OrgWideSharing)); err != nil {
 					return nil, err
 				}
+				a.Emit(ctx, "sites.changed", nil)
 			}
 			if in.PublicLinks != nil {
 				if err := set(kPublic, strconv.FormatBool(*in.PublicLinks)); err != nil {

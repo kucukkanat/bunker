@@ -84,10 +84,12 @@ var (
 func get(name, file string) *asset {
 	key := name + "/" + file
 	cacheMu.Lock()
-	defer cacheMu.Unlock()
 	if a, ok := cache[key]; ok {
+		cacheMu.Unlock()
 		return a
 	}
+	cacheMu.Unlock()
+	// Compress outside the lock so one big first request doesn't block others.
 	b, err := files.ReadFile("files/" + key)
 	if err != nil {
 		return nil // misses aren't remembered: anyone can ask for made-up names
@@ -110,6 +112,11 @@ func get(name, file string) *asset {
 		br = core.CompressBrotli(b)
 	}
 	a := &asset{b: b, br: br, etag: `"` + hex.EncodeToString(sum[:8]) + `"`, ct: ct}
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if prev, ok := cache[key]; ok {
+		return prev
+	}
 	cache[key] = a
 	return a
 }
