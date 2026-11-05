@@ -168,9 +168,9 @@ func errorsBlock(errs []previewError) string {
 		if e.Message == "" {
 			continue
 		}
-		b.WriteString("- " + e.Message)
+		b.WriteString("- " + pageText(e.Message))
 		if e.Source != "" {
-			fmt.Fprintf(&b, " (at %s", e.Source)
+			fmt.Fprintf(&b, " (at %s", pageText(e.Source))
 			if e.Line > 0 {
 				fmt.Fprintf(&b, ":%d", e.Line)
 			}
@@ -181,6 +181,12 @@ func errorsBlock(errs []previewError) string {
 	b.WriteString("</preview_errors>")
 	return b.String()
 }
+
+// pageText keeps page-supplied text on one line and unable to close the
+// <preview_errors> block (it's chosen by whoever wrote the page).
+var pageTextRe = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ", "<", "‹", ">", "›")
+
+func pageText(s string) string { return pageTextRe.Replace(s) }
 
 func (in *buildInput) validate() error {
 	if len(in.Errors) > maxPreviewErrors {
