@@ -609,6 +609,12 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			return core.BadRequest(name + " isn't a valid zip file")
 		}
 		var total, read int64
+		// One budget for the whole upload: everything already unpacked
+		// counts, so many small zips can't each expand to the limit.
+		for _, b := range files {
+			read += int64(len(b))
+		}
+		total = read
 		max := siteMaxBytes()
 		dir := path.Dir(strings.ReplaceAll(name, "\\", "/"))
 		for _, f := range zr.File {

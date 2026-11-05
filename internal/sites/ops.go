@@ -125,6 +125,10 @@ func registerOps(a *core.App) {
 				return nil, err
 			}
 			ctx := r.Context()
+			// Owner-only changes are checked before anything is written.
+			if role < core.RoleOwner && (in.OrgView != nil || in.IsTemplate != nil || (in.Slug != nil && *in.Slug != s.Slug)) {
+				return nil, core.Forbidden("only the owner can change who can view, the address, or offer the site as a template")
+			}
 			if in.Title != nil {
 				t := strings.TrimSpace(*in.Title)
 				if t == "" || len(t) > 120 {
