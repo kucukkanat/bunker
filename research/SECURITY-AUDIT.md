@@ -31,8 +31,10 @@ Every finding below was reproduced with a failing test or a browser script befor
 | F15 | Low | `data` export | Collection CSV exports wrote viewer-entered text verbatim. Values like `=HYPERLINK(…)` or DDE ran as formulas in the editor's spreadsheet. | Fixed. Text cells, column names and author names get the same apostrophe guard as the audit export. | `data/data_live_role_test.go` `TestCSVExportDefusesFormulas` |
 | F16 | Low | `mcp` CIMD fetch | **Blind SSRF.** The client-metadata fetch (the URL is chosen by any MCP client) blocked only RFC 1918, loopback and link-local. It could reach 100.64/10 (Tailscale/CGNAT), NAT64, 0/8 and similar ranges, and the status code was echoed back. | Fixed. Those ranges are blocked too. | `mcp/security_test.go` |
 | F17 | Low | `sites` delete | Trashing a site renames it to `trash-<id>-<slug>`, and the error from that rename was ignored. Anyone could take that address first (directly, or via a title like "Trash 12 payroll"), and the owner's delete would report success while the site stayed live. | Fixed. `trash-` addresses are reserved and the error is returned. | `sites/security_test.go` `TestTrashAddressesAreReserved` |
+| F18 | Low | `ai` builder auto-fix | **Prompt injection.** Preview errors (page-chosen text; `console.error` is enough) were pasted verbatim into the `<preview_errors>` block. A page could close the block and add "instructions" on new lines. Mitigating factors: count and length were already capped, and only the editor's own dashboard sends errors (`builder.run` is not page-safe). | Fixed. Newlines and angle brackets in page text are neutralized. | `ai/security_test.go` |
+| F19 | Low | `vendorlib` `/_/lib/{name}/{file...}` | **Unbounded memory growth.** The endpoint is public and cached every *miss* forever, so anonymous requests for made-up paths grew memory without bound. Subfolder traversal is not possible: `embed.FS` refuses `..`. | Fixed. Misses aren't cached. | `vendorlib/cache_internal_test.go` |
 
-**By severity:** 3 High, 7 Medium, 7 Low. All 17 were fixed; F8 is mitigated with a per-deploy budget.
+**By severity:** 3 High, 7 Medium, 9 Low. All 19 were fixed; F8 is mitigated with a per-deploy budget.
 
 ## Reviewed and found sound
 
@@ -80,7 +82,18 @@ These areas were reviewed and in several cases probed.
 - Notification links are always `/s/<slug>/…`.
 - Server-rendered auth, consent, error and "need access" pages escape their output.
 
+**Later additions (merged from master and reviewed)**
+- **MCP Apps.** `sites.embed` is not page-safe, so a page can't mint embed links. Embed tickets use their own MAC domain (`e:`), cover only published versions, expire after 60–75 minutes and keep the `sandbox` CSP; only `frame-ancestors` is dropped. The wrapper binds `site_api` calls to its own site slug and accepts host messages only from `window.parent`. On the server, `site_api` rejects `..` (also when encoded) and forwards with `X-Bunker-Page`, so only page-safe ops of that one site are reachable, as the token's user.
+- **Lifecycle.** `/archive-restore` uses a user+site MAC and requires editor access. `users.update transferTo` is admin-only, needs an active target and moves sites through `TransferAll`.
+- **Backups.** The restore path keeps only regular files and directories under the data folder and rejects absolute and `..` paths. The CLI restore refuses to run while a server is up, and it keeps the previous database.
+
 ## Residual risks (accepted, with rationale)
+
+**Later additions**
+- **Embed links are bearer URLs for about an hour and can be framed by any site.** They give static read access to the published files as that person. The SDK inside does nothing without a host that holds the person's MCP token.
+- **MCP Apps hosts must check `event.source`.** The wrapper only binds the site for messages coming through itself. A sandboxed site page could `postMessage` to `window.top` directly, so a host that doesn't check `event.source === wrapperFrame` would let it call any app-visible tool. This is the host's responsibility under SEP-1865.
+- **Restoring a backup means trusting it.** An archive's database and `secret.key` replace the current ones, including admins and settings.
+
 
 **Sandbox and site authors**
 - **Malicious site authors** can do anything the *viewer* could do inside that one site through the SDK bridge:
