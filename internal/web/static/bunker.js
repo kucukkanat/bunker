@@ -430,6 +430,18 @@
     }
   };
 
+  // ---- server functions (api/<name>.js) ----
+  // bunker.fn('orders/refund', input) runs the function on the server and
+  // resolves to its return value. Draft previews run the draft code.
+  function fn(name, input) {
+    name = String(name || '').replace(/^\/+|\/+$/g, '').replace(/\.(js|mjs|ts)$/, '').replace(/^api\//, '');
+    if (!name) return Promise.reject(new BunkerError('invalid', 'fn(name) needs a function name, like "orders" for api/orders.js'));
+    var path = '/functions/' + name.split('/').map(enc).join('/');
+    var body = { input: input === undefined ? null : input };
+    if (site.draft) body.draft = true;
+    return call('POST', path, body).then(function (r) { return r && typeof r === 'object' && 'output' in r ? r.output : r; });
+  }
+
   // ---- me ----
   var meP = null;
   function me() {
@@ -622,6 +634,7 @@
     ai: ai,
     m365: m365,
     connections: connections,
+    fn: fn,
     notify: notify,
     toast: toast,
     open: open,
