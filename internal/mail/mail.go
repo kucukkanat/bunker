@@ -261,7 +261,7 @@ func build(from string, m Message) ([]byte, error) {
 func registerOps(a *core.App) {
 	a.Handle(core.Op{Name: "admin.mail.get", Method: "GET", Path: "/api/v1/admin/mail", Summary: "Email (SMTP) settings", Access: core.AccessAdmin,
 		Fn: func(r *http.Request) (any, error) {
-			raw := a.SecretSetting("mail.smtp_url")
+			raw := core.Env("SMTP_URL", a.SecretSetting("mail.smtp_url"))
 			masked := ""
 			if u, err := url.Parse(raw); err == nil && raw != "" {
 				if u.User != nil {
@@ -274,7 +274,8 @@ func registerOps(a *core.App) {
 			if err != nil && raw != "" {
 				msg = err.Error()
 			}
-			return map[string]any{"configured": err == nil, "smtpUrl": masked, "from": a.Setting("mail.from"), "problem": msg, "pinned": a.SettingFromEnv("mail.smtp_url")}, nil
+			pinned := a.SettingFromEnv("mail.smtp_url") || core.Env("SMTP_URL", "") != ""
+			return map[string]any{"configured": err == nil, "smtpUrl": masked, "from": core.Env("SMTP_FROM", a.Setting("mail.from")), "problem": msg, "pinned": pinned}, nil
 		}})
 	a.Handle(core.Op{Name: "admin.mail.update", Method: "PUT", Path: "/api/v1/admin/mail", Summary: "Set the SMTP server used to email invites and notifications", Access: core.AccessAdmin,
 		Params: []core.Param{{Name: "smtpUrl", In: "body", Desc: "smtp://user:password@smtp.example.com:587 (STARTTLS) or smtps://...:465; empty turns email off"},
@@ -285,7 +286,7 @@ func registerOps(a *core.App) {
 				return nil, err
 			}
 			if in.SmtpURL != nil && !strings.Contains(*in.SmtpURL, "••••") {
-				if a.SettingFromEnv("mail.smtp_url") {
+				if a.SettingFromEnv("mail.smtp_url") || core.Env("SMTP_URL", "") != "" {
 					return nil, core.Conflict("the SMTP URL is set by the server environment")
 				}
 				a.SetSecretSetting("mail.smtp_url", strings.TrimSpace(*in.SmtpURL))

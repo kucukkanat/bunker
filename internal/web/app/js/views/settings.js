@@ -1,6 +1,6 @@
 // /settings: profile, access tokens, connect your tools.
-import { h, icon, clear, avatar, toast, confirmDialog, relTime, busy, codeBlock, copyBtn, empty, skeletons } from '../ui.js';
-import { get, post, del, maybe } from '../api.js';
+import { h, icon, clear, avatar, toast, confirmDialog, relTime, busy, codeBlock, copyBtn, empty, skeletons, toggle } from '../ui.js';
+import { get, post, put, del, maybe } from '../api.js';
 import { state } from '../state.js';
 import { signOut } from '../main.js';
 
@@ -43,6 +43,16 @@ function passwordCard() {
 function profile(el) {
   const me = state.me;
   const pwSlot = h('div');
+  const mailSlot = h('div');
+  maybe('/api/v1/me/email-notifications').then((m) => {
+    if (!m?.available) return;
+    mailSlot.replaceWith(h('div.card.pad', { style: { marginTop: '16px' } }, h('h3', 'Email'),
+      h('div.setting', h('div', h('b', 'Email me notifications'), h('span.d', 'Shares, access requests and messages from apps also arrive at ' + me.email + '.')),
+        toggle({ checked: !!m.enabled, label: 'Email me notifications', onchange: async (x, t) => {
+          try { await put('/api/v1/me/email-notifications', { enabled: x }, { quiet: true }); toast(x ? 'You’ll get notifications by email.' : 'No more notification emails.', { type: 'ok', timeout: 2500 }); }
+          catch (e) { t.checked = !x; toast(e.message, { type: 'error' }); }
+        } }))));
+  }).catch(() => {});
   maybe('/api/v1/auth/methods').then((m) => { if (m?.local && !me.dev) pwSlot.replaceWith(passwordCard()); }).catch(() => {});
   clear(el,
     h('div.card.pad', h('div.row', { style: { gap: '16px' } }, avatar(me.name || me.email, 'lg'),
@@ -53,6 +63,7 @@ function profile(el) {
       h('p.small.muted', { style: { margin: '4px 0 12px' } }, 'Sites shared with these groups show up for you automatically. Groups come from your company sign-in.'),
       me.groups.length ? h('div.chips', me.groups.map((g) => h('span.chip', icon('users', 14), g.name || g.id))) : h('p.small.faint', 'You’re not in any groups yet.')),
     pwSlot,
+    mailSlot,
     h('div.card.pad', { style: { marginTop: '16px' } },
       h('h3', 'Sign out'),
       h('div.setting', h('div', h('b', 'This browser'), h('span.d', 'You’ll need to sign in again here.')), h('button.btn', { onclick: () => signOut() }, icon('logout', 16), 'Sign out')),

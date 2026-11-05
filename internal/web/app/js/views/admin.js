@@ -6,7 +6,7 @@ import { providerForm, entraAuto } from './setup.js';
 
 const SECTIONS = [
   ['', 'Overview'], ['people', 'People'], ['sites', 'Sites'], ['sign-in', 'Sign-in'], ['ai', 'AI'],
-  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['sharing', 'Sharing'], ['audit', 'Audit log'],
+  ['m365', 'Microsoft 365'], ['connections', 'Connections'], ['sharing', 'Sharing'], ['email', 'Email'], ['audit', 'Audit log'],
 ];
 
 const notYet = (what) => empty({ title: what + ' isn’t installed yet', text: 'This part of Bunker is still being built. When your server is updated, its settings appear here.', art: false, iconName: 'info' });
@@ -23,7 +23,7 @@ export default async function admin(root, ctx) {
     h('nav.subnav', { 'aria-label': 'Admin sections' }, SECTIONS.map(([id, l]) => h('a', { href: '/admin' + (id ? '/' + id : ''), 'aria-current': id === sub ? 'page' : null }, l))),
     body));
   document.title = title + ' · Admin · Bunker';
-  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, sharing, audit }[sub];
+  const fn = { '': overview, people, sites, 'sign-in': signin, ai, m365, connections, sharing, email, audit }[sub];
   if (!fn) return clear(body, empty({ title: 'Nothing here', text: 'Pick a section above.', art: false }));
   return fn(body, ctx);
 }
@@ -77,7 +77,7 @@ async function people(el, ctx) {
       await busy(go, async () => {
         const r = await post('/api/v1/admin/invites', { email: email.value.trim(), name: name.value.trim(), isAdmin: adm, groups: groups.value.split(',').map((x) => x.trim()).filter(Boolean) });
         m.close();
-        linkDialog('Send this link to ' + r.email, 'It lets them create their password and sign in. It works once and expires in 7 days.', r.link);
+        linkDialog(r.emailed ? 'We emailed ' + r.email : 'Send this link to ' + r.email, (r.emailed ? 'You can also send the link yourself. ' : '') + 'It lets them create their password and sign in. It works once and expires in 7 days.', r.link);
         loadInvites();
       });
     } },
@@ -403,6 +403,30 @@ async function sharing(el, ctx) {
     num('siteMaxMB', 'Largest site', 'The most a single site can hold, files included.', 'MB'),
     num('uploadMaxMB', 'Largest upload', 'The most someone can upload at once.', 'MB'),
     num('maxSitesPerUser', 'Sites per person', 'How many sites each person can own.', 'sites')));
+}
+
+async function email(el, ctx) {
+  const d = await maybe('/api/v1/admin/mail').catch(() => null);
+  if (!ctx.alive()) return;
+  if (!d) return clear(el, notYet('Email'));
+  const url = h('input.input', { value: d.smtpUrl || '', placeholder: 'smtp://user:password@smtp.example.com:587', disabled: d.pinned, autocomplete: 'off', spellcheck: false });
+  const from = h('input.input', { value: d.from || '', placeholder: 'Bunker <bunker@example.com>' });
+  const status = h('p', d.configured ? h('span.badge.ok', icon('check', 12), ' Email is on') : h('span.badge', 'Email is off'), d.problem ? h('span.muted', ' ' + d.problem) : null);
+  const save = h('button.btn.primary', { type: 'submit' }, 'Save');
+  const test = h('button.btn', { type: 'button', disabled: !d.configured, onclick: async () => busy(test, async () => {
+    const r = await post('/api/v1/admin/mail/test', {});
+    r.ok ? toast('Test email sent to ' + state.me.email + '.', { type: 'ok' }) : toast('Couldn’t send: ' + r.error, { type: 'error', timeout: 9000 });
+  }) }, 'Send me a test email');
+  clear(el, h('div.card.pad', h('form.stack', { onsubmit: async (e) => { e.preventDefault(); await busy(save, async () => {
+    await put('/api/v1/admin/mail', { smtpUrl: url.value.trim(), from: from.value.trim() });
+    toast('Saved.', { type: 'ok', timeout: 2000 });
+    email(el, ctx);
+  }); } },
+    h('p.muted', 'Optional. With an email server, Bunker emails invite links, password resets and notifications (people can turn notifications off in Settings). Without one, you copy links yourself and notifications stay in the bell.'),
+    status,
+    h('label.field', h('span.label', 'SMTP server'), url, h('span.hint', d.pinned ? 'Set by the server’s environment (BUNKER_SMTP_URL).' : 'Use smtp:// for port 587 (STARTTLS) or smtps:// for port 465. Microsoft 365: smtp://you%40corp.com:password@smtp.office365.com:587. Leave empty to turn email off.')),
+    h('label.field', h('span.label', 'From'), from),
+    h('div.row', test, h('span.spacer'), save))));
 }
 
 async function audit(el, ctx) {
