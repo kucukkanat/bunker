@@ -10,7 +10,7 @@ Bunker is one small program and one data folder. Pick a button, wait a couple of
 |---|---|---|---|
 | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json) | **Azure** (your own subscription): a small Linux VM with a managed data disk, a free `*.cloudapp.azure.com` name and automatic HTTPS | Yes | **Recommended for Microsoft 365 companies** |
 | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/kucukkanat/bunker) | **Render**: web service + 5 GB persistent disk (Starter plan or higher) | Yes | |
-| [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bunker) | **Railway**: service + volume at `/data` | Yes | |
+| [![Deploy on Railway](https://railway.com/button.svg)](#railway) | **Railway**: service + volume at `/data` | Yes | |
 | `fly launch --from https://github.com/kucukkanat/bunker --copy-config` | **Fly.io**: one machine + volume (see [`fly.toml`](fly.toml)) | Yes | |
 | [![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=docker&image=ghcr.io/kucukkanat/bunker:latest&name=bunker&ports=8080;http;/) | **Koyeb** | Only after you attach a volume at `/data` in the service settings | |
 | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master) | DigitalOcean App Platform | **No, demo only (data resets on every deploy)** | For real use: a Droplet + the installer below |
@@ -56,6 +56,15 @@ irm https://raw.githubusercontent.com/kucukkanat/bunker/master/install.ps1 | iex
 ```
 
 Have Go installed? `go install github.com/kucukkanat/bunker/cmd/bunker@latest` gives you the same single binary. Just want to look around? `bunker demo` starts Bunker on your laptop with example apps, people and data. `bunker dev` runs Bunker with a single local admin and no sign-in. Opening the setup page from the same machine (localhost) skips the setup code.
+
+## Railway
+
+Until the one-click Railway template is published, it's four clicks:
+
+1. In Railway, **New project → Deploy from GitHub repo**, and pick your fork of this repo. [`railway.json`](railway.json) tells Railway to build the Dockerfile and use `/healthz`.
+2. On the service, **Variables → New variable**: `BUNKER_RUN_UID` = `0` (Railway volumes are owned by root).
+3. **Settings → Volumes → New volume**, mount path `/data`.
+4. **Settings → Networking → Generate domain**, then open it.
 
 ## After you deploy
 

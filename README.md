@@ -25,7 +25,7 @@
 <p>
   <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json"><img src="https://aka.ms/deploytoazurebutton" alt="Deploy to Azure" height="32"></a>
   <a href="https://render.com/deploy?repo=https://github.com/kucukkanat/bunker"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32"></a>
-  <a href="https://railway.com/deploy/bunker"><img src="https://railway.com/button.svg" alt="Deploy on Railway" height="32"></a>
+  <a href="DEPLOY.md#railway"><img src="https://railway.com/button.svg" alt="Deploy on Railway" height="32"></a>
 </p>
 
 ```sh
