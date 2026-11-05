@@ -58,6 +58,7 @@ func main() {
 	profDir := flag.String("profile", "", "directory for per-scenario CPU and allocation profiles (child mode)")
 	keep := flag.Bool("keep", false, "keep the temp data directory")
 	md := flag.Bool("md", true, "print a Markdown table at the end")
+	settle := flag.Duration("settle", 30*time.Second, "idle time before the final RSS reading")
 	flag.Parse()
 	if *child {
 		os.Exit(runChild(*pprofAddr))
@@ -117,8 +118,26 @@ func main() {
 	}
 	if run("rss") {
 		time.Sleep(3 * time.Second)
-		h.results = append(h.results, result{Name: "RSS after the whole run", Note: fmt.Sprintf("%.1f MB", float64(h.rss())/1e6)})
-		fmt.Printf("  RSS after the whole run: %.1f MB\n", float64(h.rss())/1e6)
+		r3 := h.rss()
+		h.stats(true) // two GCs: sync.Pools (net/http buffers) are emptied over two cycles
+		h.stats(true) // the runtime then returns freed pages to the OS gradually
+		time.Sleep(*settle)
+		heap := ""
+		if s := h.stats(false); s != nil {
+			heap = fmt.Sprintf(", heap in use %.1f MB, %d goroutines", float64(s.HeapInuse)/1e6, s.Goroutines)
+		}
+		note := fmt.Sprintf("%.1f MB 3 s after the last test; %.1f MB after a GC and %s idle%s", float64(r3)/1e6, float64(h.rss())/1e6, *settle, heap)
+		if h.profDir != "" && h.pprof != "" {
+			if res, err := http.Get(h.pprof + "/debug/pprof/heap"); err == nil {
+				if f, err := os.Create(filepath.Join(h.profDir, "heap-at-end.pprof")); err == nil {
+					io.Copy(f, res.Body)
+					f.Close()
+				}
+				res.Body.Close()
+			}
+		}
+		h.results = append(h.results, result{Name: "RSS after the whole run", Note: note})
+		fmt.Println("  RSS after the whole run:", note)
 	}
 	if *md {
 		fmt.Println()

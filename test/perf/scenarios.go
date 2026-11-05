@@ -290,6 +290,7 @@ func (h *harness) scenSSE(nConns, nEvents, rate int) {
 	}
 	fanTime := time.Since(pubStart)
 	pubAfter := h.stats(false)
+	rssEnd := h.rss()
 	stopProf()
 	for _, c := range conns {
 		if c != nil {
@@ -316,6 +317,9 @@ func (h *harness) scenSSE(nConns, nEvents, rate int) {
 	r.Note = fmt.Sprintf("delivered %d/%d (%.1f%%) in %s at %d changes/s; %.0f deliveries/s; allocs are per delivery; publish errors %d",
 		received.Load(), want, 100*float64(received.Load())/float64(max(want, 1)), fanTime.Round(time.Millisecond), rate,
 		float64(received.Load())/fanTime.Seconds(), pubErrs.Load())
+	if pubAfter != nil {
+		r.Note += fmt.Sprintf("; at the end heap %.0f MB, stacks %.0f MB, RSS %.0f MB", float64(pubAfter.HeapInuse)/1e6, float64(pubAfter.StackInuse)/1e6, float64(rssEnd)/1e6)
+	}
 	h.results = append(h.results, r)
 	fmt.Printf("  %s: p50 %s p99 %s; %s\n", r.Name, round(r.P50), round(r.P99), r.Note)
 	time.Sleep(time.Second)

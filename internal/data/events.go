@@ -484,21 +484,34 @@ func (h *Hub) serveSSE(w http.ResponseWriter, r *http.Request) {
 				roleAt = now
 			}
 			buf.Reset()
+			wrote := false
 			h.render(&buf, e, s.ID, u, role)
-			// Drain whatever else is queued, then flush once.
+			// Drain whatever else is queued, then flush once. Rendered
+			// frames are handed to the response writer every 4 KB, so the
+			// buffer stays small with thousands of connections.
 		drain:
 			for i := 0; i < 64; i++ {
 				select {
 				case e2 := <-c.out:
 					h.render(&buf, e2, s.ID, u, role)
+					if buf.Len() >= 4096 {
+						if write(buf.Bytes()) != nil {
+							return
+						}
+						buf.Reset()
+						wrote = true
+					}
 				default:
 					break drain
 				}
 			}
-			if buf.Len() == 0 {
+			if buf.Len() == 0 && !wrote {
 				continue
 			}
-			if write(buf.Bytes()) != nil || rc.Flush() != nil {
+			if buf.Len() > 0 && write(buf.Bytes()) != nil {
+				return
+			}
+			if rc.Flush() != nil {
 				return
 			}
 		}
