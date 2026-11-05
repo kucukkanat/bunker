@@ -238,7 +238,7 @@ func capitalize(s string) string {
 func (x *App) mainHelp() {
 	s := x.outSt
 	w := x.Stdout
-	fmt.Fprintf(w, "%s %s\n\n", s.bold(s.moss("Bunker")), s.dim("— your internal app cloud ("+core.Version+")"))
+	fmt.Fprintf(w, "%s %s\n\n", s.bold(s.moss("Bunker")), s.dim("— your private app cloud ("+core.Version+")"))
 	fmt.Fprintf(w, "%s bunker <command> [flags]\n\n", s.dim("Usage:"))
 	byGroup := map[string][]*command{}
 	for _, c := range commands {
