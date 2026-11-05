@@ -6,8 +6,10 @@
   if (window.bunker && window.bunker.__sdk) return;
   var W = window, D = document, P = W.parent;
   var inShell = P && P !== W;
-  var m = location.pathname.match(/^\/s\/([^/]+)\/~r\/([^/]+)\//);
-  var BASE = m ? '/s/' + m[1] + '/~r/' + m[2] + '/' : '/';
+  // ~r = inside the Bunker shell, ~e = embedded by an MCP Apps host.
+  var m = location.pathname.match(/^\/s\/([^/]+)\/~([re])\/([^/]+)\//);
+  if (m) m = [m[0], m[1], m[3], m[2]];
+  var BASE = m ? '/s/' + m[1] + '/~' + m[3] + '/' + m[2] + '/' : '/';
   var site = { slug: m ? decodeURIComponent(m[1]) : '', id: 0, title: D.title || '', role: '', version: 0, draft: false, icon: '' };
   var filesBase = m ? '/s/' + m[1] + '/~f/' + m[2] + '/' : '';
 

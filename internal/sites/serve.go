@@ -45,14 +45,16 @@ func MakeTicket(site, ver, user int64) string {
 }
 
 // ParseTicket validates a ticket string.
-func ParseTicket(s string) (Ticket, bool) {
+func ParseTicket(s string) (Ticket, bool) { return parseTicket(s, "t:") }
+
+func parseTicket(s, domain string) (Ticket, bool) {
 	// site-ver-user-exp-mac; the MAC is base64url and may itself contain '-'.
 	parts := strings.SplitN(s, "-", 5)
 	if len(parts) != 5 {
 		return Ticket{}, false
 	}
 	body, mac := strings.Join(parts[:4], "-"), parts[4]
-	if !core.MACEqual(mac, core.MAC("t:"+body)) {
+	if !core.MACEqual(mac, core.MAC(domain+body)) {
 		return Ticket{}, false
 	}
 	var t Ticket
@@ -69,6 +71,27 @@ func ParseTicket(s string) (Ticket, bool) {
 	return t, true
 }
 
+// Embed tickets grant the same read access as content tickets but for
+// pages framed by third-party hosts (MCP Apps in Claude, VS Code, Microsoft
+// 365 Copilot). They live in a separate MAC domain and URL prefix
+// (/s/<slug>/~e/<ticket>/...), only cover published versions, and expire
+// after about an hour, so a link copied out of a chat transcript stops
+// working soon.
+const embedWindow = 15 * 60
+
+// MakeEmbedTicket issues an embed ticket valid for 60–75 minutes.
+func MakeEmbedTicket(site, ver, user int64) string {
+	exp := (core.Now()/embedWindow + 5) * embedWindow
+	body := fmt.Sprintf("%d-%d-%d-%d", site, ver, user, exp)
+	return body + "-" + core.MAC("e:"+body)
+}
+
+// EmbedExpiry returns when an embed ticket made now expires.
+func EmbedExpiry() int64 { return (core.Now()/embedWindow + 5) * embedWindow }
+
+// ParseEmbedTicket validates an embed ticket.
+func ParseEmbedTicket(s string) (Ticket, bool) { return parseTicket(s, "e:") }
+
 // SandboxFlags are the iframe sandbox tokens for user content. No
 // allow-popups: external links go through bunker.open() so the parent can
 // open them safely (noopener, noreferrer) instead of a page leaking data
@@ -84,6 +107,13 @@ func ContentCSP() string {
 		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; " +
 		"worker-src 'self' blob:; connect-src 'self'; form-action 'none'; frame-ancestors " + appOrigin() + "; base-uri 'none'; " +
 		"frame-src 'self' blob: data:; object-src 'none'"
+}
+
+// EmbedCSP is ContentCSP without frame-ancestors: MCP hosts render the
+// wrapper in a sandboxed (opaque-origin) frame, which no frame-ancestors
+// source can match. The ticket in the path is what gates access.
+func EmbedCSP() string {
+	return strings.Replace(ContentCSP(), "frame-ancestors "+appOrigin()+"; ", "", 1)
 }
 
 // appOrigin is who may frame user content: Bunker's own origin.
@@ -152,7 +182,11 @@ func RegisterRawPrefix(prefix string, h RawHandler) { rawPrefixes[prefix] = h }
 func serveSite(w http.ResponseWriter, r *http.Request) {
 	rest := r.PathValue("path")
 	if strings.HasPrefix(rest, "~r/") {
-		serveRaw(w, r, strings.TrimPrefix(rest, "~r/"))
+		serveRaw(w, r, strings.TrimPrefix(rest, "~r/"), false)
+		return
+	}
+	if strings.HasPrefix(rest, "~e/") {
+		serveRaw(w, r, strings.TrimPrefix(rest, "~e/"), true)
 		return
 	}
 	for pre, h := range rawPrefixes {
@@ -294,13 +328,17 @@ var (
 	rawCache = map[string]rawEntry{}
 )
 
-func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
+func serveRaw(w http.ResponseWriter, r *http.Request, rest string, embed bool) {
 	i := strings.Index(rest, "/")
 	tstr, p := rest, ""
 	if i >= 0 {
 		tstr, p = rest[:i], rest[i+1:]
 	}
 	t, ok := ParseTicket(tstr)
+	if embed {
+		t, ok = ParseEmbedTicket(tstr)
+		ok = ok && t.Ver > 0
+	}
 	if !ok {
 		rawError(w, http.StatusForbidden, "This link has expired. Reload the page.")
 		return
@@ -349,6 +387,9 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 	}
 	h := w.Header()
 	ContentHeaders(h)
+	if embed {
+		h.Set("Content-Security-Policy", EmbedCSP())
+	}
 	ct := f.Type
 	isHTML := strings.HasPrefix(ct, "text/html")
 	isCSS := strings.HasPrefix(ct, "text/css")
@@ -372,6 +413,9 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 	}
 	if isHTML || isCSS {
 		prefix := "/s/" + s.Slug + "/~r/" + tstr + "/"
+		if embed {
+			prefix = "/s/" + s.Slug + "/~e/" + tstr + "/"
+		}
 		key := f.Hash + "|" + prefix
 		rawMu.Lock()
 		e, ok := rawCache[key]
