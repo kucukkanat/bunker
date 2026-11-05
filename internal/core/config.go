@@ -101,6 +101,9 @@ func LoadConfig() *Config {
 			c.Listen = ":443"
 		}
 	}
+	if c.TLS == "auto" && !listenSet {
+		c.Listen = ":443"
+	}
 	c.TrustProxy = EnvBool("TRUST_PROXY", port != "" || c.TLS == "off")
 	if c.URL == "" && c.Dev {
 		c.URL = "http://" + strings.Replace(c.Listen, "0.0.0.0", "localhost", 1)

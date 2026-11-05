@@ -265,17 +265,33 @@ write_env() {
 		code_line="#BUNKER_SETUP_CODE="
 	fi
 	listen="${BUNKER_LISTEN:-:8080}"
+	listen_line="BUNKER_LISTEN=$listen"
+	tls_line="#BUNKER_TLS=auto"
+	case "${BUNKER_URL:-}" in
+	https://localhost* | https://127.*) ;;
+	https://*)
+		if [ -z "${BUNKER_LISTEN:-}" ]; then
+			# A real domain and no proxy: Bunker gets HTTPS certificates itself
+			# (ports 80 and 443 must be reachable from the internet).
+			tls_line="BUNKER_TLS=auto"
+			listen_line="#BUNKER_LISTEN=:8080"
+		fi
+		;;
+	esac
 	umask 077
 	cat >"$ENV_FILE" <<EOF
 # Bunker settings. Edit, then: systemctl restart bunker
 # All options: https://kucukkanat.github.io/bunker/
 
 # Public URL people use to reach Bunker (needed for sign-in redirects).
-# Put Bunker behind a TLS-terminating proxy (Caddy, nginx, a load balancer).
+# With an https URL and no proxy, Bunker fetches certificates itself.
 $url_line
 
-# Address to listen on (plain HTTP).
-BUNKER_LISTEN=$listen
+# Automatic HTTPS with Let's Encrypt (needs ports 80 + 443 and DNS pointing here).
+$tls_line
+
+# Address to listen on (plain HTTP) when a proxy terminates TLS.
+$listen_line
 
 # Fixed first-run setup code (otherwise one is generated and logged).
 $code_line
