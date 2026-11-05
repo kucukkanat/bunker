@@ -105,7 +105,7 @@ func ContentHeaders(h http.Header) {
 	// Opaque-origin frames are cross-origin; tickets gate access.
 	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), payment=(), display-capture=(), clipboard-read=()")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), payment=(), display-capture=(), clipboard-read=()")
 	h.Add("Vary", "Sec-Fetch-Dest")
 	h.Del("Cross-Origin-Opener-Policy")
 }
