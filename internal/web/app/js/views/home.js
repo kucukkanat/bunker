@@ -41,9 +41,16 @@ export default async function home(root, ctx) {
     ondragleave: (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over'); },
   }, archArt(92), title, status, btnRow, pk.inputs);
   const ui = {
-    start(msg) { drop.classList.add('busy'); title.textContent = 'Making your site…'; status.textContent = msg; btnRow.replaceWith(bar); bar.firstChild.style.width = '2%'; },
+    start(msg) { drop.classList.remove('failed'); status.removeAttribute('role'); drop.classList.add('busy'); title.textContent = 'Making your site…'; status.textContent = msg; btnRow.replaceWith(bar); bar.firstChild.style.width = '2%'; },
     progress(p) { bar.firstChild.style.width = Math.max(2, p * 100) + '%'; if (p >= 1) { bar.classList.add('indeterminate'); status.textContent = 'Almost there. Checking and publishing…'; } },
-    reset() { drop.classList.remove('busy'); title.textContent = 'Drop a file or folder to make it a site'; status.textContent = 'That didn’t work. Try again, or pick different files.'; bar.classList.remove('indeterminate'); bar.replaceWith(btnRow); },
+    reset(e) {
+      drop.classList.remove('busy');
+      drop.classList.add('failed');
+      title.textContent = e?.code === 'secret_detected' ? 'We found a password or key in your files' : e?.code === 'blocked_type' ? 'That upload has a program in it' : e?.status === 413 ? 'That’s too big for one site' : 'That didn’t work';
+      status.textContent = (e?.message && e.status ? e.message : 'Please try again, or pick different files.');
+      status.setAttribute('role', 'alert');
+      bar.classList.remove('indeterminate'); bar.replaceWith(btnRow);
+    },
   };
   let overlay;
   const offDrag = onWindowDrag({

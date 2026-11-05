@@ -220,6 +220,9 @@ main#main { min-width: 0; }
 .drop p { color: var(--muted); font-size: .93rem; }
 .drop .row { margin-top: 4px; }
 .drop.busy { cursor: progress; }
+.drop.failed { border-color: color-mix(in srgb, var(--clay) 60%, var(--line)); }
+.drop.failed .art { color: var(--clay); }
+.drop.failed p { color: var(--text); max-width: 34em; }
 .progress { width: min(320px, 100%); height: 8px; border-radius: 99px; background: var(--sand); overflow: hidden; }
 .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--moss), var(--forest-700)); border-radius: inherit; transition: width .2s; }
 .progress.indeterminate i { width: 35%; animation: indet 1.1s ease-in-out infinite; }
@@ -460,6 +463,7 @@ select.mini { height: 32px; padding: 0 28px 0 10px; border-radius: 8px; border: 
 .toast .msg-t { flex: 1; min-width: 0; }
 .toast svg.lead { color: #8fbf9f; }
 .toast.error svg.lead { color: #f2a08c; }
+.toast.warn svg.lead { color: #e9b77a; }
 .toast .btn { height: 30px; background: rgb(255 255 255 / .1); border-color: transparent; color: #fff; }
 .toast .x { background: none; border: 0; color: #a8b5ad; cursor: pointer; padding: 4px; border-radius: 6px; }
 @media (prefers-color-scheme: dark) { .toast { background: #2a352e; border: 1px solid #3a4840; } }

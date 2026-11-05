@@ -5,6 +5,7 @@ import { state } from '../state.js';
 import { navigate, setQuery } from '../router.js';
 import { fromDataTransfer, onWindowDrag, toForm, describe, pickers } from '../drop.js';
 import { bell } from '../main.js';
+import { warnToast } from '../components.js';
 
 const TABS = [
   ['build', 'Build', 'chat'],
@@ -277,6 +278,7 @@ export default async function workspace(root, ctx) {
       t();
       if (publishNow) { s.version = r.version; ws.hasDraft = false; celebrate(); toast('Uploaded and published as version ' + r.version + '.', { type: 'ok' }); }
       else { ws.hasDraft = true; toast('Uploaded as a draft. Check the preview, then press Publish.', { type: 'ok' }); }
+      warnToast(r.warnings);
       sig = '';
       paintTop();
       updatePreview(true);

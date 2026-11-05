@@ -205,7 +205,7 @@ export function toast(msg, opt = {}) {
     setTimeout(() => el.remove(), 200);
   };
   const el = h('div.toast.' + type,
-    icon(type === 'error' ? 'warn' : type === 'ok' ? 'check' : 'info', 18, 'lead'),
+    icon(type === 'error' || type === 'warn' ? 'warn' : type === 'ok' ? 'check' : 'info', 18, 'lead'),
     h('div.msg-t', msg),
     opt.action && h('button.btn.sm', { onclick: () => { close(); opt.action.run(); } }, opt.action.label),
     h('button.x', { 'aria-label': 'Dismiss', onclick: close }, icon('x', 16)));
