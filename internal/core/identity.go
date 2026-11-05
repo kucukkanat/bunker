@@ -45,14 +45,49 @@ func (u *User) HasScope(s string) bool {
 	return slices.Contains(u.Scopes, s)
 }
 
-// InGroup matches by group ID or (case-insensitive) display name.
+// InGroup matches by group ID or (case-insensitive) display name. When g
+// is an object ID (a GUID, as Entra uses), only the ID counts: display
+// names are chosen by whoever creates a group, so a group named after
+// another group's ID must not match it.
 func (u *User) InGroup(g string) bool {
+	byID := IsObjectID(g)
 	for _, x := range u.Groups {
-		if x.ID == g || strings.EqualFold(x.Name, g) {
+		if x.ID == g || (byID && strings.EqualFold(x.ID, g)) || (!byID && strings.EqualFold(x.Name, g)) {
 			return true
 		}
 	}
 	return false
+}
+
+// InGroupID matches by group ID only (for privileges like admin rights,
+// where a self-chosen display name must never be enough).
+func (u *User) InGroupID(g string) bool {
+	for _, x := range u.Groups {
+		if x.ID == g || (IsObjectID(g) && strings.EqualFold(x.ID, g)) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsObjectID reports whether s looks like a GUID (8-4-4-4-12 hex).
+func IsObjectID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+			continue
+		}
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 type ctxKey int

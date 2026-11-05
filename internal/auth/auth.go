@@ -196,7 +196,9 @@ func isConfiguredAdmin(u *core.User) bool {
 		if a == "" {
 			continue
 		}
-		if strings.EqualFold(a, u.Email) || u.InGroup(a) {
+		// Groups by ID only: anyone who can create a group could otherwise
+		// name it after the admin group and become a Bunker admin.
+		if strings.EqualFold(a, u.Email) || u.InGroupID(a) {
 			return true
 		}
 	}
