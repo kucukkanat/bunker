@@ -22,7 +22,9 @@ When you add a custom domain, set `BUNKER_URL` to it.
 
 ## Railway
 
-Four clicks (a one-click template is on the way):
+[Deploy on Railway](https://railway.com/deploy/bunker): the template builds the Dockerfile with a volume at `/data`, sets `BUNKER_RUN_UID=0` and generates a `BUNKER_SETUP_CODE` (in the service's Variables). Open the generated domain and go to `/setup`.
+
+Or by hand, from your fork:
 
 1. **New project → Deploy from GitHub repo**, pick your fork of Bunker. `railway.json` sets the Dockerfile builder and the health check.
 2. **Variables**: add `BUNKER_RUN_UID` = `0` (Railway volumes are owned by root).

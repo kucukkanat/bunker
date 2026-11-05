@@ -10,7 +10,7 @@ Bunker is one small program and one data folder. Pick a button, wait a couple of
 |---|---|---|---|
 | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json) | **Azure** (your own subscription): a small Linux VM with a managed data disk, a free `*.cloudapp.azure.com` name and automatic HTTPS | Yes | **Recommended for Microsoft 365 companies** |
 | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/kucukkanat/bunker) | **Render**: web service + 5 GB persistent disk (Starter plan or higher) | Yes | |
-| [![Deploy on Railway](https://railway.com/button.svg)](#railway) | **Railway**: service + volume at `/data` | Yes | |
+| [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bunker) | **Railway**: service + volume at `/data` | Yes | |
 | `fly launch --from https://github.com/kucukkanat/bunker --copy-config` | **Fly.io**: one machine + volume (see [`fly.toml`](fly.toml)) | Yes | |
 | [![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&repository=github.com/kucukkanat/bunker&branch=master&builder=dockerfile&name=bunker&ports=8080;http;/) | **Koyeb** | Only after you attach a volume at `/data` in the service settings | |
 | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master) | DigitalOcean App Platform | **No, demo only (data resets on every deploy)** | For real use: a Droplet + the installer below |
@@ -59,7 +59,9 @@ Have Go installed? `go install github.com/kucukkanat/bunker/cmd/bunker@latest` g
 
 ## Railway
 
-Until the one-click Railway template is published, it's four clicks:
+The [button](https://railway.com/deploy/bunker) deploys the Bunker template: the Dockerfile build, a volume at `/data`, `BUNKER_RUN_UID=0` and a generated `BUNKER_SETUP_CODE` (in the service's Variables). Open the domain Railway generates and go to `/setup`.
+
+Prefer to deploy your own fork by hand? It's four clicks:
 
 1. In Railway, **New project → Deploy from GitHub repo**, and pick your fork of this repo. [`railway.json`](railway.json) tells Railway to build the Dockerfile and use `/healthz`.
 2. On the service, **Variables → New variable**: `BUNKER_RUN_UID` = `0` (Railway volumes are owned by root).
@@ -108,7 +110,7 @@ Health check: `GET /healthz` (in the container: `bunker healthcheck`).
 
 - **Releases:** push a tag `vX.Y.Z`. [`release.yml`](.github/workflows/release.yml) publishes the binaries + `checksums.txt` to GitHub Releases and a multi-arch image to `ghcr.io/kucukkanat/bunker`. After the first release, make the GHCR package **public** (Package settings → Change visibility), or the image-based deploys can't pull it.
 - **Azure:** edit [`deploy/azure/main.bicep`](deploy/azure/main.bicep) (+ [`cloud-init.yaml`](deploy/azure/cloud-init.yaml)), then `az bicep build -f deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json` and commit both. [`deploy/azure/container-apps/`](deploy/azure/container-apps/) is an evaluation-only Container Apps variant (local ephemeral disk; data is lost on restart).
-- **Railway:** the button needs a published template with code `bunker`. Create it in the Railway template composer from this repo: add a volume mounted at `/data` and the variable `BUNKER_RUN_UID=0` (Railway volumes are owned by root), then publish. [`railway.json`](railway.json) sets the Dockerfile builder and the health check.
+- **Railway:** the button points at the template [`https://railway.com/deploy/bunker`](https://railway.com/deploy/bunker) (Railway → Workspace → Templates → Bunker). It builds `master` from this repo with a volume at `/data`, an HTTP proxy on port 8080, `BUNKER_RUN_UID=0` (Railway volumes are owned by root) and `BUNKER_SETUP_CODE=${{secret(24)}}`. [`railway.json`](railway.json) sets the Dockerfile builder and the health check.
 - **Root-owned disks:** the image runs as uid 65532. Render and Railway mount disks owned by root, so they build with `BUNKER_RUN_UID=0` (a Docker build arg; Render and Railway pass service variables to the build).
 - **Heroku / Cloud Run** share [`app.json`](app.json) ([`heroku.yml`](heroku.yml) for Heroku's container stack).
 </details>
