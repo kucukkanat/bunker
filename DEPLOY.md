@@ -35,7 +35,7 @@ No image published yet, or you want the latest code? Build it straight from GitH
 docker build -t ghcr.io/kucukkanat/bunker https://github.com/kucukkanat/bunker.git
 ```
 
-Or `docker compose up -d` with [`docker-compose.yml`](docker-compose.yml). Want HTTPS on your own domain? Use [`deploy/compose-with-caddy/`](deploy/compose-with-caddy/): `DOMAIN=bunker.example.com docker compose up -d`.
+Or `docker compose up -d` with [`docker-compose.yml`](docker-compose.yml): it pulls the published image, or builds it from GitHub if there isn't one yet. Want HTTPS on your own domain? Use [`deploy/compose-with-caddy/`](deploy/compose-with-caddy/): `DOMAIN=bunker.example.com docker compose up -d`.
 
 ## Any Linux server (or a Mac)
 
