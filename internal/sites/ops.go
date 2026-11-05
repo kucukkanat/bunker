@@ -107,6 +107,7 @@ func registerOps(a *core.App) {
 		Params: []core.Param{siteParam,
 			{Name: "title", In: "body"}, {Name: "slug", In: "body", Desc: "New address"}, {Name: "description", In: "body"}, {Name: "icon", In: "body"},
 			{Name: "orgView", In: "body", Type: "boolean", Desc: "Everyone in the organization can view"},
+			{Name: "public", In: "body", Type: "boolean", Desc: "Anyone with the link can view without signing in (needs the admin's public-links policy)"},
 			{Name: "isTemplate", In: "body", Type: "boolean", Desc: "Offer as a template"},
 			{Name: "settings", In: "body", Type: "object", Desc: "{spa, notFound, entry, hideBadge}"},
 		},
@@ -118,7 +119,7 @@ func registerOps(a *core.App) {
 			}
 			var in struct {
 				Title, Slug, Description, Icon *string
-				OrgView, IsTemplate            *bool
+				OrgView, IsTemplate, Public    *bool
 				Settings                       *Settings
 			}
 			if err := core.Decode(r, &in); err != nil {
@@ -126,7 +127,7 @@ func registerOps(a *core.App) {
 			}
 			ctx := r.Context()
 			// Owner-only changes are checked before anything is written.
-			if role < core.RoleOwner && (in.OrgView != nil || in.IsTemplate != nil || (in.Slug != nil && *in.Slug != s.Slug)) {
+			if role < core.RoleOwner && (in.OrgView != nil || in.IsTemplate != nil || in.Public != nil || (in.Slug != nil && *in.Slug != s.Slug)) {
 				return nil, core.Forbidden("only the owner can change who can view, the address, or offer the site as a template")
 			}
 			if in.Title != nil {
@@ -155,6 +156,13 @@ func registerOps(a *core.App) {
 				}
 				a.DB.ExecContext(ctx, `UPDATE sites SET org_view=? WHERE id=?`, b2i(*in.OrgView), s.ID)
 				a.Audit(ctx, "site.share", s.ID, "org", map[string]any{"orgView": *in.OrgView})
+			}
+			if in.Public != nil {
+				if *in.Public && !PublicLinksAllowed() {
+					return nil, core.Forbidden("public links are off. An admin can allow them in Admin → Sharing")
+				}
+				a.DB.ExecContext(ctx, `UPDATE sites SET public=? WHERE id=?`, b2i(*in.Public), s.ID)
+				a.Audit(ctx, "site.share", s.ID, "public", map[string]any{"public": *in.Public})
 			}
 			if in.IsTemplate != nil {
 				a.DB.ExecContext(ctx, `UPDATE sites SET is_template=? WHERE id=?`, b2i(*in.IsTemplate), s.ID)
@@ -379,7 +387,7 @@ func listSites(r *http.Request) (any, error) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	var rows *sql.Rows
 	var err error
-	cols := `s.id,s.slug,s.title,s.description,s.icon,s.owner_id,s.kind,s.org_view,s.live_version,s.is_template,s.settings,s.created_at,s.updated_at,s.deleted_at,s.archived_at,s.archived_days`
+	cols := `s.id,s.slug,s.title,s.description,s.icon,s.owner_id,s.kind,s.org_view,s.live_version,s.is_template,s.settings,s.created_at,s.updated_at,s.deleted_at,s.archived_at,s.archived_days,s.public`
 	switch filter {
 	case "trash":
 		rows, err = app.DB.QueryContext(ctx, `SELECT `+cols+` FROM sites s WHERE s.deleted_at IS NOT NULL AND (s.owner_id=? OR ?=1) ORDER BY s.deleted_at DESC`, u.ID, b2i(u.IsAdmin))

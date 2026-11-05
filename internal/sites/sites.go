@@ -79,6 +79,7 @@ CREATE TABLE site_stars (
 			`ALTER TABLE sites ADD COLUMN archived_at INTEGER;
 ALTER TABLE sites ADD COLUMN archived_days INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE sites ADD COLUMN archive_warned_at INTEGER;`,
+			`ALTER TABLE sites ADD COLUMN public INTEGER NOT NULL DEFAULT 0;`,
 		},
 		Init: initSites,
 	})
@@ -100,11 +101,14 @@ type SiteRecord struct {
 	// ArchivedAt is set when the site was archived (idle or by hand).
 	ArchivedAt *int64 `json:"archivedAt,omitempty"`
 	// ArchivedDays is the idle period that triggered archival (0 = by hand).
-	ArchivedDays int64          `json:"archivedDays,omitempty"`
-	Role         string         `json:"role,omitempty"`
-	URL          string         `json:"url"`
-	Starred      bool           `json:"starred,omitempty"`
-	Extra        map[string]any `json:"extra,omitempty"`
+	ArchivedDays int64  `json:"archivedDays,omitempty"`
+	Role         string `json:"role,omitempty"`
+	// Public: anyone with the link can view without signing in (when the
+	// admin allows public links).
+	Public  bool           `json:"public"`
+	URL     string         `json:"url"`
+	Starred bool           `json:"starred,omitempty"`
+	Extra   map[string]any `json:"extra,omitempty"`
 }
 
 // Settings are per-site options.
@@ -136,6 +140,7 @@ func initSites(a *core.App) error {
 	rawCache = map[string]rawEntry{}
 	rawMu.Unlock()
 	a.Sites = resolver{}
+	a.On("sites.changed", func(context.Context, any) { invalidateAll() })
 	registerOps(a)
 	if extraOps != nil {
 		extraOps(a)
@@ -281,16 +286,17 @@ func invalidateAll() {
 	roleCache = map[string]roleEntry{}
 }
 
-const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at,archived_at,archived_days`
+const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at,archived_at,archived_days,public`
 
 func scanSite(row interface{ Scan(...any) error }) (*SiteRecord, error) {
 	s := &SiteRecord{}
-	var org, tpl int
+	var org, tpl, pub int
 	var settings string
 	var del, arch sql.NullInt64
-	if err := row.Scan(&s.ID, &s.Slug, &s.Title, &s.Description, &s.Icon, &s.OwnerID, &s.Kind, &org, &s.Version, &tpl, &settings, &s.CreatedAt, &s.UpdatedAt, &del, &arch, &s.ArchivedDays); err != nil {
+	if err := row.Scan(&s.ID, &s.Slug, &s.Title, &s.Description, &s.Icon, &s.OwnerID, &s.Kind, &org, &s.Version, &tpl, &settings, &s.CreatedAt, &s.UpdatedAt, &del, &arch, &s.ArchivedDays, &pub); err != nil {
 		return nil, err
 	}
+	s.Public = pub == 1 && PublicLinksAllowed()
 	s.OrgView, s.Template = org == 1, tpl == 1
 	json.Unmarshal([]byte(settings), &s.Settings)
 	if del.Valid {
@@ -342,7 +348,10 @@ func GetByID(ctx context.Context, id int64, withDeleted bool) (*SiteRecord, erro
 
 // RoleOf computes u's role on s.
 func RoleOf(ctx context.Context, u *core.User, s *SiteRecord) core.Role {
-	if u == nil {
+	if u == nil || u.ID == 0 {
+		if s.Public && s.ArchivedAt == nil {
+			return core.RoleViewer
+		}
 		return core.RoleNone
 	}
 	if u.IsAdmin {
@@ -440,3 +449,9 @@ func purgeLoop(a *core.App) {
 		}
 	}
 }
+
+// PublicLinksAllowed reports whether the admin allows public sites.
+func PublicLinksAllowed() bool { return app.Setting("sharing.public_links") == "true" }
+
+// Guest is the anonymous viewer of public sites.
+var Guest = &core.User{ID: 0, Name: "Guest", Email: ""}

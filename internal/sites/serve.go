@@ -219,8 +219,13 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	}
 	u := core.UserFrom(r.Context())
 	if u == nil {
-		http.Redirect(w, r, "/auth/login?next="+urlQueryEscape(r.URL.RequestURI()), http.StatusFound)
-		return
+		// Public sites open without signing in; everything else asks to sign in.
+		if ps, err := GetBySlug(r.Context(), r.PathValue("site")); err == nil && ps.Public && ps.ArchivedAt == nil {
+			u = Guest
+		} else {
+			http.Redirect(w, r, "/auth/login?next="+urlQueryEscape(r.URL.RequestURI()), http.StatusFound)
+			return
+		}
 	}
 	s, err := GetBySlug(r.Context(), r.PathValue("site"))
 	role := core.RoleNone
@@ -255,8 +260,12 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	auditView(r.Context(), s, u)
-	markVisit(r.Context(), u.ID, s.ID)
+	if u.ID != 0 {
+		auditView(r.Context(), s, u)
+		markVisit(r.Context(), u.ID, s.ID)
+	} else {
+		countGuestView(r.Context(), s)
+	}
 	t := MakeTicket(s.ID, ver, u.ID)
 	base := "/s/" + s.Slug + "/~r/" + t + "/"
 	src := app.Cfg.ContentURL + base + rest
@@ -517,6 +526,9 @@ func IsContentHost(r *http.Request) bool {
 }
 
 func loadTicketUser(ctx context.Context, id int64) *core.User {
+	if id == 0 {
+		return Guest // RoleOf grants guests access only to public sites
+	}
 	var email, name, gj string
 	var admin, disabled int
 	if app.DB.QueryRowContext(ctx, `SELECT email,name,is_admin,groups_json,disabled FROM users WHERE id=?`, id).Scan(&email, &name, &admin, &gj, &disabled) != nil || disabled == 1 {
@@ -641,4 +653,20 @@ func rewriteCSS(b []byte, prefix string) []byte {
 
 func urlQueryEscape(s string) string {
 	return strings.NewReplacer("%", "%25", "&", "%26", "?", "%3F", "#", "%23", "+", "%2B", " ", "%20").Replace(s)
+}
+
+// countGuestView records anonymous views of public sites as one audit
+// entry per site per hour (no personal data).
+func countGuestView(ctx context.Context, s *SiteRecord) {
+	key := "guest:" + itoa64(s.ID)
+	now := core.Now()
+	viewMu.Lock()
+	last := viewSeen[key]
+	if now-last < 3600 {
+		viewMu.Unlock()
+		return
+	}
+	viewSeen[key] = now
+	viewMu.Unlock()
+	app.Audit(ctx, "site.view_public", s.ID, s.Slug, nil)
 }

@@ -156,6 +156,7 @@ type policy struct {
 	SiteMaxMB       int    `json:"siteMaxMB"`
 	UploadMaxMB     int    `json:"uploadMaxMB"`
 	AllowedGroups   string `json:"allowedGroups"`
+	PublicLinks     bool   `json:"publicLinks"`
 }
 
 // Setting keys; the sites module reads the same keys (sharing.* as
@@ -168,6 +169,7 @@ const (
 	kSiteMB   = "site_max_mb"
 	kUploadMB = "upload_max_mb"
 	kGroups   = "auth.allowed_groups"
+	kPublic   = "sharing.public_links"
 )
 
 func intSetting(k string, def int) int {
@@ -185,6 +187,7 @@ func loadPolicy() policy {
 		SiteMaxMB:       intSetting(kSiteMB, 100),
 		UploadMaxMB:     intSetting(kUploadMB, 100),
 		AllowedGroups:   firstNonEmpty(core.Env("ALLOWED_GROUPS", ""), app.Setting(kGroups)),
+		PublicLinks:     app.Setting(kPublic) == "true",
 	}
 }
 
@@ -201,7 +204,7 @@ func registerPolicy(a *core.App) {
 	a.Handle(core.Op{Name: "admin.policy.get", Method: "GET", Path: "/api/v1/admin/policy", Access: core.AccessAdmin, Summary: "Sharing and size policy",
 		Fn: func(r *http.Request) (any, error) {
 			pinned := map[string]bool{}
-			for k, s := range map[string]string{"orgWideSharing": kOrgWide, "editorsCanShare": kEditors, "maxSitesPerUser": kMaxSites, "siteMaxMB": kSiteMB, "uploadMaxMB": kUploadMB, "allowedGroups": kGroups} {
+			for k, s := range map[string]string{"orgWideSharing": kOrgWide, "editorsCanShare": kEditors, "maxSitesPerUser": kMaxSites, "siteMaxMB": kSiteMB, "uploadMaxMB": kUploadMB, "allowedGroups": kGroups, "publicLinks": kPublic} {
 				pinned[k] = a.SettingFromEnv(s)
 			}
 			pinned["orgWideSharing"] = pinned["orgWideSharing"] || core.Env("ORG_WIDE_SHARING", "") != ""
@@ -214,6 +217,7 @@ func registerPolicy(a *core.App) {
 			{Name: "editorsCanShare", In: "body", Type: "boolean", Desc: "Editors (not just owners) can share"},
 			{Name: "maxSitesPerUser", In: "body", Type: "integer"}, {Name: "siteMaxMB", In: "body", Type: "integer"}, {Name: "uploadMaxMB", In: "body", Type: "integer"},
 			{Name: "allowedGroups", In: "body", Desc: "Comma-separated groups allowed to sign in (empty = everyone)"},
+			{Name: "publicLinks", In: "body", Type: "boolean", Desc: "Let owners make a site viewable by anyone with the link, without signing in (off by default)"},
 		},
 		Fn: func(r *http.Request) (any, error) {
 			var in struct {
@@ -223,6 +227,7 @@ func registerPolicy(a *core.App) {
 				SiteMaxMB       *int    `json:"siteMaxMB"`
 				UploadMaxMB     *int    `json:"uploadMaxMB"`
 				AllowedGroups   *string `json:"allowedGroups"`
+				PublicLinks     *bool   `json:"publicLinks"`
 			}
 			if err := core.Decode(r, &in); err != nil {
 				return nil, err
@@ -247,6 +252,16 @@ func registerPolicy(a *core.App) {
 			if in.OrgWideSharing != nil {
 				if err := set(kOrgWide, strconv.FormatBool(*in.OrgWideSharing)); err != nil {
 					return nil, err
+				}
+			}
+			if in.PublicLinks != nil {
+				if err := set(kPublic, strconv.FormatBool(*in.PublicLinks)); err != nil {
+					return nil, err
+				}
+				if !*in.PublicLinks {
+					// Turning the feature off closes every public link at once.
+					a.DB.ExecContext(ctx, `UPDATE sites SET public=0 WHERE public=1`)
+					a.Emit(ctx, "sites.changed", nil)
 				}
 			}
 			if in.EditorsCanShare != nil {
