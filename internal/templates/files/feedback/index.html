@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.stars{display:flex;gap:6px}.stars button{font-size:1.7rem;line-height:1;background:none;border:0;cursor:pointer;color:var(--line);padding:2px}
+.stars button.on{color:#D9A441}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--card2);border-radius:12px;padding:10px 14px}.kpi b{display:block;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.kpi span{font:600 1.5rem var(--serif)}
+.dist div{display:grid;grid-template-columns:28px 1fr 34px;gap:8px;align-items:center;font-size:.85rem;margin:3px 0}
+.dist i{display:block;height:8px;border-radius:99px;background:var(--moss)}
+.fb{padding:12px 0;border-bottom:1px solid var(--line)}.fb:last-child{border:0}
+.fb .s{color:#D9A441;letter-spacing:1px}.fb p{margin:4px 0 0;white-space:pre-wrap}
+.summary{background:var(--soft);border-radius:12px;padding:12px 16px;white-space:pre-wrap;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chips button{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:4px 12px;cursor:pointer}
+.chips button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero"><div><h1 id="title">Tell us what you think</h1><p id="sub">Two minutes, honest answers. We read every one.</p></div></div>
+  <div class="grid g2">
+    <section class="card">
+      <h2>Your feedback</h2>
+      <form id="form">
+        <div class="field"><span id="l-rate" style="display:block;font-weight:500;font-size:.9rem;margin-bottom:4px">How was it overall?</span><div class="stars" id="stars" role="radiogroup" aria-labelledby="l-rate"></div></div>
+        <div class="field"><span style="display:block;font-weight:500;font-size:.9rem;margin-bottom:4px">Topic</span><div class="chips" id="topics"></div></div>
+        <div class="field"><label for="c">Anything to add?</label><textarea id="c" maxlength="4000" placeholder="What worked, what didn’t, what you’d change"></textarea></div>
+        <div class="field"><label class="row" style="font-weight:400"><input type="checkbox" id="anon"> Don’t show my name on this page</label><div class="hint">Site owners can still see who sent what in the data export.</div></div>
+        <button class="btn primary" type="submit">Send feedback</button>
+      </form>
+    </section>
+    <section class="card">
+      <div class="row"><h2 style="margin:0">Results</h2><span class="spacer"></span><button class="btn small" id="sum">✨ Summarize</button></div>
+      <div class="kpis" style="margin-top:12px"><div class="kpi"><b>Responses</b><span id="k-n">0</span></div><div class="kpi"><b>Average</b><span id="k-avg">–</span></div><div class="kpi"><b>Happy</b><span id="k-happy">–</span></div></div>
+      <div class="dist" id="dist"></div>
+      <div id="summary"></div>
+    </section>
+  </div>
+  <section class="card" style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Comments</h2><span class="spacer"></span><select id="filter" aria-label="Filter by topic" style="max-width:200px"></select></div>
+    <div id="list" style="margin-top:6px"></div>
+  </section>
+</div>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var CONFIG = {
+  title: 'Tell us what you think',
+  topics: ['Event', 'Tools', 'Process', 'Team', 'Other'],
+  // Guidance for the AI summary.
+  summaryPrompt: 'Summarize this employee feedback for a manager in plain words: 3-5 key themes with rough counts, what people like, what to fix first. Be brief and kind. No names.'
+};
+// -------------------
+
+var fb = BK.col('feedback'), F = [], rating = 0, topic = '';
+var $ = function (id) { return document.getElementById(id); };
+document.title = CONFIG.title; $('title').textContent = CONFIG.title;
+for (var i = 1; i <= 5; i++) (function (n) {
+  var b = document.createElement('button'); b.type = 'button'; b.textContent = '★'; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', n + ' star' + (n > 1 ? 's' : ''));
+  b.onclick = function () { rating = n; paintStars(); }; $('stars').appendChild(b);
+})(i);
+function paintStars() { [].forEach.call($('stars').children, function (b, i) { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', i + 1 === rating); }); }
+CONFIG.topics.forEach(function (t) {
+  var b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', 'false');
+  b.onclick = function () { topic = topic === t ? '' : t; [].forEach.call($('topics').children, function (x) { x.setAttribute('aria-pressed', x.textContent === topic); }); };
+  $('topics').appendChild(b);
+});
+$('filter').innerHTML = '<option value="">All topics</option>' + CONFIG.topics.map(function (t) { return '<option>' + BK.esc(t) + '</option>'; }).join('');
+function render() {
+  var e = BK.esc, n = F.length, rated = F.filter(function (f) { return f.rating > 0; });
+  var avg = rated.length ? rated.reduce(function (s, f) { return s + f.rating; }, 0) / rated.length : 0;
+  $('k-n').textContent = n; $('k-avg').textContent = rated.length ? avg.toFixed(1) + '★' : '–';
+  $('k-happy').textContent = rated.length ? Math.round(rated.filter(function (f) { return f.rating >= 4; }).length / rated.length * 100) + '%' : '–';
+  var max = 1, counts = [0, 0, 0, 0, 0, 0]; rated.forEach(function (f) { counts[f.rating]++; }); counts.forEach(function (c) { if (c > max) max = c; });
+  $('dist').innerHTML = [5, 4, 3, 2, 1].map(function (s) { return '<div><span>' + s + '★</span><i style="width:' + (counts[s] / max * 100) + '%" aria-hidden="true"></i><span class="muted">' + counts[s] + '</span></div>'; }).join('');
+  var t = $('filter').value, list = F.filter(function (f) { return f.comment && (!t || f.topic === t); }).slice().reverse();
+  $('list').innerHTML = list.length ? list.map(function (f) {
+    return '<div class="fb"><div class="row"><span class="s">' + '★★★★★'.slice(0, f.rating || 0) + '</span>' + (f.topic ? '<span class="pill">' + e(f.topic) + '</span>' : '') + '<span class="muted" style="font-size:.85rem">' + (f.anonymous ? 'Anonymous' : e(f._authorName || '')) + ' · ' + BK.when(f._created) + '</span></div><p>' + e(f.comment) + '</p></div>';
+  }).join('') : '<div class="empty">No comments yet.</div>';
+}
+function load() { return fb.list().then(function (l) { F = l; render(); }).catch(BK.err); }
+$('form').onsubmit = function (ev) {
+  ev.preventDefault();
+  if (!rating && !$('c').value.trim()) { BK.toast('Pick a rating or write a comment.'); return; }
+  fb.add({ rating: rating, topic: topic, comment: $('c').value.trim(), anonymous: $('anon').checked }).then(function () {
+    rating = 0; topic = ''; paintStars(); $('form').reset(); [].forEach.call($('topics').children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+    BK.toast('Thanks! Your feedback is in.'); load();
+  }).catch(BK.err);
+};
+$('filter').onchange = render;
+$('sum').onclick = function () {
+  var comments = F.filter(function (f) { return f.comment; });
+  if (!comments.length) { BK.toast('No comments to summarize yet.'); return; }
+  var btn = $('sum'); btn.disabled = true; btn.textContent = 'Thinking…';
+  var text = comments.slice(-200).map(function (f) { return '- (' + (f.rating || '?') + '/5, ' + (f.topic || 'general') + ') ' + f.comment.slice(0, 600); }).join('\n');
+  BK.ai([{ role: 'user', content: CONFIG.summaryPrompt + '\n\nFeedback:\n' + text }]).then(function (out) {
+    if (out == null) out = localSummary(comments);
+    $('summary').innerHTML = '<div class="summary">' + BK.esc(out) + '</div>';
+  }).catch(function (e) { $('summary').innerHTML = '<div class="summary">' + BK.esc(localSummary(comments)) + '\n\n(AI isn’t available: ' + BK.esc(e && e.message || 'ask your admin to set it up') + ')</div>'; })
+    .then(function () { btn.disabled = false; btn.textContent = '✨ Summarize'; });
+};
+// Without AI: most common meaningful words.
+function localSummary(list) {
+  var stop = 'the a an and or but to of in on for with is are was were it this that be we i you they our my at as so not no very just really have has had more less'.split(' '), c = {};
+  list.forEach(function (f) { f.comment.toLowerCase().replace(/[^a-zÀ-ɏ\s]/g, ' ').split(/\s+/).forEach(function (w) { if (w.length > 3 && stop.indexOf(w) < 0) c[w] = (c[w] || 0) + 1; }); });
+  var top = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).slice(0, 8);
+  return 'Most mentioned: ' + top.map(function (w) { return w + ' (' + c[w] + ')'; }).join(', ') + '.';
+}
+BK.me().then(function () { BK.banner(); load(); });
+fb.subscribe(load);
+</script>
+</body>
+</html>

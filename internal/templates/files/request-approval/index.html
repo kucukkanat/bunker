@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Requests &amp; approvals</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px;overflow-x:auto}
+.tabs button{border:0;background:none;padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--text);border-color:var(--accent)}
+.req{display:grid;grid-template-columns:1fr auto;gap:6px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.req:last-child{border:0}.req .amt{font:600 1.1rem var(--serif);text-align:right}
+.req .meta{font-size:.85rem;color:var(--muted)}.req .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.req .note{grid-column:1/-1;font-size:.88rem;background:var(--card2);border-radius:8px;padding:6px 10px}
+.count{background:var(--clay);color:#fff;border-radius:99px;font-size:.7rem;padding:1px 7px;margin-left:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div><h1 id="title">Requests &amp; approvals</h1><p id="sub">Ask for something, get a clear yes or no, keep a record.</p></div>
+    <div class="row"><span class="muted" id="who"></span></div>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="new">New request</button>
+    <button role="tab" aria-selected="false" data-tab="mine">My requests</button>
+    <button role="tab" aria-selected="false" data-tab="review" id="tab-review" hidden>To approve <span class="count" id="pending" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="all">All requests</button>
+  </div>
+
+  <section id="p-new" class="card" style="max-width:640px">
+    <form id="form" novalidate>
+      <div class="field"><label for="f-what">What do you need?</label><input type="text" id="f-what" required maxlength="140" placeholder="e.g. Conference ticket for UX Days"></div>
+      <div class="grid g2">
+        <div class="field"><label for="f-amount">Amount</label><input type="number" id="f-amount" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label for="f-cat">Category</label><select id="f-cat"></select></div>
+      </div>
+      <div class="field"><label for="f-date">Needed by</label><input type="date" id="f-date"></div>
+      <div class="field"><label for="f-why">Why?</label><textarea id="f-why" placeholder="A sentence or two helps approvers decide quickly."></textarea></div>
+      <div class="row"><button class="btn primary" type="submit">Send request</button><span class="hint" id="route"></span></div>
+    </form>
+  </section>
+  <section id="p-mine" class="card" hidden><div id="l-mine"></div></section>
+  <section id="p-review" class="card" hidden><div id="l-review"></div></section>
+  <section id="p-all" class="card" hidden>
+    <div class="row" style="margin-bottom:8px"><input type="search" id="q" placeholder="Search requests…" aria-label="Search" style="max-width:320px"><select id="st" aria-label="Status" style="max-width:180px"><option value="">Any status</option><option>Pending</option><option>Approved</option><option>Declined</option></select></div>
+    <div id="l-all"></div>
+  </section>
+</div>
+<script>
+/*BK:JS*/
+// ---- Settings: change these to fit your team ----
+var CONFIG = {
+  title: 'Requests & approvals',
+  // People in this group (Entra/Bunker group name or ID) can approve.
+  // Tip for site owners: in Data settings, set the "decisions" collection
+  // rule to  group:Finance Approvers  so only they can record decisions.
+  approvers: 'Finance Approvers',
+  categories: ['Software', 'Hardware', 'Travel', 'Training', 'Other'],
+  currency: 'USD'
+};
+// ---------------------------------------------------
+
+var reqs = BK.col('requests'), decs = BK.col('decisions'), me = {}, R = [], D = [];
+var $ = function (id) { return document.getElementById(id); };
+document.title = CONFIG.title; $('title').textContent = CONFIG.title;
+CONFIG.categories.forEach(function (c) { var o = document.createElement('option'); o.textContent = c; $('f-cat').appendChild(o); });
+$('route').textContent = 'Goes to: ' + CONFIG.approvers;
+var money = function (n) { return n == null || n === '' ? '' : Number(n).toLocaleString(undefined, { style: 'currency', currency: CONFIG.currency }); };
+function isApprover() { return BK.demo || (me.groups || []).some(function (g) { return g.id === CONFIG.approvers || String(g.name || g).toLowerCase() === CONFIG.approvers.toLowerCase(); }) || me.isAdmin; }
+function status(r) {
+  var ds = D.filter(function (d) { return d.requestId === r._id; }).sort(function (a, b) { return (a._created || 0) - (b._created || 0); });
+  var last = ds[ds.length - 1];
+  return last ? { s: last.decision === 'approve' ? 'Approved' : 'Declined', d: last } : { s: 'Pending' };
+}
+function pill(s) { return '<span class="pill ' + (s === 'Approved' ? 'ok' : s === 'Declined' ? 'no' : 'wait') + '">' + s + '</span>'; }
+function item(r, review) {
+  var st = status(r), e = BK.esc;
+  var h = '<div class="req"><div><h3>' + e(r.what) + '</h3><div class="meta">' + e(r.category || '') + ' · by ' + e(r._authorName || 'someone') + ' · ' + BK.when(r._created) + (r.neededBy ? ' · needed by ' + e(r.neededBy) : '') + '</div></div>' +
+    '<div><div class="amt">' + money(r.amount) + '</div><div style="text-align:right">' + pill(st.s) + '</div></div>';
+  if (r.why) h += '<div class="note">' + e(r.why) + '</div>';
+  if (st.d) h += '<div class="meta" style="grid-column:1/-1">' + (st.d.decision === 'approve' ? 'Approved' : 'Declined') + ' by ' + e(st.d._authorName || 'approver') + ' · ' + BK.when(st.d._created) + (st.d.note ? ': “' + e(st.d.note) + '”' : '') + '</div>';
+  if (review) h += '<div class="acts"><button class="btn primary small" data-act="approve" data-id="' + e(r._id) + '">Approve</button><button class="btn small danger" data-act="decline" data-id="' + e(r._id) + '">Decline</button></div>';
+  return h + '</div>';
+}
+function render() {
+  var mine = R.filter(function (r) { return r._author === me.id || BK.demo; });
+  var pending = R.filter(function (r) { return status(r).s === 'Pending'; });
+  var show = function (el, list, review, empty) { $(el).innerHTML = list.length ? list.slice().reverse().map(function (r) { return item(r, review); }).join('') : '<div class="empty">' + empty + '</div>'; };
+  show('l-mine', mine, false, 'You haven’t asked for anything yet.');
+  show('l-review', pending, true, 'Nothing waiting for you. Nice.');
+  var q = $('q').value.toLowerCase(), st = $('st').value;
+  show('l-all', R.filter(function (r) { return (!q || JSON.stringify(r).toLowerCase().indexOf(q) >= 0) && (!st || status(r).s === st); }), false, 'No requests match.');
+  $('pending').hidden = !pending.length; $('pending').textContent = pending.length;
+}
+function load() { return Promise.all([reqs.list(), decs.list()]).then(function (x) { R = x[0]; D = x[1]; render(); }).catch(BK.err); }
+document.querySelectorAll('.tabs button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('.tabs button').forEach(function (x) { x.setAttribute('aria-selected', x === b); $('p-' + x.dataset.tab).hidden = x !== b; });
+  };
+});
+$('form').onsubmit = function (e) {
+  e.preventDefault();
+  var what = $('f-what').value.trim();
+  if (!what) { $('f-what').focus(); BK.toast('Say what you need first.'); return; }
+  var doc = { what: what, amount: $('f-amount').value ? Number($('f-amount').value) : null, category: $('f-cat').value, neededBy: $('f-date').value, why: $('f-why').value.trim() };
+  reqs.add(doc).then(function () { $('form').reset(); BK.toast('Request sent to ' + CONFIG.approvers); return load(); }).catch(BK.err);
+};
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-act]'); if (!b) return;
+  var note = b.dataset.act === 'decline' ? prompt('Reason (optional, shown to the requester):') : '';
+  if (note === null) return;
+  decs.add({ requestId: b.dataset.id, decision: b.dataset.act, note: note || '' }).then(function () { BK.toast(b.dataset.act === 'approve' ? 'Approved' : 'Declined'); return load(); }).catch(BK.err);
+});
+$('q').oninput = render; $('st').onchange = render;
+BK.me().then(function (u) { me = u; $('who').textContent = u.name ? 'Signed in as ' + u.name : ''; $('tab-review').hidden = !isApprover(); BK.banner(); return load(); });
+reqs.subscribe(load); decs.subscribe(load);
+</script>
+</body>
+</html>

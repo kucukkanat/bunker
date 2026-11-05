@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Team directory</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1180px}
+.layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+.person{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.person:last-child{border:0}.person .avatar{width:42px;height:42px;font-size:.95rem}
+.person h3{margin:0}.person .r{color:var(--muted);font-size:.88rem}.person .c{font-size:.85rem;margin-top:3px}
+.out{background:rgba(194,104,63,.14);color:var(--text)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .h{font-size:.72rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding:4px 0}
+.cal .d{min-height:74px;border:1px solid var(--line);border-radius:8px;padding:4px 5px;background:var(--card);font-size:.75rem;overflow:hidden}
+.cal .d.o{opacity:.45}.cal .d.t{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.cal .d.w{background:var(--card2)}
+.cal .d b{display:block;font-size:.78rem;margin-bottom:2px}
+.cal .d span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:0 4px;margin:1px 0;background:var(--soft)}
+.cal .d span.sick{background:rgba(194,104,63,.18)}.cal .d span.trip{background:rgba(90,120,180,.18)}
+.today li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div><h1 id="title">Team directory</h1><p>Who’s who, and who’s out.</p></div>
+    <div class="row"><button class="btn" id="b-me">Edit my profile</button><button class="btn primary" id="b-out">I’m away…</button></div>
+  </div>
+  <div class="layout">
+    <section class="card">
+      <div class="row" style="margin-bottom:6px"><input type="search" id="q" placeholder="Search name, role, team, skills…" aria-label="Search people" style="flex:1;width:auto;min-width:180px"><select id="team" aria-label="Team" style="max-width:180px"></select></div>
+      <div id="people"></div>
+    </section>
+    <div class="grid" style="align-content:start">
+      <section class="card"><h2>Out today</h2><ul class="today" id="today"></ul></section>
+      <section class="card">
+        <div class="row" style="margin-bottom:10px"><button class="btn small" id="prev" aria-label="Previous month">‹</button><h2 id="month" style="margin:0;flex:1;text-align:center"></h2><button class="btn small" id="next" aria-label="Next month">›</button></div>
+        <div class="cal" id="cal"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<dialog id="d-me"><form method="dialog">
+  <h2>My profile</h2>
+  <div class="grid g2"><div class="field"><label for="p-name">Name</label><input type="text" id="p-name" required></div><div class="field"><label for="p-role">Role</label><input type="text" id="p-role" placeholder="e.g. Designer"></div></div>
+  <div class="grid g2"><div class="field"><label for="p-team">Team</label><input type="text" id="p-team" list="teams"></div><div class="field"><label for="p-loc">Location</label><input type="text" id="p-loc" placeholder="e.g. Berlin / remote"></div></div>
+  <div class="field"><label for="p-phone">Phone</label><input type="text" id="p-phone"></div>
+  <div class="field"><label for="p-skills">Ask me about</label><input type="text" id="p-skills" placeholder="Comma-separated, e.g. Excel, onboarding"></div>
+  <datalist id="teams"></datalist>
+  <div class="row"><span class="spacer"></span><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="save">Save</button></div>
+</form></dialog>
+<dialog id="d-out"><form method="dialog">
+  <h2>I’m away</h2>
+  <div class="grid g2"><div class="field"><label for="o-from">From</label><input type="date" id="o-from" required></div><div class="field"><label for="o-to">To (incl.)</label><input type="date" id="o-to" required></div></div>
+  <div class="field"><label for="o-type">Type</label><select id="o-type"><option value="vacation">Vacation</option><option value="sick">Sick</option><option value="trip">Business trip</option><option value="other">Other</option></select></div>
+  <div class="field"><label for="o-note">Note (optional)</label><input type="text" id="o-note" placeholder="e.g. Ask Sam for anything urgent"></div>
+  <div id="my-out"></div>
+  <div class="row"><span class="spacer"></span><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="save">Save</button></div>
+</form></dialog>
+<script>
+/*BK:JS*/
+var people = BK.col('people'), outs = BK.col('away'), P = [], O = [], me = {}, view = new Date();
+var $ = function (id) { return document.getElementById(id); }, e = BK.esc;
+var iso = function (d) { var z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
+var TODAY = iso(new Date()), LABEL = { vacation: 'Vacation', sick: 'Sick', trip: 'Trip', other: 'Away' };
+function mineP() { return P.filter(function (p) { return BK.demo ? p._authorName === 'You' : p._author === me.id; })[0]; }
+function outOn(day) { return O.filter(function (o) { return o.from <= day && day <= o.to; }); }
+function render() {
+  var q = $('q').value.toLowerCase(), t = $('team').value;
+  var teams = P.map(function (p) { return p.team; }).filter(Boolean).filter(function (x, i, a) { return a.indexOf(x) === i; }).sort();
+  var cur = $('team').value; $('team').innerHTML = '<option value="">All teams</option>' + teams.map(function (x) { return '<option' + (x === cur ? ' selected' : '') + '>' + e(x) + '</option>'; }).join('');
+  $('teams').innerHTML = teams.map(function (x) { return '<option value="' + e(x) + '">'; }).join('');
+  var todayOut = outOn(TODAY);
+  var list = P.filter(function (p) { return (!t || p.team === t) && (!q || [p.name, p.role, p.team, p.location, p.skills, p.email].join(' ').toLowerCase().indexOf(q) >= 0); }).sort(function (a, b) { return String(a.name).localeCompare(b.name); });
+  $('people').innerHTML = list.length ? list.map(function (p) {
+    var away = todayOut.filter(function (o) { return o._author === p._author; })[0];
+    return '<div class="person"><span class="avatar">' + e(BK.initials(p.name)) + '</span><div style="flex:1;min-width:0"><div class="row"><h3>' + e(p.name) + '</h3>' + (away ? '<span class="pill out">' + LABEL[away.type] + ' until ' + e(away.to) + '</span>' : '') + '</div>' +
+      '<div class="r">' + e([p.role, p.team, p.location].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="c">' + (p.email ? '<a href="mailto:' + e(p.email) + '">' + e(p.email) + '</a>' : '') + (p.phone ? ' · ' + e(p.phone) : '') + '</div>' +
+      (p.skills ? '<div class="c muted">Ask me about: ' + e(p.skills) + '</div>' : '') + '</div></div>';
+  }).join('') : '<div class="empty">' + (P.length ? 'Nobody matches.' : 'No one has added a profile yet. Be the first: “Edit my profile”.') + '</div>';
+  $('today').innerHTML = todayOut.length ? todayOut.map(function (o) { return '<li><b>' + e(o.name) + '</b> · ' + LABEL[o.type] + ' until ' + e(o.to) + (o.note ? '<br><span class="muted">' + e(o.note) + '</span>' : '') + '</li>'; }).join('') : '<li class="muted">Everyone’s in.</li>';
+  calendar();
+}
+function calendar() {
+  var y = view.getFullYear(), m = view.getMonth(), first = new Date(y, m, 1), start = new Date(y, m, 1 - ((first.getDay() + 6) % 7));
+  $('month').textContent = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  var h = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (d) { return '<div class="h">' + d + '</div>'; }).join('');
+  for (var i = 0; i < 42; i++) {
+    var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = iso(d), list = outOn(k);
+    if (i >= 35 && d.getMonth() !== m) break;
+    h += '<div class="d' + (d.getMonth() !== m ? ' o' : '') + (k === TODAY ? ' t' : '') + (d.getDay() % 6 === 0 ? ' w' : '') + '"><b>' + d.getDate() + '</b>' + list.slice(0, 3).map(function (o) { return '<span class="' + e(o.type) + '" title="' + e(o.name + ': ' + LABEL[o.type]) + '">' + e(String(o.name).split(' ')[0]) + '</span>'; }).join('') + (list.length > 3 ? '<span>+' + (list.length - 3) + '</span>' : '') + '</div>';
+  }
+  $('cal').innerHTML = h;
+}
+function load() { return Promise.all([people.list(), outs.list()]).then(function (x) { P = x[0]; O = x[1]; render(); }).catch(BK.err); }
+$('b-me').onclick = function () { var p = mineP() || {}; $('p-name').value = p.name || me.name || ''; $('p-role').value = p.role || ''; $('p-team').value = p.team || ''; $('p-loc').value = p.location || ''; $('p-phone').value = p.phone || ''; $('p-skills').value = p.skills || ''; $('d-me').showModal(); };
+$('d-me').addEventListener('close', function () {
+  if ($('d-me').returnValue !== 'save') return;
+  var doc = { name: $('p-name').value.trim() || me.name, role: $('p-role').value.trim(), team: $('p-team').value.trim(), location: $('p-loc').value.trim(), phone: $('p-phone').value.trim(), skills: $('p-skills').value.trim(), email: me.email || '' };
+  var p = mineP(); (p ? people.update(p._id, doc) : people.add(doc)).then(function () { BK.toast('Profile saved'); load(); }).catch(BK.err);
+});
+$('b-out').onclick = function () {
+  $('o-from').value = TODAY; $('o-to').value = TODAY;
+  var mine = O.filter(function (o) { return BK.demo ? o._authorName === 'You' : o._author === me.id; }).filter(function (o) { return o.to >= TODAY; });
+  $('my-out').innerHTML = mine.length ? '<p class="hint">Your upcoming time away:</p>' + mine.map(function (o) { return '<div class="row" style="margin:4px 0"><span>' + e(o.from) + ' → ' + e(o.to) + ' · ' + LABEL[o.type] + '</span><span class="spacer"></span><button type="button" class="btn small danger" data-del="' + e(o._id) + '">Remove</button></div>'; }).join('') : '';
+  $('d-out').showModal();
+};
+$('my-out').addEventListener('click', function (ev) { var b = ev.target.closest('[data-del]'); if (b) outs.remove(b.dataset.del).then(function () { b.parentNode.remove(); load(); }).catch(BK.err); });
+$('d-out').addEventListener('close', function () {
+  if ($('d-out').returnValue !== 'save') return;
+  var f = $('o-from').value, t = $('o-to').value; if (!f || !t) return; if (t < f) { var x = f; f = t; t = x; }
+  var p = mineP();
+  outs.add({ name: (p && p.name) || me.name || 'Someone', from: f, to: t, type: $('o-type').value, note: $('o-note').value.trim() }).then(function () { BK.toast('Saved. Enjoy!'); $('o-note').value = ''; load(); }).catch(BK.err);
+});
+$('prev').onclick = function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); calendar(); };
+$('next').onclick = function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); calendar(); };
+$('q').oninput = render; $('team').onchange = render;
+BK.me().then(function (u) { me = u; BK.banner(); load(); });
+people.subscribe(load); outs.subscribe(load);
+</script>
+</body>
+</html>

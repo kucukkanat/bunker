@@ -519,7 +519,7 @@ func CreateSite(ctx context.Context, u *core.User, title, slug, desc, icon strin
 	} else {
 		slug = uniqueSlug(ctx, Slugify(title))
 	}
-	if max := core.EnvInt("MAX_SITES_PER_USER", 500); max > 0 {
+	if max := SettingInt("max_sites_per_user", 500); max > 0 {
 		var n int
 		app.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE owner_id=? AND deleted_at IS NULL`, u.ID).Scan(&n)
 		if n >= max {

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quick poll</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:720px}
+.opt{position:relative;display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:14px 16px;margin:0 0 10px;cursor:pointer;overflow:hidden;font-size:1rem}
+.opt:hover{border-color:var(--moss)}
+.opt .fill{position:absolute;inset:0 auto 0 0;background:var(--soft);transition:width .5s ease;z-index:0}
+.opt>*:not(.fill){position:relative;z-index:1}
+.opt .lbl{flex:1;font-weight:500}.opt .pct{font:600 1.05rem var(--serif);min-width:3.5em;text-align:right}
+.opt .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:none}
+.opt[aria-checked=true]{border-color:var(--accent)}.opt[aria-checked=true] .dot{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,transparent 50%)}
+.opt.lead .fill{background:rgba(79,122,99,.24)}
+.foot{display:flex;justify-content:space-between;color:var(--muted);font-size:.9rem;margin-top:6px}
+.live{display:inline-flex;align-items:center;gap:6px}.live::before{content:"";width:8px;height:8px;border-radius:50%;background:#4F9A6F;animation:p 2s infinite}
+@keyframes p{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.opt .fill{transition:none}.live::before{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero"><div><p class="muted" style="margin:0 0 6px">Poll</p><h1 id="q"></h1><p id="sub"></p></div></div>
+  <div class="card">
+    <div id="opts" role="radiogroup" aria-labelledby="q"></div>
+    <div class="foot"><span id="total"></span><span class="live">Live results</span></div>
+  </div>
+  <p class="hint" style="margin-top:12px" id="hint"></p>
+</div>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var POLL = {
+  question: 'Where should we hold the team offsite?',
+  detail: 'One vote each. You can change your mind until Friday.',
+  options: ['Mountain lodge', 'City hotel + workshop space', 'Lake cabins', 'Stay in the office, order great food'],
+  showResultsBeforeVoting: true,
+  closesAt: '' // e.g. '2026-06-20' (empty = never)
+};
+// -------------------
+
+var votes = BK.col('votes'), V = [], me = {}, busy = false;
+var $ = function (id) { return document.getElementById(id); };
+document.title = POLL.question; $('q').textContent = POLL.question; $('sub').textContent = POLL.detail;
+var closed = POLL.closesAt && new Date().toISOString().slice(0, 10) > POLL.closesAt;
+function mine() { return V.filter(function (v) { return BK.demo ? v._authorName === 'You' : v._author === me.id; })[0]; }
+function render() {
+  // Count each person's latest vote only.
+  var latest = {};
+  V.forEach(function (v) { var k = v._author || v._id; if (!latest[k] || (v._updated || v._created) >= (latest[k]._updated || latest[k]._created)) latest[k] = v; });
+  var list = Object.keys(latest).map(function (k) { return latest[k]; }), total = list.length, my = mine();
+  var counts = POLL.options.map(function (o) { return list.filter(function (v) { return v.option === o; }).length; });
+  var max = Math.max.apply(null, counts), reveal = POLL.showResultsBeforeVoting || my || closed;
+  $('opts').innerHTML = POLL.options.map(function (o, i) {
+    var pct = total ? Math.round(counts[i] / total * 100) : 0, chosen = my && my.option === o;
+    return '<button class="opt' + (reveal && counts[i] === max && max > 0 ? ' lead' : '') + '" role="radio" aria-checked="' + !!chosen + '" data-o="' + BK.esc(o) + '"' + (closed ? ' disabled' : '') + '>' +
+      '<span class="fill" style="width:' + (reveal ? pct : 0) + '%"></span><span class="dot"></span><span class="lbl">' + BK.esc(o) + '</span>' +
+      (reveal ? '<span class="muted">' + counts[i] + '</span><span class="pct">' + pct + '%</span>' : '') + '</button>';
+  }).join('');
+  $('total').textContent = total + ' vote' + (total === 1 ? '' : 's');
+  $('hint').textContent = closed ? 'This poll is closed.' : my ? 'You voted for “' + my.option + '”. Pick another option to change your vote.' : 'Tap an option to vote.';
+}
+function load() { return votes.list().then(function (l) { V = l; render(); }).catch(BK.err); }
+$('opts').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-o]'); if (!b || busy || closed) return;
+  var o = b.dataset.o, my = mine(); if (my && my.option === o) return;
+  busy = true;
+  (my ? votes.update(my._id, { option: o }) : votes.add({ option: o })).then(function () { BK.toast('Vote saved'); }).catch(BK.err).then(function () { busy = false; load(); });
+});
+BK.me().then(function (u) { me = u; BK.banner(); load(); });
+votes.subscribe(load);
+</script>
+</body>
+</html>

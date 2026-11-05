@@ -410,7 +410,7 @@ func StoreFiles(files map[string][]byte) (Manifest, error) {
 	return m, nil
 }
 
-func siteMaxBytes() int64 { return int64(core.EnvInt("SITE_MAX_MB", 100)) << 20 }
+func siteMaxBytes() int64 { return int64(SettingInt("site_max_mb", 100)) << 20 }
 
 // Commit creates a new version from a manifest. If publish is true it
 // becomes the live version. The draft is cleared on publish.
@@ -482,7 +482,7 @@ func readUpload(r *http.Request) (map[string][]byte, map[string]string, error) {
 	case <-r.Context().Done():
 		return nil, nil, core.Unavailable("upload cancelled")
 	}
-	max := int64(core.EnvInt("UPLOAD_MAX_MB", 100)) << 20
+	max := int64(SettingInt("upload_max_mb", 100)) << 20
 	r.Body = http.MaxBytesReader(nil, r.Body, max)
 	meta := map[string]string{}
 	files := map[string][]byte{}

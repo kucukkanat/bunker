@@ -1,0 +1,5 @@
+Region,Rep,Amount,Date,Closed
+North,Ana,"$1,200.50",2024-01-05,yes
+South,Ben,$950,2024-02-11,no
+North,Cy,$2300,2024-02-20,yes
+East,Dee,$410.25,2024-03-01,yes

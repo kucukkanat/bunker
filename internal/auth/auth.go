@@ -212,7 +212,7 @@ func upsertUser(ctx context.Context, subject, email, name string, groups []core.
 	if err == sql.ErrNoRows {
 		// The first person to sign in to a fresh install becomes admin.
 		var n int
-		app.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE subject NOT LIKE 'dev:%'`).Scan(&n)
+		app.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE subject NOT LIKE 'dev:%' AND subject NOT LIKE 'system:%'`).Scan(&n)
 		admin := 0
 		if n == 0 && app.Setting("admins") == "" && !strings.HasPrefix(subject, "dev:") {
 			admin = 1

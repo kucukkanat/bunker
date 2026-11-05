@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard</title>
+<link rel="stylesheet" href="/_/kit.css">
+<style>
+/*BK:STYLE*/
+.wrap{max-width:1200px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.kpi b{display:block;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi span{display:block;font:600 1.9rem var(--serif);margin-top:4px}
+.kpi small{color:var(--muted)}
+svg{width:100%;height:auto;display:block}svg text{fill:var(--muted);font:11px var(--sans)}
+svg .bar{fill:var(--moss)}svg .bar:hover{fill:var(--clay)}svg .grid{stroke:var(--line)}svg .line{fill:none;stroke:var(--moss);stroke-width:2.5}
+svg .area{fill:var(--soft)}svg .pt{fill:var(--card);stroke:var(--moss);stroke-width:2}
+.tbl{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.tbl th{position:sticky;top:0;background:var(--card2);cursor:pointer}
+.tbl td.n{text-align:right;font-variant-numeric:tabular-nums}
+.src{font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div><h1 id="title">Dashboard</h1><p class="src" id="src">Loading data…</p></div>
+    <div class="row">
+      <select id="dim" aria-label="Group by" style="width:auto"></select>
+      <select id="met" aria-label="Measure" style="width:auto"></select>
+      <label class="btn" for="file">Load CSV…</label><input type="file" id="file" accept=".csv,text/csv" class="sr">
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid g2">
+    <section class="card"><h2 id="t-bar">By category</h2><div id="bar"></div></section>
+    <section class="card"><h2 id="t-line">Over time</h2><div id="line"></div></section>
+  </div>
+  <section class="card" style="margin-top:14px"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Rows</h2><span class="spacer"></span><input type="search" id="q" placeholder="Search…" aria-label="Search rows" style="max-width:260px"></div><div class="tbl"><table id="tbl"></table></div></section>
+</div>
+<script>
+/*BK:JS*/
+// ---- Settings ----
+var SOURCE = {
+  title: 'Sales dashboard',
+  // Read a SharePoint list as the viewer (needs Microsoft 365 enabled by
+  // your admin). Leave empty to use the sample data or a CSV.
+  sharepointSite: '',   // e.g. 'https://contoso.sharepoint.com/sites/Sales'
+  sharepointList: '',   // e.g. 'Deals'
+  // Or keep a CSV in the site (upload it next to this page) and name it here.
+  csvFile: ''           // e.g. 'data.csv'
+};
+var SAMPLE = 'Date,Region,Product,Units,Revenue\n2026-01-08,North,Starter,12,1440\n2026-01-15,South,Pro,5,2250\n2026-01-22,East,Starter,9,1080\n2026-02-03,North,Pro,7,3150\n2026-02-11,West,Team,3,2700\n2026-02-19,South,Starter,15,1800\n2026-03-02,East,Team,4,3600\n2026-03-10,North,Starter,11,1320\n2026-03-18,West,Pro,6,2700\n2026-03-27,South,Team,2,1800\n2026-04-05,East,Pro,8,3600\n2026-04-14,North,Team,5,4500\n2026-04-23,West,Starter,14,1680\n2026-05-02,South,Pro,9,4050\n2026-05-12,East,Starter,10,1200\n2026-05-21,North,Pro,12,5400';
+// -------------------
+
+var $ = function (id) { return document.getElementById(id); };
+var rows = [], cols = [], types = {}, sortBy = null, sortDir = 1;
+document.title = SOURCE.title; $('title').textContent = SOURCE.title;
+function parseCSV(t) {
+  var out = [], row = [], f = '', q = false;
+  t = t.replace(/^\ufeff/, '');
+  var sep = (t.split('\n')[0].match(/;/g) || []).length > (t.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  for (var i = 0; i < t.length; i++) {
+    var c = t[i];
+    if (q) { if (c === '"' && t[i + 1] === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
+    else if (c === '"') q = true; else if (c === sep) { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); f = ''; if (row.some(function (x) { return x !== ''; })) out.push(row); row = []; }
+    else f += c;
+  }
+  row.push(f); if (row.some(function (x) { return x !== ''; })) out.push(row);
+  var head = out.shift() || [];
+  return out.map(function (r) { var o = {}; head.forEach(function (h, i) { o[h.trim()] = (r[i] || '').trim(); }); return o; });
+}
+function num(v) { if (typeof v === 'number') return v; var s = String(v == null ? '' : v).replace(/[$€£,\s%]/g, ''); return s !== '' && !isNaN(s) ? Number(s) : null; }
+function isDate(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v); }
+function setData(list, label) {
+  rows = list; cols = list.length ? Object.keys(list[0]).filter(function (k) { return k[0] !== '_' && k !== 'id' && k.indexOf('@odata') < 0; }) : [];
+  types = {}; cols.forEach(function (c) { var vals = rows.map(function (r) { return r[c]; }).filter(function (v) { return v !== '' && v != null; });
+    types[c] = vals.length && vals.every(function (v) { return num(v) != null; }) ? 'num' : vals.length && vals.every(isDate) ? 'date' : 'text'; });
+  var dims = cols.filter(function (c) { return types[c] === 'text'; }), mets = cols.filter(function (c) { return types[c] === 'num'; });
+  $('dim').innerHTML = dims.map(function (c) { return '<option>' + BK.esc(c) + '</option>'; }).join('');
+  $('met').innerHTML = '<option value="">Count</option>' + mets.map(function (c) { return '<option>' + BK.esc(c) + '</option>'; }).join('');
+  if (mets.length) $('met').value = mets[mets.length - 1];
+  $('src').textContent = label + ' · ' + rows.length + ' rows · updated ' + new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  render();
+}
+function fmt(n) { return Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.abs(n) >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : Number(n.toFixed(2)).toLocaleString(); }
+function agg(list, m) { return m ? list.reduce(function (s, r) { return s + (num(r[m]) || 0); }, 0) : list.length; }
+function render() {
+  var m = $('met').value, d = $('dim').value, q = $('q').value.toLowerCase();
+  var data = q ? rows.filter(function (r) { return JSON.stringify(r).toLowerCase().indexOf(q) >= 0; }) : rows;
+  var mets = cols.filter(function (c) { return types[c] === 'num'; });
+  $('kpis').innerHTML = '<div class="card kpi"><b>Rows</b><span>' + data.length.toLocaleString() + '</span></div>' + mets.slice(0, 3).map(function (c) {
+    var t = agg(data, c); return '<div class="card kpi"><b>Total ' + BK.esc(c) + '</b><span>' + fmt(t) + '</span><small>avg ' + fmt(data.length ? t / data.length : 0) + '</small></div>'; }).join('');
+  // Bars by dimension
+  var groups = {}; data.forEach(function (r) { var k = r[d] || '(blank)'; (groups[k] = groups[k] || []).push(r); });
+  var bars = Object.keys(groups).map(function (k) { return { k: k, v: agg(groups[k], m) }; }).sort(function (a, b) { return b.v - a.v; }).slice(0, 12);
+  $('t-bar').textContent = (m || 'Count') + ' by ' + (d || '…'); $('bar').innerHTML = d ? barSVG(bars) : '<div class="empty">No text column to group by.</div>';
+  // Line by month
+  var dc = cols.filter(function (c) { return types[c] === 'date'; })[0];
+  if (dc) {
+    var months = {}; data.forEach(function (r) { var k = String(r[dc]).slice(0, 7); months[k] = (months[k] || 0) + (m ? (num(r[m]) || 0) : 1); });
+    var pts = Object.keys(months).sort().map(function (k) { return { k: k, v: months[k] }; });
+    $('t-line').textContent = (m || 'Count') + ' by month'; $('line').innerHTML = lineSVG(pts);
+  } else { $('t-line').textContent = 'Over time'; $('line').innerHTML = '<div class="empty">Add a date column (YYYY-MM-DD) to see trends.</div>'; }
+  table(data);
+}
+function ticks(max) { var p = Math.pow(10, Math.floor(Math.log10(max || 1))), f = max / p, s = (f <= 2 ? 0.5 : f <= 5 ? 1 : 2) * p; var t = []; for (var v = 0; v <= max + 1e-9; v += s) t.push(v); return t; }
+function barSVG(bars) {
+  var W = 560, H = 260, L = 48, B = 54, max = Math.max.apply(null, bars.map(function (b) { return b.v; }).concat([1])), bw = (W - L) / Math.max(1, bars.length), s = '';
+  ticks(max).forEach(function (t) { var y = H - B - t / max * (H - B - 10); s += '<line class="grid" x1="' + L + '" x2="' + W + '" y1="' + y + '" y2="' + y + '"/><text x="' + (L - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + fmt(t) + '</text>'; });
+  bars.forEach(function (b, i) { var h = b.v / max * (H - B - 10), x = L + i * bw + bw * .15, cx = L + i * bw + bw / 2;
+    s += '<rect class="bar" rx="4" x="' + x + '" y="' + (H - B - h) + '" width="' + bw * .7 + '" height="' + h + '"><title>' + BK.esc(b.k) + ': ' + fmt(b.v) + '</title></rect>' +
+      '<text x="' + cx + '" y="' + (H - B + 16) + '" text-anchor="' + (bars.length > 6 ? 'end' : 'middle') + '"' + (bars.length > 6 ? ' transform="rotate(-30 ' + cx + ' ' + (H - B + 16) + ')"' : '') + '>' + BK.esc(String(b.k).slice(0, 14)) + '</text>'; });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart">' + s + '</svg>';
+}
+function lineSVG(pts) {
+  if (!pts.length) return '<div class="empty">No dated rows.</div>';
+  var W = 560, H = 260, L = 48, B = 34, max = Math.max.apply(null, pts.map(function (p) { return p.v; }).concat([1])), step = (W - L - 44) / Math.max(1, pts.length - 1), s = '';
+  ticks(max).forEach(function (t) { var y = H - B - t / max * (H - B - 10); s += '<line class="grid" x1="' + L + '" x2="' + W + '" y1="' + y + '" y2="' + y + '"/><text x="' + (L - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + fmt(t) + '</text>'; });
+  var xy = pts.map(function (p, i) { return [L + 8 + i * step, H - B - p.v / max * (H - B - 10)]; });
+  var path = xy.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+  s += '<path class="area" d="' + path + ' L' + xy[xy.length - 1][0] + ' ' + (H - B) + ' L' + xy[0][0] + ' ' + (H - B) + ' Z"/><path class="line" d="' + path + '"/>';
+  xy.forEach(function (p, i) { s += '<circle class="pt" r="4" cx="' + p[0] + '" cy="' + p[1] + '"><title>' + pts[i].k + ': ' + fmt(pts[i].v) + '</title></circle>';
+    if (pts.length <= 12 || i % Math.ceil(pts.length / 12) === 0) s += '<text x="' + p[0] + '" y="' + (H - B + 18) + '" text-anchor="middle">' + pts[i].k.slice(2) + '</text>'; });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Line chart">' + s + '</svg>';
+}
+function table(data) {
+  var list = data.slice();
+  if (sortBy) list.sort(function (a, b) { var x = types[sortBy] === 'num' ? num(a[sortBy]) : a[sortBy], y = types[sortBy] === 'num' ? num(b[sortBy]) : b[sortBy]; return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
+  $('tbl').innerHTML = '<thead><tr>' + cols.map(function (c) { return '<th data-c="' + BK.esc(c) + '" aria-sort="' + (sortBy === c ? (sortDir > 0 ? 'ascending' : 'descending') : 'none') + '">' + BK.esc(c) + (sortBy === c ? (sortDir > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    list.slice(0, 500).map(function (r) { return '<tr>' + cols.map(function (c) { return '<td' + (types[c] === 'num' ? ' class="n"' : '') + '>' + BK.esc(r[c]) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody>';
+}
+$('tbl').addEventListener('click', function (e) { var th = e.target.closest('th'); if (!th) return; var c = th.dataset.c; if (sortBy === c) sortDir = -sortDir; else { sortBy = c; sortDir = 1; } render(); });
+['dim', 'met'].forEach(function (id) { $(id).onchange = render; }); $('q').oninput = render;
+$('file').onchange = function () { var f = this.files[0]; if (!f) return; var rd = new FileReader(); rd.onload = function () { setData(parseCSV(rd.result), f.name); }; rd.readAsText(f); };
+function load() {
+  var m = BK.m365, lists = m && m.lists, fn = lists && (lists.items || lists.get);
+  if (SOURCE.sharepointSite && SOURCE.sharepointList && fn) {
+    return Promise.resolve(fn.call(lists, SOURCE.sharepointSite, SOURCE.sharepointList, { top: 2000 })).then(function (r) {
+      var items = Array.isArray(r) ? r : (r && (r.items || r.value)) || [];
+      setData(items.map(function (it) { return it.fields || it; }), 'SharePoint · ' + SOURCE.sharepointList);
+    }).catch(function (e) { BK.err(e); setData(parseCSV(SAMPLE), 'Sample data (SharePoint failed)'); });
+  }
+  if (SOURCE.csvFile) return fetch(SOURCE.csvFile).then(function (r) { if (!r.ok) throw new Error(SOURCE.csvFile + ' not found'); return r.text(); }).then(function (t) { setData(parseCSV(t), SOURCE.csvFile); }).catch(function (e) { BK.err(e); setData(parseCSV(SAMPLE), 'Sample data'); });
+  setData(parseCSV(SAMPLE), 'Sample data. Edit SOURCE at the top of this page to connect your own');
+  return Promise.resolve();
+}
+$('refresh').onclick = load;
+load();
+</script>
+</body>
+</html>
