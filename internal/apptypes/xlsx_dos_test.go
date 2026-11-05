@@ -40,7 +40,7 @@ func TestXLSXExpansionBounded(t *testing.T) {
 		runtime.ReadMemStats(&m1)
 		d, alloc := time.Since(st), (m1.TotalAlloc-m0.TotalAlloc)>>20
 		t.Logf("%d MB: %v, %d MB allocated", mb, d, alloc)
-		if d > 8*time.Second || alloc > 2500 {
+		if d > 8*time.Second*raceSlowdown || alloc > 2500 {
 			t.Errorf("%d MB of shared strings: %v, %d MB allocated", mb, d, alloc)
 		}
 	}

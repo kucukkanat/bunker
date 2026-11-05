@@ -39,8 +39,10 @@ func registerUsers(a *core.App) {
 	a.Handle(core.Op{Name: "users.list", Method: "GET", Path: "/api/v1/admin/users", Summary: "List everyone who has signed in", Access: core.AccessAdmin,
 		Params: []core.Param{{Name: "q", In: "query", Desc: "Filter by name or email"}},
 		Fn: func(r *http.Request) (any, error) {
-			q := "%" + r.URL.Query().Get("q") + "%"
-			rows, err := a.DB.QueryContext(r.Context(), `SELECT id,email,name,is_admin,disabled,groups_json,created_at,last_seen_at FROM users WHERE (subject NOT LIKE 'dev:%' OR ? = 1) AND subject NOT LIKE 'system:%' ORDER BY last_seen_at DESC LIMIT 500`, boolInt(a.Cfg.Dev))
+			// Filter in SQL: filtering after LIMIT 500 hid everyone but the
+			// 500 most recently seen people from the search box.
+			q := "%" + likeEscape(r.URL.Query().Get("q")) + "%"
+			rows, err := a.DB.QueryContext(r.Context(), `SELECT id,email,name,is_admin,disabled,groups_json,created_at,last_seen_at FROM users WHERE (subject NOT LIKE 'dev:%' OR ? = 1) AND subject NOT LIKE 'system:%' AND (name || ' ' || email) LIKE ? ESCAPE '\' ORDER BY last_seen_at DESC LIMIT 500`, boolInt(a.Cfg.Dev), q)
 			if err != nil {
 				return nil, err
 			}
@@ -66,9 +68,6 @@ func registerUsers(a *core.App) {
 				}
 				u.IsAdmin, u.Disabled = adm == 1 || isConfiguredAdmin(&core.User{Email: u.Email, Groups: u.Groups}), dis == 1
 				u.Sites = owned[u.ID]
-				if q != "%%" && !containsFold(u.Name+" "+u.Email, r.URL.Query().Get("q")) {
-					continue
-				}
 				out = append(out, u)
 			}
 			return map[string]any{"users": out}, nil
@@ -90,8 +89,12 @@ func registerUsers(a *core.App) {
 			if err := core.Decode(r, &in); err != nil {
 				return nil, err
 			}
+			var exists int
+			if a.DB.QueryRowContext(r.Context(), `SELECT 1 FROM users WHERE id=?`, id).Scan(&exists) != nil {
+				return nil, core.NotFound("that person isn't in Bunker. Refresh the list and try again.")
+			}
 			var toID int64
-			if t := strings.TrimSpace(in.TransferTo); t != "" {
+			if t :=strings.TrimSpace(in.TransferTo); t != "" {
 				if in.Disabled == nil || !*in.Disabled {
 					return nil, core.BadRequest("transferTo only works together with disabled: true")
 				}
@@ -145,26 +148,6 @@ func boolInt(b bool) int {
 	return 0
 }
 
-func containsFold(s, sub string) bool {
-	return len(sub) == 0 || indexFold(s, sub) >= 0
-}
-
-func indexFold(s, sub string) int {
-	ls, lsub := []rune(lower(s)), []rune(lower(sub))
-	for i := 0; i+len(lsub) <= len(ls); i++ {
-		if string(ls[i:i+len(lsub)]) == string(lsub) {
-			return i
-		}
-	}
-	return -1
-}
-
-func lower(s string) string {
-	b := []rune(s)
-	for i, r := range b {
-		if r >= 'A' && r <= 'Z' {
-			b[i] = r + 32
-		}
-	}
-	return string(b)
+func likeEscape(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }

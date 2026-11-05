@@ -181,6 +181,17 @@ func tooMany(keys ...string) bool {
 	return limited
 }
 
+// refundAttempt removes the newest recorded attempt for key: a successful
+// sign-in must not count toward a shared address's lockout (an office
+// behind one NAT would otherwise be locked out after ten sign-ins).
+func refundAttempt(key string) {
+	attemptMu.Lock()
+	defer attemptMu.Unlock()
+	if ts := attempts[key]; len(ts) > 0 {
+		attempts[key] = ts[:len(ts)-1]
+	}
+}
+
 func clearAttempts(keys ...string) {
 	attemptMu.Lock()
 	defer attemptMu.Unlock()
@@ -294,7 +305,7 @@ func registerLocal(a *core.App) {
 			a.Audit(r.Context(), "auth.invite", 0, in.Email, map[string]any{"admin": in.IsAdmin})
 			by := core.MustUser(r).Name
 			emailed := mail.Send(mail.Message{To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
-				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in 7 days.", ButtonText: "Join Bunker", ButtonURL: link})
+				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in "+inviteDays(in.Days)+".", ButtonText: "Join Bunker", ButtonURL: link})
 			note := "Send this link to them. It works once."
 			if emailed {
 				note = "We emailed them the link. You can also send it yourself; it works once."
@@ -364,6 +375,22 @@ func registerLocal(a *core.App) {
 		}})
 }
 
+// clampDays is an invite link's lifetime: 1-30 days, 7 when unset.
+func clampDays(days int) int {
+	if days <= 0 || days > 30 {
+		return 7
+	}
+	return days
+}
+
+// inviteDays words an invite lifetime for the email ("1 day", "14 days").
+func inviteDays(days int) string {
+	if days = clampDays(days); days == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", days)
+}
+
 func makeInvite(ctx context.Context, by *core.User, email, name string, admin bool, groups []string, days int, kind string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !validEmail(email) {
@@ -376,9 +403,7 @@ func makeInvite(ctx context.Context, by *core.User, email, name string, admin bo
 			return "", core.Conflict(email + " already has an account")
 		}
 	}
-	if days <= 0 || days > 30 {
-		days = 7
-	}
+	days = clampDays(days)
 	var gs []core.Group
 	for _, g := range groups {
 		if g = strings.TrimSpace(g); g != "" {
@@ -455,6 +480,7 @@ func handlePasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clearAttempts("email:" + email)
+	refundAttempt("ip:" + ip)
 	if err := startSession(w, r, u); err != nil {
 		authError(w, r, "Sign-in failed", "Could not start a session.")
 		return
