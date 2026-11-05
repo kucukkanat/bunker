@@ -1,11 +1,69 @@
-<img src="brand/logo-wordmark.svg" alt="Bunker" height="48">
+<p align="center">
+  <img src="brand/logo-wordmark.svg" alt="Bunker" height="56">
+</p>
 
-**Internal apps anyone can build. IT can trust.**
+<h3 align="center">Your own private app cloud.<br>For you, your team, or your whole company.</h3>
 
-Bunker is a self-hosted platform where non-technical people describe an app in plain words and share it privately with coworkers. Sandboxed, Microsoft Entra ID sign-in, MIT licensed. *In development.*
+<p align="center">
+  Drop in a file or folder, or describe an app in plain words, and get a private web app you can share with a link.<br>
+  Every app is sandboxed. Built-in accounts out of the box; Microsoft Entra ID, Google Workspace or OIDC when you want them.<br>
+  One Go binary, one data folder. MIT licensed.
+</p>
 
-- Website & docs: https://kucukkanat.github.io/bunker/
-- **Deploy:** [DEPLOY.md](DEPLOY.md) (Azure, Render, Railway, Fly, Docker, one-line Linux installer)
-- Plan: [PLAN.md](PLAN.md)
-- Brand kit: [brand/](brand/)
-- Website source: [website/](website/) (Astro + Starlight)
+<p align="center">
+  <a href="https://kucukkanat.github.io/bunker/"><b>Website</b></a> ·
+  <a href="https://kucukkanat.github.io/bunker/docs/start/quickstart/"><b>60-second quickstart</b></a> ·
+  <a href="https://kucukkanat.github.io/bunker/docs/start/introduction/">Docs</a> ·
+  <a href="DEPLOY.md">Deploy</a> ·
+  <a href="https://kucukkanat.github.io/bunker/docs/security/threat-model/">Security</a>
+</p>
+
+---
+
+## Deploy in one click
+
+<p>
+  <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json"><img src="https://aka.ms/deploytoazurebutton" alt="Deploy to Azure" height="32"></a>
+  <a href="https://render.com/deploy?repo=https://github.com/kucukkanat/bunker"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32"></a>
+  <a href="https://railway.com/deploy/bunker"><img src="https://railway.com/button.svg" alt="Deploy on Railway" height="32"></a>
+</p>
+
+```sh
+# Any Linux server: hardened systemd service + automatic HTTPS
+curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sudo BUNKER_URL=https://bunker.example.com sh
+
+# Docker
+docker run -p 8080:8080 -v bunker:/data ghcr.io/kucukkanat/bunker
+
+# Fly.io
+fly launch --from https://github.com/kucukkanat/bunker --copy-config
+```
+
+Open the URL, create your admin account, and drop a file. Every option (Koyeb, Coolify, CapRover, Windows, Compose with Caddy, demo-only platforms) is in **[DEPLOY.md](DEPLOY.md)**.
+
+## What you get
+
+- **Anything becomes an app.** HTML, folders, zips and build output today; Markdown, spreadsheets, notebooks, PDFs and single-file React next. Or describe it to the AI builder.
+- **Share like a document.** People, groups or everyone, as viewer or editor. "Ask for access" requests, notifications, view stats.
+- **Every change is a version.** Drafts, diffs and one-click restore.
+- **A real backend without servers.** `window.bunker` gives pages a database with access rules and live updates, file uploads, per-person storage, live rooms, AI and notifications, all with the viewer's own permissions.
+- **Built for agents.** A CLI (`bunker deploy`, `share`, `rollback`, `ai`, `api`), local and remote MCP (add `https://your-bunker/mcp` to Claude, Cursor or ChatGPT), `/llms.txt`, and every UI action in the API.
+- **Safe by design.** Opaque-origin sandbox, signed content tickets, strict CSP plus `Connection-Allowlist`, no keys in pages, secret scanning, audit log. [Threat model](https://kucukkanat.github.io/bunker/docs/security/threat-model/), including what remains.
+- **Tiny footprint.** One pure-Go binary with SQLite. Back up one folder.
+
+## Status
+
+Bunker is young and moving fast. The docs mark everything that isn't finished as **Preview**. See the [roadmap](https://kucukkanat.github.io/bunker/docs/project/roadmap/).
+
+## Develop
+
+```sh
+go test ./...
+go run ./cmd/bunker dev      # http://127.0.0.1:8080, signed in as a local admin
+```
+
+- Product plan: [PLAN.md](PLAN.md) · Engineering contract: [CONTRACT.md](CONTRACT.md)
+- Brand kit: [brand/](brand/) · Website and docs source: [website/](website/) (Astro + Starlight)
+- Security reports: [privately via GitHub](https://github.com/kucukkanat/bunker/security/advisories/new)
+
+MIT License.

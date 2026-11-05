@@ -7,44 +7,112 @@ import '../styles/landing.css';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const u = (p: string) => `${base}/${p}`;
 const repo = 'https://github.com/kucukkanat/bunker';
-const title = 'Bunker: internal apps anyone can build, IT can trust';
+const title = 'Bunker: your own private app cloud';
 const description =
-  'Bunker is a self-hosted platform where non-technical people describe an app in plain words and share it privately with coworkers. Sandboxed, Entra ID sign-in, MIT licensed.';
+  'Your own private app cloud, for you, your team or your whole company. Drop a file or describe an app and get a private, shareable, sandboxed web app. Built-in accounts out of the box; Microsoft Entra ID, Google Workspace or OIDC when you want them. One Go binary, MIT licensed.';
+
+const curl =
+  'curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh | sudo BUNKER_URL=https://bunker.example.com sh';
+const docker = 'docker run -p 8080:8080 -v bunker:/data ghcr.io/kucukkanat/bunker';
+const fly = 'fly launch --from https://github.com/kucukkanat/bunker --copy-config';
+
+const deployButtons = [
+  {
+    name: 'Azure',
+    note: 'VM + managed disk + HTTPS',
+    href: 'https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json',
+    tag: 'Best for Microsoft 365',
+  },
+  { name: 'Render', note: 'Web service + 5 GB disk', href: 'https://render.com/deploy?repo=https://github.com/kucukkanat/bunker' },
+  { name: 'Railway', note: 'Service + volume', href: 'https://railway.com/deploy/bunker' },
+  {
+    name: 'DigitalOcean',
+    note: 'App Platform, data resets',
+    href: 'https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master',
+    tag: 'Demo only',
+    demo: true,
+  },
+];
+
+type Tile = { t: string; ext: string; d: string; preview?: boolean; ai?: boolean };
+const tiles: Tile[] = [
+  { t: 'A web page', ext: '.html', d: 'Published as it is. Links to popular CDN libraries are swapped for built-in copies.' },
+  { t: 'A folder or zip', ext: 'folder · .zip', d: 'Finds index.html, even inside dist/ or build/. Root paths keep working.' },
+  { t: 'React in one file', ext: '.jsx · .tsx', d: 'A single component becomes a running app. No build step.', preview: true },
+  { t: 'Docs and notes', ext: '.md', d: 'Markdown becomes a clean, readable page in your house style.', preview: true },
+  { t: 'Slides', ext: '.md with ---', d: 'Split a Markdown file into slides and present from the browser.', preview: true },
+  { t: 'A spreadsheet', ext: '.csv · .xlsx', d: 'Becomes a shared table app: search, sort, add rows, by permission.', preview: true },
+  { t: 'A notebook', ext: '.ipynb', d: 'Rendered with its charts and outputs, ready to read.', preview: true },
+  { t: 'A PDF', ext: '.pdf', d: 'Opens in a built-in viewer that works inside the sandbox.', preview: true },
+  { t: 'Images and video', ext: '.png · .jpg · .mp4', d: 'A tidy gallery page your team can browse.', preview: true },
+  { t: 'Describe it', ext: 'plain words', d: '“A holiday tracker where managers approve requests.” The AI builds a draft. You publish.', ai: true },
+];
 
 const security = [
-  { t: 'Sandboxed pages', d: 'Every site runs in a locked iframe with an opaque origin and a strict Content Security Policy. Pages can’t reach the internet, read cookies, or touch other sites.' },
-  { t: 'No keys in pages', d: 'AI, database and Microsoft 365 calls go through Bunker using the viewer’s session. API keys and tokens stay on the server, encrypted.' },
-  { t: 'Private by default', d: 'New sites are visible only to their owner. Share with people or Entra groups as viewer or editor, the way you share a document.' },
-  { t: 'Viewer-scoped M365 data', d: 'A page can read SharePoint, Excel and OneDrive only with the viewer’s own rights, and only for scopes an admin has allowed.' },
-  { t: 'Full audit trail', d: 'Creates, deploys, shares, views, AI calls and Graph calls are logged. Export as CSV or JSON, or stream to your SIEM.' },
-  { t: 'Your servers, your tenant', d: 'One Go binary and a SQLite file on your own VM. Single-tenant Entra ID only. Bunker refuses to start if personal accounts could sign in.' },
+  { t: 'Opaque-origin sandbox', d: 'Every app runs in an iframe without allow-same-origin. It has no cookies, no storage and no reach into Bunker or other apps.', code: 'sandbox="allow-scripts allow-forms allow-modals allow-downloads"' },
+  { t: 'Signed content tickets', d: 'App files are served under a short-lived HMAC ticket tied to the site, version and viewer. Revoke a share and the next request fails.', code: '/s/<site>/~r/<ticket>/index.html' },
+  { t: 'No keys in pages', d: 'Data, AI and Microsoft 365 calls go through the parent frame with the viewer’s session. Uploads containing API keys are refused at publish time.', code: '422 secret_detected' },
+  { t: 'Connection-Allowlist', d: 'CSP can’t stop WebRTC. On Chromium and Edge 152+ this header also blocks WebRTC, navigations and prefetch to anywhere but Bunker.', code: 'Connection-Allowlist: (response-origin)' },
+  { t: 'Viewer-scoped Microsoft 365', d: 'An app sees SharePoint, Excel and OneDrive only with the viewer’s own rights, and only for scopes your admin allowed.', code: 'delegated · admin allowlist', preview: true },
+  { t: 'Audit everything', d: 'Sign-ins, publishes, shares, views, data-rule and admin changes land in an indexed audit table, with every agent action marked as a token.', code: 'site.share · site.view · auth.login' },
+  { t: 'SSRF-safe connections', d: 'Apps reach internal APIs only through named connections an admin defines. Private and metadata addresses are blocked by default.', code: 'bunker.connections.fetch("hr", "/people")', preview: true },
+  { t: 'Your sign-in, your rules', d: 'Built-in accounts use argon2id and one-time invite links. Company sign-in is single-tenant only, and Bunker refuses settings that would let personal accounts in.', code: 'argon2id · tenant ≠ common' },
 ];
 
-const features = [
-  { t: 'AI app builder', d: 'Describe what you need in a chat. Bunker builds it, shows a live preview, and publishes when you’re happy.' },
-  { t: 'Drag-and-drop upload', d: 'Already have HTML from ChatGPT or a colleague? Drop a file, folder or zip.' },
-  { t: 'Built-in database', d: 'Forms, trackers and dashboards save data with live updates. No setup.' },
-  { t: 'File uploads', d: 'Images, PDFs and video stored per site, with the same sharing rules.' },
-  { t: 'AI inside your apps', d: 'Pages can summarise, classify or draft with the model your admin picked.' },
-  { t: 'Version history', d: 'Every change is a version. Something broke? Restore in one click.' },
-];
-
-const compare = [
-  ['Non-technical people can build', 'yes', 'partly', 'no'],
-  ['Data stays on your servers', 'yes', 'no', 'yes'],
-  ['Per-site sharing with Entra groups', 'yes', 'yes', 'no'],
-  ['Pages sandboxed from each other and the internet', 'yes', 'varies', 'no'],
-  ['AI builder and AI-in-page, keys server-side', 'yes', 'add-on', 'no'],
-  ['Per-seat licence fees', 'none', 'yes', 'none'],
+const compare: [string, string, string, string][] = [
+  ['Anyone can build: drop a file or describe it', 'yes', 'partly', 'no'],
+  ['Runs on your own servers', 'yes', 'no', 'varies'],
+  ['Company sign-in on every app, included', 'yes', 'paid tier', 'extra setup'],
+  ['Share each app with people and groups', 'yes', 'yes', 'no'],
+  ['Apps sandboxed from each other and the internet', 'yes', 'varies', 'no'],
+  ['Database, files and live updates built in', 'yes', 'yes', 'no'],
+  ['Agents deploy through CLI and MCP', 'yes', 'rarely', 'partly'],
+  ['Plain HTML you can take with you', 'yes', 'lock-in', 'yes'],
+  ['Audit log', 'yes', 'paid tier', 'no'],
+  ['Per-seat fees', 'none', 'per builder + per viewer', 'usually none'],
 ];
 
 const faq = [
-  { q: 'Is Bunker ready for production?', a: 'Not yet. Bunker is in active development and these docs describe planned behaviour. Follow the repository for releases.' },
-  { q: 'Which AI models does it support?', a: 'An admin chooses the provider: Anthropic Claude, OpenAI, Azure OpenAI, or a local model through Ollama. Keys live only in the server config.' },
-  { q: 'Can sites be shared outside the company?', a: 'No. Bunker is internal-only by design. Every request needs a signed-in member of your Entra tenant.' },
-  { q: 'Do we need wildcard DNS?', a: 'No. Sites are served at paths on one hostname, for example bunker.corp.com/s/holiday-requests, so you need one DNS record and one certificate.' },
-  { q: 'What does it cost?', a: 'Bunker is free and MIT licensed. You pay for the VM you run it on and for any AI usage with your chosen provider.' },
-  { q: 'Can developers use their own tools?', a: 'Yes. The bunker CLI deploys a folder, and bunker mcp lets Claude Code, Cursor and other MCP clients build and deploy with the developer’s own permissions.' },
+  {
+    q: 'Do I need Microsoft 365 or SSO?',
+    a: 'No. Bunker works out of the box with built-in accounts: you create the first admin in the setup page and invite people with one-time links. When you want company sign-in, switch on Microsoft Entra ID, Google Workspace or any OIDC provider, then turn built-in accounts off if you like.',
+  },
+  {
+    q: 'Is it only for big companies?',
+    a: 'No. Run it on a laptop or a five-dollar server for your own projects, share apps with a few friends or a small team, or put it in front of thousands of employees. Same binary.',
+  },
+  {
+    q: 'Is Bunker ready for production?',
+    a: 'Bunker is early and moving fast. Sign-in, sites, sharing, versions, the sandbox, the SDK, the AI builder, the CLI and MCP are in the code today. The new dashboard, more app types and Microsoft 365 data are landing now and are marked Preview in the docs. Try it with a small group first.',
+  },
+  {
+    q: 'Do we need wildcard DNS or a wildcard certificate?',
+    a: 'No. Apps live at paths on one hostname, like bunker.corp.com/s/holiday-requests. One DNS record, one certificate. A separate content domain is optional for extra isolation.',
+  },
+  {
+    q: 'Can apps be made public?',
+    a: 'No. Every request needs someone signed in to your Bunker: an invited built-in account or a member of your organization. Entra guests are blocked unless an admin allows them.',
+  },
+  {
+    q: 'Which AI models can it use?',
+    a: 'Your admin picks one: Anthropic Claude, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint, including local models. Keys stay on the server. Each person and each site gets a daily allowance. Without a provider, everything except the AI parts still works.',
+  },
+  {
+    q: 'What if an app author is malicious?',
+    a: 'The sandbox stops an app from reaching your session, other apps or the internet on every modern browser. On Chromium and Edge it also blocks WebRTC and navigation leaks. The security docs list what remains, honestly.',
+  },
+  {
+    q: 'How many people can one server handle?',
+    a: 'Bunker is built for 500 to 5,000 people on one small VM. It is one Go binary and one SQLite database, with content-addressed files served precompressed.',
+  },
+  {
+    q: 'What does it cost?',
+    a: 'Nothing. Bunker is MIT licensed. You pay for the machine it runs on and, if you turn it on, your AI provider.',
+  },
+  {
+    q: 'What happens to our apps if we stop using Bunker?',
+    a: 'They are plain HTML, CSS and JavaScript files. Download any version and host it anywhere.',
+  },
 ];
 
 const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
@@ -57,193 +125,432 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F7F4EC" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121714" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href={u('favicon.svg')} type="image/svg+xml" />
     <link rel="apple-touch-icon" href={u('apple-touch-icon.png')} />
+    <link rel="canonical" href="https://kucukkanat.github.io/bunker/" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content="https://kucukkanat.github.io/bunker/og.png" />
+    <meta property="og:url" content="https://kucukkanat.github.io/bunker/" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script is:inline>
+      // Share the theme choice with the docs (Starlight uses the same key).
+      try {
+        var t = localStorage.getItem('starlight-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
-    <header class="nav wrap">
-      <a class="brand" href={u('')}>
-        <img src={u('favicon.svg')} alt="" width="32" height="32" />
-        <span>bunker</span>
-      </a>
-      <nav>
-        <a href="#security">Security</a>
-        <a href="#features">Features</a>
-        <a href={u('docs/start/introduction/')}>Docs</a>
-        <a href={repo} class="gh">GitHub</a>
-      </nav>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav">
+      <div class="wrap nav-in">
+        <a class="brand" href={u('')} aria-label="Bunker home">
+          <img src={u('favicon.svg')} alt="" width="30" height="30" />
+          <span>bunker</span>
+        </a>
+        <nav aria-label="Main">
+          <a href="#apps" class="hide-sm">Product</a>
+          <a href="#agents" class="hide-sm">Agents</a>
+          <a href="#security" class="hide-sm">Security</a>
+          <a href="#deploy" class="hide-sm">Deploy</a>
+          <a href={u('docs/start/introduction/')}>Docs</a>
+          <a href={repo} class="gh" aria-label="Bunker on GitHub">
+            <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            <span class="hide-sm">GitHub</span>
+          </a>
+          <button class="theme" type="button" aria-label="Switch between light and dark" data-theme-toggle>
+            <svg class="sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+          </button>
+        </nav>
+      </div>
     </header>
 
-    <main>
-      <section class="hero wrap">
-        <div class="hero-copy">
-          <p class="pill">Open source · In development</p>
-          <h1>Internal apps anyone can build. <em>IT can trust.</em></h1>
-          <p class="lede">
-            Your people describe the tool they need in plain words. Bunker builds it, and it runs on your own servers behind Microsoft Entra ID, sandboxed, and shared only with the coworkers they choose.
-          </p>
-          <div class="ctas">
-            <a class="btn primary" href={u('docs/security/model/')}>Read the security model</a>
-            <a class="btn" href={u('docs/start/introduction/')}>Explore the docs</a>
-          </div>
-        </div>
-
-        <div class="mock" aria-label="Illustration of the Bunker builder">
-          <div class="mock-bar"><span></span><span></span><span></span><b>bunker.corp.com/s/holiday-requests</b></div>
-          <div class="mock-body">
-            <div class="chat">
-              <p class="msg me">Make a holiday request form. My manager should approve each one, and I want a calendar of who’s out.</p>
-              <p class="msg ai">Done. Requests save to the site’s database, managers in <code>HR-Managers</code> can approve, and everyone sees the calendar. Publish?</p>
-              <div class="chat-input">Ask for a change…</div>
+    <main id="main">
+      <!-- HERO -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Open source · MIT · Self-hosted</p>
+            <h1>Your own private <span class="ground">app cloud.</span></h1>
+            <p class="sub">For you, your team, or your whole company.</p>
+            <p class="lede">
+              Drop in a file or folder, or describe an app in plain words, and get a private web app you can share with a link. Every app is sandboxed. Sign in with built-in accounts from minute one, and switch on Microsoft Entra ID, Google Workspace or OIDC when your company is ready.
+            </p>
+            <div class="ctas">
+              <a class="btn primary" href="#deploy">Deploy in one click</a>
+              <a class="btn" href={u('docs/start/quickstart/')}>See how it works <span aria-hidden="true">→</span></a>
             </div>
-            <div class="preview">
-              <p class="pv-title">Holiday requests</p>
-              <div class="field"><label>From</label><span>12 Dec</span></div>
-              <div class="field"><label>To</label><span>19 Dec</span></div>
-              <div class="pv-btn">Submit request</div>
-              <div class="cal">
-                {Array.from({ length: 21 }).map((_, i) => <i class={[3, 4, 10, 11, 12, 16].includes(i) ? 'on' : ''}></i>)}
+            <ul class="facts" aria-label="At a glance">
+              <li><b>1</b> Go binary</li>
+              <li><b>1</b> data folder</li>
+              <li><b>0</b> SSO required</li>
+            </ul>
+          </div>
+
+          <figure class="stage" aria-label="Animation: a spreadsheet is dropped into Bunker and becomes a live, shared app">
+            <div class="win">
+              <div class="win-bar">
+                <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="addr"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/></svg> bunker.corp.com</span>
               </div>
-              <p class="pv-share">🔒 Shared with <b>Finance team</b> · 14 people</p>
+              <div class="win-body">
+                <aside class="side" aria-hidden="true">
+                  <b>My apps</b>
+                  <span class="s-item"><i style="--c:#4F7A63"></i>Holiday tracker</span>
+                  <span class="s-item"><i style="--c:#C2683F"></i>Lunch vote</span>
+                  <span class="s-item new"><i style="--c:#2F5543"></i>Q3 budget</span>
+                </aside>
+                <div class="canvas">
+                  <div class="drop" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="26" height="26"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 15V4m0 0L8 8m4-4 4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                    <span>Drop a file, folder or zip</span>
+                    <small>or describe what you need</small>
+                    <div class="bar"><i></i></div>
+                  </div>
+
+                  <div class="app" aria-hidden="true">
+                    <div class="app-head">
+                      <div>
+                        <p class="app-title">Q3 budget</p>
+                        <p class="app-url">/s/q3-budget <span class="live">● Live</span></p>
+                      </div>
+                      <span class="share-chip"><svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M5.5 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm5.5 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM1 13c0-2.2 2-3.5 4.5-3.5S10 10.8 10 13v1H1v-1zm10 1v-1c0-1.2-.4-2.2-1.1-3 .4-.1.7-.1 1.1-.1 2.2 0 4 1.2 4 3.1v1h-4z"/></svg>Finance · 14</span>
+                    </div>
+                    <div class="tbl">
+                      <div class="tr th"><span>Team</span><span>Plan</span><span>Actual</span></div>
+                      <div class="tr"><span>Sales</span><span>120k</span><span class="ok">112k</span></div>
+                      <div class="tr"><span>Ops</span><span>80k</span><span class="warn">86k</span></div>
+                      <div class="tr"><span>People</span><span>45k</span><span class="ok">41k</span></div>
+                      <div class="tr add"><span>+ Add row</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+            <div class="file" aria-hidden="true">
+              <span class="file-ic">XLSX</span>
+              <span>q3-budget.xlsx</span>
+            </div>
+            <div class="toast" aria-hidden="true">Link copied · Shared with Finance</div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- DEPLOY -->
+      <section id="deploy" class="deploy">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="kicker">Deploy in one click</p>
+            <h2>Running in your cloud before your coffee cools.</h2>
+            <p>Pick a button, wait a couple of minutes, open the URL and create your admin account. Bunker needs one machine and one real disk.</p>
+          </div>
+          <div class="deploy-grid">
+            {deployButtons.map((b) => (
+              <a class={`dbtn${b.demo ? ' demo' : ''}`} href={b.href} rel="noopener" target="_blank">
+                <span class="dbtn-top">
+                  <span class="dbtn-label">Deploy to <b>{b.name}</b></span>
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M5 3h8v8h-2V6.4l-6.3 6.3-1.4-1.4L9.6 5H5z"/></svg>
+                </span>
+                <span class="dbtn-note">{b.note}</span>
+                {b.tag && <span class={`tag${b.demo ? ' tag-warn' : ''}`}>{b.tag}</span>}
+              </a>
+            ))}
+            <div class="dbtn fly">
+              <span class="dbtn-top"><span class="dbtn-label">Deploy to <b>Fly.io</b></span></span>
+              <span class="dbtn-note">One machine + volume</span>
+              <button class="mini-copy" type="button" data-copy={fly}>Copy <code>fly launch</code></button>
+            </div>
+          </div>
+
+          <div class="cmds">
+            <div class="cmd">
+              <p class="cmd-label">Any Linux server <span>installs a hardened systemd service</span></p>
+              <div class="cmd-box">
+                <code><span class="pr" aria-hidden="true">$</span>{curl}</code>
+                <button type="button" class="copy" data-copy={curl} aria-label="Copy the installer command">Copy</button>
+              </div>
+            </div>
+            <div class="cmd">
+              <p class="cmd-label">Docker <span>data lives in one volume</span></p>
+              <div class="cmd-box">
+                <code><span class="pr" aria-hidden="true">$</span>{docker}</code>
+                <button type="button" class="copy" data-copy={docker} aria-label="Copy the docker command">Copy</button>
+              </div>
+            </div>
+          </div>
+          <p class="fine">More options: Docker Compose with automatic HTTPS, Coolify, CapRover, Koyeb and Windows. <a href={u('docs/deploy/one-click/')}>All deploy guides →</a></p>
+        </div>
+      </section>
+
+      <!-- APPS -->
+      <section id="apps" class="apps">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="kicker">Anything becomes an app</p>
+            <h2>If it’s on your desktop, it can be an app.</h2>
+            <p>Bunker looks at what you dropped and turns it into the right kind of page. Whoever you share it with opens a link and signs in.</p>
+          </div>
+          <ul class="tiles">
+            {tiles.map((x) => (
+              <li class={`tile${x.ai ? ' tile-ai' : ''}`}>
+                <span class="ext">{x.ext}</span>
+                <h3>{x.t}</h3>
+                <p>{x.d}</p>
+                {x.preview && <span class="pv" title="In preview: being built now">Preview</span>}
+              </li>
+            ))}
+          </ul>
+          <div class="flow" aria-label="What happens next">
+            <div><b>Share</b><span>with people or groups, as viewer or editor</span></div>
+            <div><b>Ask for access</b><span>owners approve with one click</span></div>
+            <div><b>Every change is a version</b><span>restore any of them</span></div>
+            <div><b>Drafts</b><span>preview before anyone sees it</span></div>
           </div>
         </div>
       </section>
 
-      <section class="strip">
-        <div class="wrap">
-          <span>Self-hosted single binary</span>
-          <span>Microsoft Entra ID</span>
-          <span>Sandboxed by default</span>
-          <span>MIT licensed</span>
+      <!-- AGENTS -->
+      <section id="agents" class="agents">
+        <div class="wrap agents-grid">
+          <div class="agents-copy">
+            <p class="kicker">Built for agents</p>
+            <h2>Your coding agent already knows how to ship here.</h2>
+            <p>Every button in Bunker is an API operation, and the CLI and MCP tools are generated from the same list. So whatever a person can do in the browser, an agent can do with that person’s permissions, and nothing more.</p>
+            <ul class="checks">
+              <li><b>MCP with just the URL.</b> Add <code>https://bunker.corp.com/mcp</code> to Claude, Cursor or ChatGPT. Sign-in happens through OAuth with your Bunker account.</li>
+              <li><b>A real CLI.</b> <code>bunker deploy</code>, <code>share</code>, <code>rollback</code>, <code>ai</code>, <code>api</code>. Uploads only what changed. One binary, same as the server.</li>
+              <li><b>llms.txt.</b> Agents read <code>/llms.txt</code> and learn the SDK, the sandbox rules and every operation.</li>
+              <li><b>Everything in the UI is in the API.</b> Listed live at <code>/api/v1/ops</code> and <code>/api/v1/openapi.json</code>.</li>
+            </ul>
+            <p class="fine"><a href={u('docs/agents/mcp/')}>Connect your agent →</a> · <a href={u('docs/cli/reference/')}>CLI reference →</a></p>
+          </div>
+          <div class="term" role="img" aria-label="Terminal showing bunker login, deploy and share commands, and an MCP configuration">
+            <div class="term-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span>~/q3-report</span></div>
+            <pre><code><span class="c-p">$</span> bunker login https://bunker.corp.com
+<span class="c-d">  Open https://bunker.corp.com/device, code</span> <span class="c-k">BKRT-WXQP</span>
+<span class="c-ok">✓</span> Signed in as ada@corp.com
+
+<span class="c-p">$</span> bunker deploy
+<span class="c-d">  npm run build · 12 files · 3 changed</span>
+<span class="c-ok">✓</span> Version 7 is live: <span class="c-u">bunker.corp.com/s/q3-report</span>
+
+<span class="c-p">$</span> bunker share Finance
+<span class="c-ok">✓</span> Finance can view q3-report</code></pre>
+            <div class="term-split" aria-hidden="true"></div>
+            <pre class="mcp"><code><span class="c-d">// Claude, Cursor, ChatGPT: add a connector</span>
+{"{"} <span class="c-k">"bunker"</span>: {"{"} <span class="c-k">"url"</span>: <span class="c-u">"https://bunker.corp.com/mcp"</span> {"}"} {"}"}</code></pre>
+          </div>
         </div>
       </section>
 
-      <section class="problem wrap">
-        <h2>Your people are already building apps.</h2>
-        <p>
-          They're in spreadsheets with 40 tabs, forms in unsanctioned tools, and HTML pasted out of AI chats and emailed around. Bunker gives that energy a safe home that IT controls, so nobody has to file a ticket to get a simple tool built.
-        </p>
-      </section>
-
-      <section class="steps wrap">
-        <article>
-          <span class="n">1</span>
-          <h3>Describe it</h3>
-          <p>Chat with the builder, or drop in an HTML file. A live preview updates as you go.</p>
-        </article>
-        <article>
-          <span class="n">2</span>
-          <h3>Share it</h3>
-          <p>Pick people or Entra groups. Viewers use it and editors change it. Nobody else sees it.</p>
-        </article>
-        <article>
-          <span class="n">3</span>
-          <h3>Use it</h3>
-          <p>Coworkers open the link and they're already signed in. Data, files and AI just work.</p>
-        </article>
-      </section>
-
+      <!-- SECURITY -->
       <section id="security" class="security">
         <div class="wrap">
-          <p class="eyebrow">For IT and security</p>
-          <h2>Safe for the whole company, not just the developers.</h2>
-          <p class="sub">Bunker assumes every page could be written badly or by an AI that got it wrong, so the platform contains each one.</p>
-
-          <div class="layers" aria-label="Isolation layers">
-            <div class="layer l1">Microsoft Entra ID: only your tenant gets in</div>
-            <div class="layer l2">Bunker app: checks the viewer's role on every call</div>
-            <div class="layer l3">Sandboxed iframe + CSP: no network, no cookies, no other sites</div>
-            <div class="layer l4">The page someone built</div>
+          <div class="sec-head">
+            <p class="kicker">Security, for IT and for you</p>
+            <h2>Every app gets a locked room. You keep the keys.</h2>
+            <p>An app is untrusted code written by a trusted coworker. Bunker treats it that way, with layers that each hold on their own.</p>
           </div>
 
-          <div class="grid">
+          <div class="layers-wrap">
+            <ol class="layers" aria-label="Isolation layers, from outside in">
+              <li class="l1">
+                <span class="l-name">Sign-in</span>
+                <span class="l-what">Built-in accounts, or Entra ID, Google Workspace and OIDC. Only people you let in.</span>
+                <ol>
+                  <li class="l2">
+                    <span class="l-name">Bunker</span>
+                    <span class="l-what">Checks site, viewer and role on every call. Holds the session and every secret.</span>
+                    <ol>
+                      <li class="l3">
+                        <span class="l-name">App shell</span>
+                        <span class="l-what">Strict CSP, <code>script-src 'self'</code>. Relays SDK calls from its own frame only.</span>
+                        <ol>
+                          <li class="l4">
+                            <span class="l-name">Sandboxed frame</span>
+                            <span class="l-what">Opaque origin. Signed ticket URLs. No cookies, no storage, no internet.</span>
+                            <div class="l-core">Your app’s code</div>
+                          </li>
+                        </ol>
+                      </li>
+                    </ol>
+                  </li>
+                </ol>
+              </li>
+            </ol>
+            <ul class="blocked" aria-label="What an app cannot do">
+              <li class="b-head">An app can’t</li>
+              <li><span aria-hidden="true">✕</span> Read the Bunker session or cookies</li>
+              <li><span aria-hidden="true">✕</span> Open another app’s files or data</li>
+              <li><span aria-hidden="true">✕</span> Call outside URLs, post forms, load CDNs</li>
+              <li><span aria-hidden="true">✕</span> Hold API keys or tokens</li>
+              <li><span aria-hidden="true">✕</span> Open popups or navigate the top window</li>
+              <li><span aria-hidden="true">✕</span> Use camera, microphone, location or USB</li>
+            </ul>
+          </div>
+
+          <ul class="sec-cards">
             {security.map((s) => (
-              <article class="card">
-                <h3>{s.t}</h3>
+              <li>
+                <h3>{s.t}{s.preview && <span class="pv">Preview</span>}</h3>
                 <p>{s.d}</p>
-              </article>
+                <code>{s.code}</code>
+              </li>
+            ))}
+          </ul>
+          <p class="fine center"><a href={u('docs/security/threat-model/')}>Read the threat model, including the risks that remain →</a></p>
+        </div>
+      </section>
+
+      <!-- PERFORMANCE -->
+      <section class="perf">
+        <div class="wrap">
+          <div class="perf-grid">
+            <div class="perf-copy">
+              <p class="kicker">Small footprint</p>
+              <h2>One binary. One folder. That’s the whole platform.</h2>
+              <p>No Postgres, no Redis, no Kubernetes, no queue. Bunker is a pure-Go program with SQLite in WAL mode and a content-addressed file store. Files are compressed once at publish and served with ETags, so a small VM serves a big company.</p>
+              <p class="fine">Back up one folder. Upgrade by replacing one file.</p>
+            </div>
+            <dl class="stats">
+              <div><dt>Requests per second</dt><dd>~30k<small>on 4 cores</small></dd></div>
+              <div><dt>Moving parts</dt><dd>1<small>binary, no CGO</small></dd></div>
+              <div><dt>State</dt><dd>1<small>folder to back up</small></dd></div>
+              <div><dt>Built for</dt><dd>5,000<small>people per VM</small></dd></div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPARE -->
+      <section class="compare">
+        <div class="wrap">
+          <div class="sec-head">
+            <p class="kicker">How it compares</p>
+            <h2>The ease of a builder. The control of your own server.</h2>
+          </div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Comparison table">
+            <table>
+              <thead>
+                <tr><th scope="col"><span class="sr">Capability</span></th><th scope="col" class="us">Bunker</th><th scope="col">Low-code SaaS</th><th scope="col">Static hosting tools</th></tr>
+              </thead>
+              <tbody>
+                {compare.map(([k, a, b, c]) => (
+                  <tr>
+                    <th scope="row">{k}</th>
+                    <td class={`us v-${a}`}>{mark(a)}</td>
+                    <td class={`v-${b}`}>{mark(b)}</td>
+                    <td class={`v-${c}`}>{mark(c)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="faq" id="faq">
+        <div class="wrap faq-grid">
+          <div class="sec-head left">
+            <p class="kicker">Questions</p>
+            <h2>Asked by IT, answered plainly.</h2>
+            <p>Something missing? <a href={`${repo}/discussions`}>Ask on GitHub</a>.</p>
+          </div>
+          <div class="qs">
+            {faq.map((f) => (
+              <details>
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
             ))}
           </div>
-          <p class="more"><a href={u('docs/security/model/')}>Read the full security model →</a></p>
         </div>
       </section>
 
-      <section id="features" class="features wrap">
-        <p class="eyebrow">For everyone else</p>
-        <h2>Everything a small internal tool needs.</h2>
-        <div class="grid">
-          {features.map((f) => (
-            <article class="card plain">
-              <h3>{f.t}</h3>
-              <p>{f.d}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section class="compare wrap">
-        <h2>How Bunker compares</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th></th><th class="us">Bunker</th><th>Low-code SaaS</th><th>Static hosting tools</th></tr>
-            </thead>
-            <tbody>
-              {compare.map(([label, a, b, c]) => (
-                <tr><td>{label}</td><td class="us">{mark(a)}</td><td>{mark(b)}</td><td>{mark(c)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="deploy wrap">
-        <div>
-          <p class="eyebrow">Deploy</p>
-          <h2>One binary. One VM. One afternoon.</h2>
-          <p>Register an app in Entra ID, point a DNS record at a small VM, and start Bunker. HTTPS certificates are handled automatically.</p>
-          <a class="btn" href={u('docs/admin/install/')}>Installation guide</a>
-        </div>
-        <pre><code><span class="c"># planned</span>
-docker run -d --name bunker \
-  -p 443:443 -v bunker-data:/data \
-  -e BUNKER_URL=https://bunker.corp.com \
-  -e BUNKER_ENTRA_TENANT_ID=… \
-  -e BUNKER_ENTRA_CLIENT_ID=… \
-  -e BUNKER_ENTRA_CLIENT_SECRET=… \
-  ghcr.io/kucukkanat/bunker</code></pre>
-      </section>
-
-      <section class="faq wrap">
-        <h2>Questions</h2>
-        {faq.map((f) => (
-          <details>
-            <summary>{f.q}</summary>
-            <p>{f.a}</p>
-          </details>
-        ))}
-      </section>
-
+      <!-- CTA -->
       <section class="final">
-        <div class="wrap">
-          <h2>A safe place to build.</h2>
-          <div class="ctas">
-            <a class="btn primary light" href={u('docs/start/introduction/')}>Read the docs</a>
-            <a class="btn ghost" href={repo}>Star on GitHub</a>
+        <div class="wrap final-in">
+          <img src={u('favicon.svg')} alt="" width="56" height="56" />
+          <h2>Give yourself, your team or your company a safe place to build.</h2>
+          <p>Free and open source. Up in minutes on a machine you control. Company sign-in whenever you want it.</p>
+          <div class="ctas center">
+            <a class="btn primary on-dark" href="#deploy">Deploy Bunker</a>
+            <a class="btn ghost-dark" href={u('docs/start/introduction/')}>Read the docs</a>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="wrap foot">
-      <span>© Bunker contributors · MIT License</span>
-      <span><a href={u('docs/project/brand/')}>Brand</a> · <a href={u('docs/project/roadmap/')}>Roadmap</a> · <a href={repo}>GitHub</a></span>
+    <footer class="foot">
+      <div class="wrap foot-in">
+        <div class="foot-brand">
+          <a class="brand" href={u('')}><img src={u('favicon.svg')} alt="" width="24" height="24" /><span>bunker</span></a>
+          <p>A safe place to build. MIT licensed.</p>
+        </div>
+        <nav aria-label="Footer">
+          <div>
+            <b>Start</b>
+            <a href={u('docs/start/introduction/')}>What is Bunker</a>
+            <a href={u('docs/start/quickstart/')}>Quickstart</a>
+            <a href={u('docs/deploy/one-click/')}>Deploy</a>
+          </div>
+          <div>
+            <b>Build</b>
+            <a href={u('docs/build/drop-anything/')}>Drop anything</a>
+            <a href={u('docs/sdk/overview/')}>SDK</a>
+            <a href={u('docs/agents/mcp/')}>MCP &amp; agents</a>
+          </div>
+          <div>
+            <b>Trust</b>
+            <a href={u('docs/security/threat-model/')}>Threat model</a>
+            <a href={u('docs/security/reporting/')}>Report a vulnerability</a>
+            <a href={repo}>Source code</a>
+          </div>
+        </nav>
+      </div>
     </footer>
+
+    <script>
+      // Copy buttons.
+      for (const b of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+        b.addEventListener('click', async () => {
+          const text = b.dataset.copy || '';
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.append(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+          }
+          const old = b.innerHTML;
+          b.textContent = 'Copied';
+          b.classList.add('done');
+          setTimeout(() => {
+            b.innerHTML = old;
+            b.classList.remove('done');
+          }, 1600);
+        });
+      }
+      // Theme toggle (shared with the docs via Starlight's storage key).
+      const root = document.documentElement;
+      document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+        const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        const next = dark ? 'light' : 'dark';
+        root.dataset.theme = next;
+        try {
+          localStorage.setItem('starlight-theme', next);
+        } catch {}
+      });
+    </script>
   </body>
 </html>
