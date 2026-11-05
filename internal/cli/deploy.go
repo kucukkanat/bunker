@@ -489,5 +489,13 @@ func (x *App) deploySingle(a *Args, proj *Project, name string, data []byte, sta
 		res.URL = siteURL(c.Server, res.Site) + "?draft=1"
 	}
 	res.Ms = time.Since(start).Milliseconds()
-	return x.finishDeploy(a, res)
+	if err := x.finishDeploy(a, res); err != nil {
+		return err
+	}
+	if res.Created && !x.JSON {
+		// Single files and stdin don't write bunker.json (a folder can hold
+		// many of them), so without --site the next deploy makes another app.
+		x.info("To update this app next time: bunker deploy %s --site %s", firstNonEmpty(a.Arg(0), name), res.Site)
+	}
+	return nil
 }

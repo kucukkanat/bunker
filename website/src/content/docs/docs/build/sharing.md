@@ -54,6 +54,7 @@ Someone who opens an app they can't see gets a **You need access** page. The pag
 
 - The owner gets a notification with **Approve** / **Deny** (`access.list`, `access.decide`).
 - Approving adds them as a viewer (or editor, if you choose) and notifies them.
+- Someone who can already view can ask to edit: `access.request` with `{"role": "editor"}` (`POST /api/v1/sites/{site}/access-requests`).
 - Requests are audited (`access.request`).
 
 ## Notify people from your app
