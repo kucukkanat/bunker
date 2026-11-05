@@ -101,3 +101,25 @@ func TestOneLetterSlugRejected(t *testing.T) {
 		t.Errorf("one-letter address accepted: %d", r.Status)
 	}
 }
+
+// Admins named in the "admins" setting (or BUNKER_ADMINS) open any site in
+// the shell, but the sandboxed frame's requests carry no cookie and were
+// checked against the users table only, so they got "Access revoked".
+func TestConfiguredAdminCanLoadSiteContent(t *testing.T) {
+	k := testkit.New(t)
+	ada := k.As("ada@corp.com", "")
+	drop(t, ada, map[string]string{"index.html": "<title>Private</title>secret"})
+	k.App.SetSetting(t.Context(), "admins", "bob@corp.com")
+	bob := k.As("bob@corp.com", "")
+	r := bob.Do("GET", "/s/private/", nil)
+	body := string(r.Body)
+	i := strings.Index(body, `src="/s/private/~r/`)
+	if r.Status != 200 || i < 0 {
+		t.Fatalf("shell: %d %s", r.Status, body)
+	}
+	src := body[i+5 : i+5+strings.Index(body[i+5:], `"`)]
+	src = strings.ReplaceAll(src, "&#43;", "+")
+	if raw := k.As("", "").Do("GET", src, nil, "Sec-Fetch-Dest", "iframe"); raw.Status != 200 {
+		t.Errorf("content for a configured admin: %d %s", raw.Status, raw.Body)
+	}
+}
