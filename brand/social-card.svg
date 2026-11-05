@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#F7F4EC"/>
+  <path fill="#E9E3D3" d="M760 630V420a260 260 0 0 1 520 0v210z"/>
+  <rect x="80" y="80" width="96" height="96" rx="21" fill="#1F3A2E"/>
+  <path fill="#F7F4EC" fill-rule="evenodd" d="M98 155V131a30 30 0 0 1 60 0v24zM119.75 155v-13.5a8.25 8.25 0 0 1 16.5 0V155z"/>
+  <rect x="93.5" y="155" width="69" height="4.5" rx="2.25" fill="#C2683F"/>
+  <text x="80" y="330" font-family="Georgia, serif" font-size="76" font-weight="600" fill="#1F3A2E">Internal apps anyone</text>
+  <text x="80" y="420" font-family="Georgia, serif" font-size="76" font-weight="600" fill="#1F3A2E">can build. IT can trust.</text>
+  <text x="80" y="520" font-family="Helvetica, Arial, sans-serif" font-size="32" fill="#5A635D">Self-hosted · Entra ID sign-in · Sandboxed by default</text>
+</svg>

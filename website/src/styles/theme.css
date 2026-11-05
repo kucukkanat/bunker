@@ -1,0 +1,35 @@
+/* Bunker theme for Starlight. See /brand/README.md */
+:root {
+  --sl-font: 'Inter Variable', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --sl-color-accent-low: #1f3a2e;
+  --sl-color-accent: #8fbf9f;
+  --sl-color-accent-high: #d7e8dc;
+  --sl-color-white: #f3f4f0;
+  --sl-color-gray-1: #e8ebe6;
+  --sl-color-gray-2: #c4cbc5;
+  --sl-color-gray-3: #95a099;
+  --sl-color-gray-4: #5f6a63;
+  --sl-color-gray-5: #3a433d;
+  --sl-color-gray-6: #1a211d;
+  --sl-color-black: #121714;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dfe9e1;
+  --sl-color-accent: #2f5543;
+  --sl-color-accent-high: #1f3a2e;
+  --sl-color-white: #1c211e;
+  --sl-color-gray-1: #2a302c;
+  --sl-color-gray-2: #3f4742;
+  --sl-color-gray-3: #5a635d;
+  --sl-color-gray-4: #8a928c;
+  --sl-color-gray-5: #c9cfc8;
+  --sl-color-gray-6: #ece7da;
+  --sl-color-gray-7: #f2eee4;
+  --sl-color-black: #f7f4ec;
+}
+h1, h2, h3, .site-title, .sl-markdown-content :is(h1, h2, h3) {
+  font-family: 'Fraunces Variable', Georgia, serif;
+  letter-spacing: -0.01em;
+}
+.site-title { font-weight: 600; }

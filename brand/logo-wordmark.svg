@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 64" role="img" aria-label="Bunker">
+  <rect width="64" height="64" rx="14" fill="#1F3A2E"/>
+  <path fill="#F7F4EC" fill-rule="evenodd" d="M12 50V34a20 20 0 0 1 40 0v16zM26.5 50V41a5.5 5.5 0 0 1 11 0v9z"/>
+  <rect x="9" y="50" width="46" height="3" rx="1.5" fill="#C2683F"/>
+  <text x="80" y="45" font-family="Fraunces, Georgia, 'Times New Roman', serif" font-size="40" font-weight="600" fill="#1F3A2E" letter-spacing="-0.5">bunker</text>
+</svg>

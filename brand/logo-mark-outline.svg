@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bunker">
+  <path fill="currentColor" fill-rule="evenodd" d="M8 52V32a24 24 0 0 1 48 0v20zM25.5 52V41a6.5 6.5 0 0 1 13 0v11z"/>
+  <rect x="4" y="52" width="56" height="4" rx="2" fill="#C2683F"/>
+</svg>
