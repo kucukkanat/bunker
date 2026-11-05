@@ -58,8 +58,12 @@ type Hub struct {
 
 type topicSubs struct {
 	mu     sync.RWMutex
-	conns  map[*sseConn]sub
+	conns  map[*sseConn]*sub
 	cancel func()
+	// For db:<coll> topics: the collection, so forward can parse each
+	// change and look up the collection rule once for all connections.
+	site int64
+	coll string
 }
 
 type sub struct {
@@ -68,9 +72,22 @@ type sub struct {
 	coll string
 }
 
+// evt is one queued delivery. It is two pointers (16 bytes), so each
+// connection's queue of connQueue events costs 4 KB.
 type evt struct {
-	sub sub
+	sub *sub
+	m   *busMsg
+}
+
+// busMsg is a bus message prepared once for every connection on a topic.
+type busMsg struct {
 	msg []byte
+	// db changes: author, client payload and the collection rule.
+	db     bool
+	ok     bool
+	author int64
+	data   []byte
+	rule   string
 }
 
 type sseConn struct {
@@ -117,17 +134,20 @@ func (h *Hub) release(uid int64) {
 	}
 }
 
-func (h *Hub) subscribe(c *sseConn, topic string, s sub) {
+func (h *Hub) subscribe(c *sseConn, topic string, site int64, s sub) {
 	h.mu.Lock()
 	ts := h.topics[topic]
 	if ts == nil {
 		ch, cancel := h.a.Bus.Subscribe(topic)
-		ts = &topicSubs{conns: map[*sseConn]sub{}, cancel: cancel}
+		ts = &topicSubs{conns: map[*sseConn]*sub{}, cancel: cancel}
+		if s.kind == 'd' {
+			ts.site, ts.coll = site, s.coll
+		}
 		h.topics[topic] = ts
 		go forward(ts, ch)
 	}
 	ts.mu.Lock()
-	ts.conns[c] = s
+	ts.conns[c] = &s
 	ts.mu.Unlock()
 	h.mu.Unlock()
 }
@@ -151,10 +171,18 @@ func (h *Hub) unsubscribe(c *sseConn, topic string) {
 
 func forward(ts *topicSubs, ch <-chan []byte) {
 	for msg := range ch {
+		m := &busMsg{msg: msg}
+		if ts.coll != "" {
+			m.db = true
+			m.author, m.data, m.ok = splitDBMsg(msg)
+			if m.ok && m.author != 0 {
+				m.rule = CollectionRule(context.Background(), ts.site, ts.coll)
+			}
+		}
 		ts.mu.RLock()
 		for c, s := range ts.conns {
 			select {
-			case c.out <- evt{sub: s, msg: msg}:
+			case c.out <- evt{sub: s, m: m}:
 			default:
 				c.dropped.Add(1)
 			}
@@ -396,7 +424,7 @@ func (h *Hub) serveSSE(w http.ResponseWriter, r *http.Request) {
 
 	c := &sseConn{out: make(chan evt, connQueue)}
 	for _, q := range reqs {
-		h.subscribe(c, q.topic, q.s)
+		h.subscribe(c, q.topic, s.ID, q.s)
 	}
 	defer func() {
 		for _, q := range reqs {
@@ -418,6 +446,12 @@ func (h *Hub) serveSSE(w http.ResponseWriter, r *http.Request) {
 	tick := time.NewTicker(heartbeat)
 	defer tick.Stop()
 	var buf bytes.Buffer
+	// The viewer's role is re-resolved for an event when site caches were
+	// invalidated since the last check (shares, updates) or a second has
+	// passed, instead of on every event.
+	gens, _ := h.a.Sites.(interface{ Generation() uint64 })
+	var roleGen uint64
+	var roleAt time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -437,10 +471,17 @@ func (h *Hub) serveSSE(w http.ResponseWriter, r *http.Request) {
 		case e := <-c.out:
 			// Use the viewer's current role (cached; shares invalidate it), so
 			// a demotion or removal applies to the next event, not the next reconnect.
-			if _, ro, err := h.a.Sites.Resolve(ctx, u, s.Slug); err != nil || ro == core.RoleNone {
-				return
-			} else {
-				role = ro
+			now := time.Now()
+			if gens == nil || gens.Generation() != roleGen || now.Sub(roleAt) >= time.Second {
+				if gens != nil {
+					roleGen = gens.Generation() // read before resolving
+				}
+				if _, ro, err := h.a.Sites.Resolve(ctx, u, s.Slug); err != nil || ro == core.RoleNone {
+					return
+				} else {
+					role = ro
+				}
+				roleAt = now
 			}
 			buf.Reset()
 			h.render(&buf, e, s.ID, u, role)
@@ -483,19 +524,25 @@ func writeFrame(b *bytes.Buffer, ch string, payload []byte) {
 
 // render writes e to b if this viewer may see it.
 func (h *Hub) render(b *bytes.Buffer, e evt, siteID int64, u *core.User, role core.Role) {
-	payload := e.msg
+	payload := e.m.msg
 	if e.sub.kind == 'd' {
-		author, data, ok := splitDBMsg(e.msg)
-		if !ok {
+		m := e.m
+		if !m.db { // not prepared by forward (defensive)
+			m = &busMsg{db: true}
+			m.author, m.data, m.ok = splitDBMsg(e.m.msg)
+			if m.ok && m.author != 0 {
+				m.rule = CollectionRule(context.Background(), siteID, e.sub.coll)
+			}
+		}
+		if !m.ok {
 			return
 		}
-		if author != 0 { // 0 = collection-level notice (dropped/reset)
-			acc := AccessFor(u, role, CollectionRule(context.Background(), siteID, e.sub.coll))
-			if !acc.CanRead(u.ID, author) {
+		if m.author != 0 { // 0 = collection-level notice (dropped/reset)
+			if !AccessFor(u, role, m.rule).CanRead(u.ID, m.author) {
 				return
 			}
 		}
-		payload = data
+		payload = m.data
 	}
 	writeFrame(b, e.sub.ch, payload)
 }

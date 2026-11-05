@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kucukkanat/bunker/internal/core"
@@ -271,7 +272,7 @@ var (
 	roleCache = map[string]roleEntry{}
 	// cacheGen counts invalidations, so a lookup that raced with one
 	// doesn't put a stale record back into the cache.
-	cacheGen uint64
+	cacheGen atomic.Uint64
 )
 
 type roleEntry struct {
@@ -285,7 +286,7 @@ func Invalidate(slug string) {
 	defer scMu.Unlock()
 	delete(siteCache, slug)
 	roleCache = map[string]roleEntry{}
-	cacheGen++
+	cacheGen.Add(1)
 }
 
 func invalidateAll() {
@@ -293,17 +294,17 @@ func invalidateAll() {
 	defer scMu.Unlock()
 	siteCache = map[string]siteCacheEntry{}
 	roleCache = map[string]roleEntry{}
-	cacheGen++
+	cacheGen.Add(1)
 }
 
 // CacheGeneration changes whenever site or role caches are invalidated
 // (updates, shares, deploys): a caller holding a resolved role may keep
 // using it while the generation is unchanged.
-func CacheGeneration() uint64 {
-	scMu.Lock()
-	defer scMu.Unlock()
-	return cacheGen
-}
+func CacheGeneration() uint64 { return cacheGen.Load() }
+
+// Generation lets other modules (live streams) see cache invalidations
+// through the core.SiteResolver they hold.
+func (resolver) Generation() uint64 { return cacheGen.Load() }
 
 const siteCols = `id,slug,title,description,icon,owner_id,kind,org_view,live_version,is_template,settings,created_at,updated_at,deleted_at,archived_at,archived_days,public`
 
@@ -337,7 +338,7 @@ func GetBySlug(ctx context.Context, slug string) (*SiteRecord, error) {
 		scMu.Unlock()
 		return e.s, nil
 	}
-	gen := cacheGen
+	gen := cacheGen.Load()
 	scMu.Unlock()
 	s, err := scanSite(app.DB.QueryRowContext(ctx, `SELECT `+siteCols+` FROM sites WHERE slug=? AND deleted_at IS NULL`, slug))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -350,7 +351,7 @@ func GetBySlug(ctx context.Context, slug string) (*SiteRecord, error) {
 	if len(siteCache) > 20000 {
 		siteCache = map[string]siteCacheEntry{}
 	}
-	if gen == cacheGen {
+	if gen == cacheGen.Load() {
 		siteCache[slug] = siteCacheEntry{s: s, exp: time.Now().Add(20 * time.Second)}
 	}
 	scMu.Unlock()
@@ -390,7 +391,7 @@ func RoleOf(ctx context.Context, u *core.User, s *SiteRecord) core.Role {
 		scMu.Unlock()
 		return e.r
 	}
-	gen := cacheGen
+	gen := cacheGen.Load()
 	scMu.Unlock()
 	role := baseRole(s)
 	rows, err := app.DB.QueryContext(ctx, `SELECT ptype,pid,role FROM site_members WHERE site_id=?`, s.ID)
@@ -428,7 +429,7 @@ func putRole(key string, role core.Role, gen uint64) {
 	if len(roleCache) > 100000 {
 		roleCache = map[string]roleEntry{}
 	}
-	if gen == cacheGen {
+	if gen == cacheGen.Load() {
 		roleCache[key] = roleEntry{r: role, exp: time.Now().Add(15 * time.Second)}
 	}
 	scMu.Unlock()
@@ -455,7 +456,7 @@ func primeRoles(ctx context.Context, u *core.User, list []*SiteRecord) {
 		need[s.ID] = s
 		ids = append(ids, s.ID)
 	}
-	gen := cacheGen
+	gen := cacheGen.Load()
 	scMu.Unlock()
 	for len(ids) > 0 {
 		n := min(len(ids), 500)
