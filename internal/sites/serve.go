@@ -281,10 +281,10 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self' "+app.Cfg.ContentURL+"; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	shellTmpl.Execute(w, map[string]any{
-		"Title": s.Title, "Slug": s.Slug, "Src": src, "Base": base, "Role": role.String(),
-		"Draft": draft, "Version": ver, "Live": s.Version, "Icon": s.Icon,
-		"Badge": !s.Settings.HideBadge || role >= core.RoleEditor, "User": u.Name, "SiteID": s.ID, "Sandbox": SandboxFlags,
+	renderShell(w, shellData{
+		Title: s.Title, Slug: s.Slug, Src: src, Base: base, Role: role.String(),
+		Draft: draft, Version: ver, Live: s.Version, Icon: s.Icon,
+		Badge: !s.Settings.HideBadge || role >= core.RoleEditor, User: u.Name, SiteID: s.ID,
 	})
 }
 
