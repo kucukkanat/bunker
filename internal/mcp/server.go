@@ -48,6 +48,9 @@ type Request struct {
 	Query       url.Values
 	Body        []byte
 	ContentType string
+	// PageSafe marks a call made on behalf of a site page (an embedded MCP
+	// App): it is sent with X-Bunker-Page: 1 so only page-safe ops run.
+	PageSafe bool
 }
 
 // Response is the API's answer.
@@ -209,6 +212,8 @@ func (s *Server) capabilities() map[string]any {
 		"resources": map[string]any{"listChanged": false, "subscribe": false},
 		"prompts":   map[string]any{"listChanged": false},
 		"logging":   map[string]any{},
+		// MCP Apps (SEP-1865): open_site renders sites inside the host.
+		"extensions": map[string]any{UIExtension: map[string]any{"mimeTypes": []string{AppMimeType}}},
 	}
 }
 
@@ -221,7 +226,7 @@ func (s *Server) serverInfo() map[string]any {
 }
 
 // Instructions are sent to clients on initialize/discover.
-const Instructions = `Bunker hosts private internal web apps ("sites") for your organization. To publish an app: write a self-contained index.html (inline CSS/JS, no CDN scripts, no fetch to outside URLs) and call create_site_from_html, or deploy_files for several files. Pages use window.bunker (db, files, ai, storage, me) for data; call get_sdk_docs first. Every deploy makes a version (versions_list, versions_restore to roll back). Share with sharing_add. You act with the signed-in person's permissions.`
+const Instructions = `Bunker hosts private internal web apps ("sites") for your organization. To publish an app: write a self-contained index.html (inline CSS/JS, no CDN scripts, no fetch to outside URLs) and call create_site_from_html, or deploy_files for several files. Pages use window.bunker (db, files, ai, storage, me) for data; call get_sdk_docs first. Every deploy makes a version (versions_list, versions_restore to roll back). Share with sharing_add. open_site shows a published site as an interactive app inside hosts that support MCP Apps. You act with the signed-in person's permissions.`
 
 func (s *Server) dispatch(ctx context.Context, m *Message) (any, error) {
 	if v := MetaVersion(m.Params); v != "" && !slices.Contains(SupportedVersions, v) {

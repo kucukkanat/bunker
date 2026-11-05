@@ -53,6 +53,7 @@ Bunker hosts these libraries locally. Load them with a normal script/link tag us
   canvas-confetti:                  <script src="/_/lib/canvas-confetti/confetti.browser.js"></script>
   jQuery:                           <script src="/_/lib/jquery/jquery.min.js"></script>
   htmx:                             <script src="/_/lib/htmx.org/htmx.min.js"></script>
+  Leaflet (window.L, maps):         <link rel="stylesheet" href="/_/lib/leaflet/leaflet.css"> and <script src="/_/lib/leaflet/leaflet.js"></script>. Map tiles can't load (no internet), so draw on your own picture instead: L.map(el, {crs: L.CRS.Simple}) + L.imageOverlay('floorplan.png', bounds), or GeoJSON shapes. Good for floor plans, desk maps and site layouts with markers.
 Nothing else is available. Prefer kit.css + plain JavaScript for small apps; use Chart.js for charts; reach for a framework only when the app is big enough to need one. React has no JSX here: use React.createElement (e.g. const h = React.createElement). Don't mix several CSS frameworks.
 
 # Look and feel

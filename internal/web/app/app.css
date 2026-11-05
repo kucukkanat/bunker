@@ -327,6 +327,9 @@ main#main { min-width: 0; }
 .msg.ai { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 5px; }
 .msg.err { align-self: flex-start; background: var(--danger-soft); color: var(--danger); }
 .msg .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msg .fix-list { margin: 8px 0; padding-left: 18px; }
+.msg .fix-list code { white-space: pre-wrap; word-break: break-word; }
+.msg.fix .btn { margin-top: 4px; }
 .file-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line-soft); font: .74rem var(--mono); color: var(--muted); animation: pop .25s var(--ease) both; }
 .file-chip svg { color: var(--moss); }
 .status-line { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .84rem; padding-left: 4px; }

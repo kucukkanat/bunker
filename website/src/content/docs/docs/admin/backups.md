@@ -70,7 +70,25 @@ rsync -a /var/lib/bunker/blobs /var/lib/bunker/secret.key /backup/
 
 Or stop Bunker briefly and copy the whole folder. Disk snapshots (Azure managed disk, EBS, a Fly volume snapshot) also work: SQLite in WAL mode recovers cleanly from a crash-consistent snapshot.
 
+### With the CLI
+
+`bunker backup [file]` downloads a consistent archive (database `VACUUM INTO` snapshot, blobs and `secret.key`) from the server you're signed in to. It needs an admin token with the `admin` scope. Add `--no-key` to leave `secret.key` out.
+
+```bash
+bunker backup /backup/bunker-$(date +%F).tar.gz
+```
+
 ## Restore
+
+Stop Bunker, then on the server run `bunker restore <file>`. It unpacks the archive into `BUNKER_DATA_DIR`, refuses while a server still answers on `BUNKER_LISTEN`, asks before replacing existing data (`--yes` skips the question) and keeps the old database as `bunker.db.pre-restore-<time>`. Start Bunker again afterwards; migrations run automatically.
+
+```bash
+sudo systemctl stop bunker
+sudo -u bunker BUNKER_DATA_DIR=/var/lib/bunker bunker restore /backup/bunker-2026-11-05.tar.gz
+sudo systemctl start bunker
+```
+
+### By hand
 
 1. Stop Bunker.
 2. Unpack the backup into an **empty** data folder:
