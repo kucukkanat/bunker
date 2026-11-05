@@ -115,7 +115,7 @@ var indexNameRe = regexp.MustCompile(`^docs_x_[0-9a-f]{16}$`)
 // noteQuery counts a query's index-friendly fields and queues an index
 // when one gets hot. It never blocks the query.
 func noteQuery(site int64, coll string, fields []string, orderField string) {
-	if autoIndexPerColl() <= 0 || ai.jobs == nil {
+	if autoIndexPerColl() <= 0 {
 		return
 	}
 	now := time.Now()
@@ -124,6 +124,9 @@ func noteQuery(site int64, coll string, fields []string, orderField string) {
 	ns := 0
 	ai.mu.Lock()
 	defer ai.mu.Unlock()
+	if ai.jobs == nil {
+		return
+	}
 	note := func(f string) {
 		if !indexableField(f) {
 			return
@@ -194,17 +197,18 @@ func pruneStats(now time.Time) bool {
 // builds them (one at a time) and the daily sweep. A nil stop runs them
 // for the life of the process.
 func startIndexer(stop <-chan struct{}) {
+	jobs := make(chan idxJob, 64)
 	ai.mu.Lock()
 	ai.stats = map[idxKey]*idxStat{}
+	ai.jobs = jobs // senders hold ai.mu; the worker reads its own copy
 	ai.mu.Unlock()
-	ai.jobs = make(chan idxJob, 64)
 	loadIndexes()
 	go func() {
 		for {
 			select {
 			case <-stop:
 				return
-			case j := <-ai.jobs:
+			case j := <-jobs:
 				runIndexJob(j)
 				ai.idle.Done()
 			}
