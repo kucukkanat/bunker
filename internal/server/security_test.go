@@ -118,3 +118,22 @@ func itoa(i int) string {
 	}
 	return s
 }
+
+// The first-run setup (authorized by the setup code) records the URL, so
+// company sign-in works without BUNKER_URL.
+func TestSetupRemembersURL(t *testing.T) {
+	a, srv := newUnconfigured(t)
+	code := a.Setting("setup.code")
+	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/setup", strings.NewReader(`{"provider":"local","email":"me@home.dev","password":"correct horse battery","code":"`+code+`"}`))
+	req.Host = "bunker.example.com"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", "203.0.113.5")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil || res.StatusCode != 200 {
+		t.Fatalf("setup: %v %v", err, res)
+	}
+	if a.Cfg.URL != "https://bunker.example.com" {
+		t.Fatalf("URL after setup: %q", a.Cfg.URL)
+	}
+}

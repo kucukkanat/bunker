@@ -113,6 +113,9 @@ func initEntra(a *core.App) error {
 			if err := authorize(r, in.Code); err != nil {
 				return nil, err
 			}
+			if !auth.Configured() {
+				auth.RememberURL(r) // authorized by the setup code
+			}
 			if a.Cfg.URL == "" {
 				return nil, core.BadRequest("Bunker doesn't know its own address yet. Set BUNKER_URL (e.g. https://bunker.corp.com) and restart, then try again.")
 			}
