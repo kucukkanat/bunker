@@ -21,10 +21,10 @@ export function showWelcome() {
 
 export default function welcome(root) {
   store('welcomed', '1');
-  clear(root, h('div.page.narrow', h('div.card.pad', { style: { textAlign: 'center', padding: '40px 32px' } },
+  clear(root, h('div.page.narrow', h('div.card.pad', { style: { textAlign: 'center', padding: '40px clamp(16px, 5vw, 32px)' } },
     h('div', { style: { display: 'flex', justifyContent: 'center', color: 'var(--moss)', marginBottom: '12px' } }, archArt(96)),
-    h('h1', 'Welcome to Bunker'),
+    h('h1', 'Welcome to Bunker' + (first() && first().toLowerCase() !== 'you' ? ', ' + first() : '')),
     h('p.muted', { style: { marginTop: '8px', fontSize: '1.05rem' } }, 'A safe place to build small apps for your team.'),
     h('div', { style: { textAlign: 'left', maxWidth: '520px', margin: '20px auto' } }, stepsEl()),
-    h('div.row', { style: { justifyContent: 'center', marginTop: '20px' } }, h('a.btn.primary.lg', { href: '/new' }, icon('plus', 18), 'Make my first site'), h('a.btn.lg', { href: '/' }, 'Go to Home')))));
+    h('div.row.wrap', { style: { justifyContent: 'center', marginTop: '20px' } }, h('a.btn.primary.lg', { href: '/new' }, icon('plus', 18), 'Make my first site'), h('a.btn.lg', { href: '/' }, 'Go to Home')))));
 }
