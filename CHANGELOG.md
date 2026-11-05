@@ -9,6 +9,8 @@ Your own private app cloud: drop a file or describe an app, get a private, share
 - **CDN links just work:** popular libraries (React, Vue, Chart.js, Tailwind, Alpine, d3, Bootstrap, Leaflet, …) are built in at `/_/lib` and CDN tags are rewritten at publish; unknown external URLs are reported as warnings.
 - **AI builder:** Claude, OpenAI, Azure OpenAI or any OpenAI-compatible/local model; edits drafts with diffs, streams progress, sets data rules, offers to fix preview errors (max 2 rounds), daily budgets. Zero setup with `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, one-click local Ollama/LM Studio.
 - **8 templates:** requests & approvals, kanban tracker, sign-up sheet, feedback with AI summary, poll, dashboard, team directory & who's out, meeting notes.
+- **Import from GitHub:** paste a public repo or folder link on Home.
+- **`bunker demo`:** dev mode pre-filled with example apps, teammates and data.
 - **Versions and drafts:** every publish is a version; diff, preview, one-click restore; duplicate; zip export.
 
 ### Runtime for pages (`window.bunker`)
@@ -33,5 +35,6 @@ Your own private app cloud: drop a file or describe an app, get a private, share
 - One-click deploys: Render, Railway, Fly.io, Azure VM (with HTTPS), Koyeb, Coolify, CapRover, Docker/Compose (+ Caddy), Linux installer with hardened systemd (builds from source when no release exists), Windows PowerShell installer.
 - Automatic HTTPS (Let's Encrypt) on bare machines; learns its URL; desktop first run opens the setup page.
 - Admin: people, sites, sign-in, AI, Microsoft 365, connections, sharing policy, email, audit log, stats; offboarding (move someone's sites), idle archival, backups (download, scheduled snapshots, `bunker backup`/`restore`), Prometheus `/metrics`.
-- Footprint: ~26 MB idle RSS, content-addressed precompressed (brotli/gzip) files, ~30k req/s on 4 cores.
+- Footprint: ~27 MB idle RSS, content-addressed precompressed (brotli/gzip) files; on 4 vCPU the shell page serves ~38k req/s and site files 22–41k req/s; 5,000 live update streams fan out 1,000 changes with p99 ~0.3 s (see `research/PERF.md`, reproducible with `go run ./test/perf`).
+- Optional email (SMTP) for invites, resets and notifications; installable dashboard (web app manifest).
 - Accessibility: WCAG 2.2 AA checks (axe) with no serious/critical violations.
