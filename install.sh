@@ -49,6 +49,7 @@ Options:
   --version vX.Y.Z   install a specific release (default: latest)
   --no-service       only install the binary, do not create a systemd service
   --dir DIR          install the binary into DIR
+  --from-source      build from the GitHub source (automatic when no release exists yet)
   -h, --help         show this help
 
 Run as root on Linux with systemd to also install and start the service.
@@ -61,6 +62,7 @@ while [ $# -gt 0 ]; do
 	--version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
 	--version=*) VERSION="${1#*=}"; shift ;;
 	--no-service) NO_SERVICE=1; shift ;;
+	--from-source) FROM_SOURCE=1; shift ;;
 	--dir) [ $# -ge 2 ] || die "--dir needs a value"; INSTALL_DIR="$2"; shift 2 ;;
 	--dir=*) INSTALL_DIR="${1#*=}"; shift ;;
 	-h | --help) usage ;;
@@ -143,14 +145,53 @@ download() {
 	fi
 	TMP=$(mktemp -d 2>/dev/null || mktemp -d -t bunker)
 	trap 'rm -rf "$TMP"' EXIT INT TERM
+	if [ "${FROM_SOURCE:-0}" = 1 ]; then
+		build_from_source
+		return
+	fi
 	step "Downloading $ASSET ($VERSION)"
-	fetch "$base/$ASSET" "$TMP/bunker" || die "download failed: $base/$ASSET"
+	if ! fetch "$base/$ASSET" "$TMP/bunker" 2>/dev/null; then
+		if [ -z "${BUNKER_DOWNLOAD_URL:-}" ] && [ "${BUNKER_NO_SOURCE:-0}" != 1 ]; then
+			say "    ${DIM}no release binary yet; building from source instead (takes a couple of minutes)${RESET}"
+			build_from_source
+			return
+		fi
+		die "download failed: $base/$ASSET"
+	fi
 	fetch "$base/checksums.txt" "$TMP/checksums.txt" || die "could not download checksums.txt"
 	want=$(checksum_for "$TMP/checksums.txt" "$ASSET") || die "no checksum for $ASSET in checksums.txt"
 	got=$(sha256 "$TMP/bunker")
 	[ "$want" = "$got" ] || die "checksum mismatch for $ASSET (expected $want, got $got)"
 	say "    ${DIM}sha256 $got ok${RESET}"
 	chmod 0755 "$TMP/bunker"
+}
+
+# Build Bunker from the GitHub source with a temporary Go toolchain. Used
+# when no release binary exists (yet) or with --from-source. Nothing is
+# left behind except the bunker binary.
+build_from_source() {
+	command -v tar >/dev/null 2>&1 || die "need tar to build from source"
+	ref="refs/heads/master"
+	[ "$VERSION" != latest ] && ref="refs/tags/$VERSION"
+	step "Fetching Bunker source ($ref)"
+	fetch "https://codeload.github.com/$REPO/tar.gz/$ref" "$TMP/src.tgz" || die "could not download the source"
+	mkdir -p "$TMP/src" && tar -xzf "$TMP/src.tgz" -C "$TMP/src" --strip-components=1 || die "could not unpack the source"
+	gover=$(sed -n 's/^go \([0-9.]*\).*/\1/p' "$TMP/src/go.mod" | head -n 1)
+	[ -n "$gover" ] || die "could not read the Go version from go.mod"
+	gotgz="go$gover.$OS-$ARCH.tar.gz"
+	step "Fetching Go $gover (temporary)"
+	fetch "https://dl.google.com/go/$gotgz" "$TMP/go.tgz" || die "could not download Go"
+	fetch "https://dl.google.com/go/$gotgz.sha256" "$TMP/go.sha256" || die "could not download the Go checksum"
+	want=$(first_word "$(cat "$TMP/go.sha256")")
+	got=$(sha256 "$TMP/go.tgz")
+	[ "$want" = "$got" ] || die "checksum mismatch for $gotgz"
+	tar -xzf "$TMP/go.tgz" -C "$TMP" || die "could not unpack Go"
+	step "Building Bunker"
+	(cd "$TMP/src" && GOROOT="$TMP/go" GOPATH="$TMP/gopath" GOCACHE="$TMP/gocache" GOTOOLCHAIN=local CGO_ENABLED=0 \
+		"$TMP/go/bin/go" build -trimpath -ldflags "-s -w -X github.com/kucukkanat/bunker/internal/core.Version=source" -o "$TMP/bunker" ./cmd/bunker) ||
+		die "build failed"
+	chmod 0755 "$TMP/bunker"
+	rm -rf "$TMP/go" "$TMP/gopath" "$TMP/gocache" "$TMP/src" "$TMP/go.tgz" "$TMP/src.tgz"
 }
 
 # ----------------------------------------------------------------- install
