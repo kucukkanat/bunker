@@ -41,8 +41,8 @@ Apps run in a sandbox with no cookies, no network and no keys. **`window.bunker`
 | [`bunker.storage`](/bunker/docs/sdk/storage/) | Per-person key/value storage, plus working `localStorage` |
 | [`bunker.room()`](/bunker/docs/sdk/rooms/) | Live broadcast and presence |
 | [`bunker.ai`](/bunker/docs/sdk/ai/) | Chat, JSON and streaming answers from the admin's AI provider |
-| [`bunker.m365`](/bunker/docs/sdk/m365/) | SharePoint lists, Excel ranges, OneDrive files, delegated (Preview) |
-| [`bunker.connections`](/bunker/docs/sdk/connections/) | Admin-defined company APIs (Preview) |
+| [`bunker.m365`](/bunker/docs/sdk/m365/) | SharePoint lists, Excel ranges, OneDrive files and Graph reads, as the viewer |
+| [`bunker.connections`](/bunker/docs/sdk/connections/) | Admin-defined company APIs, keys kept on the server |
 | [`notify`, `toast`, `download`, `open`](/bunker/docs/sdk/ui/) | Notifications and small helpers |
 | [Sandbox limits](/bunker/docs/sdk/limits/) | What pages can't do, and what to do instead |
 
