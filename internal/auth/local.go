@@ -595,8 +595,8 @@ func pageHeadStatus(w http.ResponseWriter, status int, title string) {
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `<!doctype html><html lang="en"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>%s</title><link rel=icon href="/_/icon.svg">
 <style>
-@font-face{font-family:Fraunces;src:url(/app/fonts/fraunces.woff2) format("woff2");font-weight:100 900;font-display:swap}
-@font-face{font-family:Inter;src:url(/app/fonts/inter.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:Fraunces;src:url(/_/fonts/fraunces.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:Inter;src:url(/_/fonts/inter.woff2) format("woff2");font-weight:100 900;font-display:swap}
 :root{--forest:#1f3a2e;--paper:#f7f4ec;--card:#fffdf8;--ink:#1c211e;--slate:#5a635d;--line:#ddd6c4;--err:#9a4423;--errBg:rgba(194,104,63,.12);--btn:#1f3a2e;--btnText:#f7f4ec;--link:#2f5543}
 @media(prefers-color-scheme:dark){:root{--paper:#121714;--card:#1a211d;--ink:#e8ebe6;--slate:#a4ada7;--line:#2e3832;--forest:#e8ebe6;--err:#f0a27c;--errBg:rgba(224,138,95,.14);--btn:#8fbf9f;--btnText:#121714;--link:#8fbf9f}}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--paper);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}

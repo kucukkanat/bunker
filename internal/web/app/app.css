@@ -1,6 +1,6 @@
 /* Bunker dashboard. Fonts: Fraunces + Inter (OFL), bundled. */
-@font-face { font-family: 'Fraunces'; src: url(/app/fonts/fraunces.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
-@font-face { font-family: 'Inter'; src: url(/app/fonts/inter.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Fraunces'; src: url(/_/fonts/fraunces.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url(/_/fonts/inter.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
 
 :root {
   --forest: #1f3a2e; --forest-700: #2f5543; --moss: #4f7a63; --moss-200: #c9d8cc;
