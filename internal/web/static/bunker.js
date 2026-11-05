@@ -64,6 +64,7 @@
     port.onmessage = onPort;
     if (d.site) Object.assign(site, d.site);
     if (d.filesBase) filesBase = d.filesBase;
+    errorsReady();
     if (first) {
       var q = queue; queue = [];
       q.forEach(function (msg) { port.postMessage(msg); });
@@ -75,6 +76,57 @@
     reportLocation();
     reportTitle();
   });
+
+  // ---- error reporting (draft previews only, for the builder's auto-fix) ----
+  // Errors are buffered until the shell's init says whether an editor is
+  // previewing a draft; otherwise they're dropped and nothing is sent.
+  var errBuf = [], errOn = null, errSent = 0, errLast = '';
+  function reportError(message, source, line) {
+    if (errOn === false || errSent >= 20) return;
+    var src = String(source || '');
+    var root = location.origin + BASE;
+    if (src.indexOf(root) === 0) src = src.slice(root.length) || 'index.html';
+    var e = { type: 'error', message: String(message || 'Error').slice(0, 600), source: src.slice(0, 300), line: line | 0, doc: nonce };
+    var key = e.message + '|' + e.source + '|' + e.line;
+    if (key === errLast) return;
+    errLast = key;
+    if (errOn === null) { if (errBuf.length < 20) errBuf.push(e); return; }
+    errSent++;
+    send(e);
+  }
+  function errorsReady() {
+    errOn = !!(site.draft && /^(editor|owner|admin)$/.test(site.role));
+    var b = errBuf; errBuf = [];
+    if (errOn) b.forEach(function (e) { if (errSent++ < 20) send(e); });
+  }
+  if (inShell) {
+    W.addEventListener('error', function (ev) {
+      var t = ev.target;
+      if (t && t !== W && t.tagName) {
+        var u = t.src || t.href || '';
+        if (u) reportError('Could not load ' + t.tagName.toLowerCase() + ' ' + u.replace(location.origin + BASE, ''), '', 0);
+        return;
+      }
+      reportError(ev.message || (ev.error && ev.error.message), ev.filename, ev.lineno);
+    }, true);
+    W.addEventListener('unhandledrejection', function (ev) {
+      var r = ev.reason;
+      var at = r && r.stack ? String(r.stack).match(/(https?:\/\/[^\s)]+):(\d+):\d+/) : null;
+      reportError('Unhandled promise rejection: ' + (r && r.message ? r.message : String(r)), at ? at[1] : '', at ? +at[2] : 0);
+    });
+    var origError = console.error;
+    console.error = function () {
+      try {
+        var parts = [];
+        for (var i = 0; i < arguments.length; i++) {
+          var x = arguments[i];
+          parts.push(x && x.message ? x.message : typeof x === 'object' ? (function () { try { return JSON.stringify(x); } catch (_) { return String(x); } })() : String(x));
+        }
+        reportError('console.error: ' + parts.join(' '), '', 0);
+      } catch (_) {}
+      return origError.apply(console, arguments);
+    };
+  }
 
   if (inShell) {
     // Ask the shell for a channel; repeat in case it wasn't listening yet.

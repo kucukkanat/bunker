@@ -74,27 +74,52 @@ export default async function build(panel, ws) {
         if (t && !ai) bubble('ai', t);
         if (!ai && !files.length && !t) bubble('ai', 'Done. Take a look at the preview.');
         ws.refresh();
-        onDone && onDone();
+        onDone && onDone(true);
       } else if (type === 'error') {
         end();
         bubble('err', (d && (d.message || d.error?.message || d.error)) || 'The builder ran into a problem. Please try again.');
-        onDone && onDone();
+        onDone && onDone(false);
       }
     };
   }
 
-  async function submit() {
-    const msg = input.value.trim();
+  // Auto-fix: after a build, look at errors the draft preview reported and
+  // offer one click to send them to the builder (at most 2 rounds per message).
+  const MAX_FIXES = 2;
+  let fixRound = 0, fixEl = null;
+  async function checkPreview() {
+    await ws.previewSettled(2000);
+    if (!ws.alive() || busy) return;
+    const errs = ws.previewErrors();
+    fixEl?.remove();
+    fixEl = null;
+    if (!errs.length) return;
+    const n = errs.length;
+    const list = h('ul.fix-list.small', errs.slice(-5).map((e) => h('li', h('code', e.message), e.source ? h('span.faint', ' · ' + e.source + (e.line ? ':' + e.line : '')) : null)));
+    if (fixRound >= MAX_FIXES) {
+      fixEl = bubble('ai', 'The preview still shows ' + (n === 1 ? 'an error' : n + ' errors') + '. Tell me what you see, or what should happen, and I’ll take another look.');
+      fixEl.append(list);
+      return;
+    }
+    fixEl = bubble('ai', 'The preview shows ' + (n === 1 ? 'an error' : n + ' errors') + '.');
+    fixEl.classList.add('fix');
+    fixEl.append(list, h('div', h('button.btn.sm.primary', { type: 'button', onclick: () => { fixRound++; fixEl?.remove(); fixEl = null; submit('Fix the errors the preview shows.', errs); } }, icon('sparkle', 14), 'Fix these errors')));
+    scroll();
+  }
+
+  async function submit(auto, errors) {
+    const msg = typeof auto === 'string' ? auto : input.value.trim();
     if (!msg || busy) return;
     log.querySelector('.chat-intro')?.remove();
-    input.value = '';
-    input.style.height = '';
+    if (typeof auto !== 'string') { input.value = ''; input.style.height = ''; fixRound = 0; fixEl?.remove(); fixEl = null; }
     bubble('me', msg);
     setBusy(true);
     abort = new AbortController();
-    const on = attach(() => setBusy(false));
+    const on = attach((ok) => { setBusy(false); if (ok) checkPreview(); });
+    const body = { message: msg };
+    if (errors && errors.length) body.errors = errors;
     try {
-      await stream(sp(ws.slug, '/builder'), { message: msg }, on, { quiet: true, signal: abort.signal });
+      await stream(sp(ws.slug, '/builder'), body, on, { quiet: true, signal: abort.signal });
     } catch (e) {
       if (e.name === 'AbortError') return;
       on('error', { message: e.missing ? 'The AI builder isn’t switched on yet. Ask your Bunker admin, or edit the files yourself.' : e.message });
