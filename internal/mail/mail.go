@@ -12,6 +12,7 @@ import (
 	"html"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	"net/http"
 	"net/mail"
@@ -233,13 +234,16 @@ func build(from string, m Message) ([]byte, error) {
 	}
 	text += "\n\n-- \nSent by Bunker. You can turn off email notifications in Bunker → Settings.\n"
 	h.Set("Content-Type", "text/plain; charset=utf-8")
-	h.Set("Content-Transfer-Encoding", "8bit")
+	h.Set("Content-Transfer-Encoding", "quoted-printable")
 	pw, _ := mw.CreatePart(h)
-	pw.Write([]byte(strings.ReplaceAll(text, "\n", "\r\n")))
+	qp := quotedprintable.NewWriter(pw)
+	qp.Write([]byte(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\n", "\r\n")))
+	qp.Close()
 	h = textproto.MIMEHeader{}
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Transfer-Encoding", "8bit")
-	hw, _ := mw.CreatePart(h)
+	h.Set("Content-Transfer-Encoding", "quoted-printable")
+	hp, _ := mw.CreatePart(h)
+	hw := quotedprintable.NewWriter(hp)
 	btn := ""
 	if m.ButtonURL != "" && (strings.HasPrefix(m.ButtonURL, "https://") || strings.HasPrefix(m.ButtonURL, "http://")) {
 		btn = fmt.Sprintf(`<p style="margin:24px 0"><a href="%s" style="background:#1f3a2e;color:#f7f4ec;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600;display:inline-block">%s</a></p>`, html.EscapeString(m.ButtonURL), html.EscapeString(m.ButtonText))
@@ -254,6 +258,7 @@ func build(from string, m Message) ([]byte, error) {
 <h1 style="font:600 22px/1.3 Georgia,serif;color:#1f3a2e;margin:0 0 12px">%s</h1>%s%s
 <p style="color:#5a635d;font-size:13px;margin-top:28px">Sent by Bunker. You can turn off email notifications in Bunker → Settings.</p></div></body></html>`,
 		html.EscapeString(m.Subject), paras, btn)
+	hw.Close()
 	mw.Close()
 	return b.Bytes(), nil
 }
