@@ -12,7 +12,7 @@ Bunker is one program and one data folder. Pick a button, wait a couple of minut
 |---|---|---|---|
 | [Deploy to Azure](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkucukkanat%2Fbunker%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json) | A small Ubuntu VM with a managed data disk, a free `*.cloudapp.azure.com` name and HTTPS | Yes | [Azure VM](/bunker/docs/deploy/azure/) |
 | [Deploy to Render](https://render.com/deploy?repo=https://github.com/kucukkanat/bunker) | Web service + 5 GB disk (Starter plan or higher) | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
-| [Deploy on Railway](https://railway.com/deploy/bunker) | Service + volume at `/data` | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
+| [Deploy on Railway](/bunker/docs/deploy/paas/#railway) | Service + volume at `/data` | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
 | `fly launch --from https://github.com/kucukkanat/bunker --copy-config` | Fly.io: one machine + volume | Yes | [Render, Railway, Fly](/bunker/docs/deploy/paas/) |
 | [Deploy to Koyeb](https://app.koyeb.com/deploy?type=docker&image=ghcr.io/kucukkanat/bunker:latest&name=bunker&ports=8080;http;/) | Koyeb | Only after you attach a volume at `/data` | |
 | [DigitalOcean App Platform](https://cloud.digitalocean.com/apps/new?repo=https://github.com/kucukkanat/bunker/tree/master) | App Platform | **No, demo only**: data resets on every deploy. For real use, a Droplet + the [Linux installer](/bunker/docs/deploy/linux/) | |
