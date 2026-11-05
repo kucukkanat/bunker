@@ -49,7 +49,7 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/kucukkanat/bunker/master/install.ps1 | iex
 ```
 
-Just want to try it on your laptop? `bunker dev` runs Bunker with a single local admin and no sign-in.
+Just want to try it on your laptop? `bunker dev` runs Bunker with a single local admin and no sign-in. Opening the setup page from the same machine (localhost) skips the setup code.
 
 ## After you deploy
 
@@ -66,14 +66,10 @@ Just want to try it on your laptop? `bunker dev` runs Bunker with a single local
    - **Render:** *Environment → BUNKER_SETUP_CODE*
    - **Linux installer:** printed at the end, also in `/var/lib/bunker/setup-code.txt`
    - **Everywhere else:** the service logs
-3. **Connect Microsoft Entra ID (2 minutes).** In the [Entra admin center](https://entra.microsoft.com) go to *App registrations → New registration*:
-   - Name: `Bunker`. Supported account types: **this organizational directory only** (single tenant).
-   - Redirect URI: **Web**, `https://<your-bunker-url>/auth/callback` (the setup page shows the exact value).
-   - Copy the **Application (client) ID** and **Directory (tenant) ID** into the setup page.
-   - *Certificates & secrets → New client secret*: paste the **Value** into the setup page.
-   - Click **Connect** and sign in. The first person to sign in becomes the admin.
+3. **Create your account.** Pick **Just me or my team** and enter your email, name and a password. You're the admin. Invite others from *Admin → People*: each invite is a one-time link you send them.
+4. **Optional: company sign-in.** Want coworkers to use their work account? In *Admin → Sign-in* choose Microsoft Entra ID (it can register itself in your tenant), Google Workspace or any OIDC provider. Afterwards you can turn off built-in accounts.
 
-Done. Your coworkers can now sign in with their work account.
+Done. Drop a file on the home page and you have your first app.
 
 ## Settings
 
