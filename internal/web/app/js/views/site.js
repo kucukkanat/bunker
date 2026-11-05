@@ -184,6 +184,7 @@ export default async function workspace(root, ctx) {
     const draft = ws.hasDraft;
     statusEl.className = 'badge dot ' + (draft ? 'draft' : s.version ? 'ok' : '');
     statusEl.textContent = draft ? 'Draft — not published yet' : s.version ? 'Live · version ' + s.version : 'Not published yet';
+    if (s.archivedAt) { statusEl.className = 'badge dot'; statusEl.textContent = 'Archived — open the preview to restore it'; }
     publishBtn.disabled = !draft;
     publishBtn.title = draft ? 'Make your changes live for everyone you’ve shared with' : 'Nothing new to publish';
     discardBtn.classList.toggle('hidden', !draft);

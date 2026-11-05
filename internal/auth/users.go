@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/kucukkanat/bunker/internal/core"
 )
@@ -17,6 +18,7 @@ type userRow struct {
 	Groups    []core.Group `json:"groups"`
 	CreatedAt int64        `json:"createdAt"`
 	LastSeen  int64        `json:"lastSeenAt"`
+	Sites     int64        `json:"sites"` // sites they own (not in the trash)
 }
 
 func registerUsers(a *core.App) {
@@ -42,6 +44,15 @@ func registerUsers(a *core.App) {
 				return nil, err
 			}
 			defer rows.Close()
+			owned := map[int64]int64{}
+			if srows, err := a.DB.QueryContext(r.Context(), `SELECT owner_id, COUNT(*) FROM sites WHERE deleted_at IS NULL GROUP BY owner_id`); err == nil {
+				for srows.Next() {
+					var id, n int64
+					srows.Scan(&id, &n)
+					owned[id] = n
+				}
+				srows.Close()
+			}
 			out := []userRow{}
 			for rows.Next() {
 				var u userRow
@@ -53,6 +64,7 @@ func registerUsers(a *core.App) {
 					u.Groups = []core.Group{}
 				}
 				u.IsAdmin, u.Disabled = adm == 1 || isConfiguredAdmin(&core.User{Email: u.Email, Groups: u.Groups}), dis == 1
+				u.Sites = owned[u.ID]
 				if q != "%%" && !containsFold(u.Name+" "+u.Email, r.URL.Query().Get("q")) {
 					continue
 				}
@@ -65,15 +77,29 @@ func registerUsers(a *core.App) {
 			{Name: "id", In: "path", Type: "integer", Required: true},
 			{Name: "isAdmin", In: "body", Type: "boolean"},
 			{Name: "disabled", In: "body", Type: "boolean"},
+			{Name: "transferTo", In: "body", Desc: "When disabling: email of the person who gets their sites"},
 		},
 		Fn: func(r *http.Request) (any, error) {
 			id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 			var in struct {
 				IsAdmin  *bool `json:"isAdmin"`
-				Disabled *bool `json:"disabled"`
+				Disabled   *bool  `json:"disabled"`
+				TransferTo string `json:"transferTo"`
 			}
 			if err := core.Decode(r, &in); err != nil {
 				return nil, err
+			}
+			var toID int64
+			if t := strings.TrimSpace(in.TransferTo); t != "" {
+				if in.Disabled == nil || !*in.Disabled {
+					return nil, core.BadRequest("transferTo only works together with disabled: true")
+				}
+				if a.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?) AND disabled=0`, t).Scan(&toID) != nil {
+					return nil, core.NotFound(t + " hasn't signed in to Bunker yet, or their account is disabled. Pick someone else.")
+				}
+				if toID == id {
+					return nil, core.BadRequest("pick someone other than the person you're disabling")
+				}
 			}
 			if id == core.MustUser(r).ID && ((in.IsAdmin != nil && !*in.IsAdmin) || (in.Disabled != nil && *in.Disabled)) {
 				return nil, core.BadRequest("you can't remove your own admin access or disable yourself")
@@ -90,7 +116,17 @@ func registerUsers(a *core.App) {
 			}
 			InvalidateUser(id)
 			a.Audit(r.Context(), "admin.user_update", 0, strconv.FormatInt(id, 10), map[string]any{"isAdmin": in.IsAdmin, "disabled": in.Disabled})
-			return map[string]any{"ok": true}, nil
+			out := map[string]any{"ok": true}
+			if in.Disabled != nil && *in.Disabled {
+				// The sites module moves their sites (auth can't import it).
+				ev := &core.UserDisabled{UserID: id, TransferTo: toID}
+				a.Emit(r.Context(), "user.disabled", ev)
+				if toID != 0 {
+					a.Audit(r.Context(), "admin.user_offboard", 0, strconv.FormatInt(id, 10), map[string]any{"transferTo": strings.ToLower(strings.TrimSpace(in.TransferTo)), "moved": ev.Moved})
+					out["moved"] = ev.Moved
+				}
+			}
+			return out, nil
 		}})
 }
 

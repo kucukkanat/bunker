@@ -203,7 +203,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s, err := GetBySlug(r.Context(), r.PathValue("site"))
-			if err != nil || s.ID != t.Site {
+			if err != nil || s.ID != t.Site || s.ArchivedAt != nil {
 				rawError(w, http.StatusNotFound, "Not found")
 				return
 			}
@@ -229,6 +229,10 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || role == core.RoleNone {
 		renderNotFound(w, r, u, r.PathValue("site"))
+		return
+	}
+	if s.ArchivedAt != nil {
+		renderArchived(w, u, s, role)
 		return
 	}
 	draft := r.URL.Query().Get("draft") == "1" && role >= core.RoleEditor
@@ -347,6 +351,10 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string, embed bool) {
 	s, err := GetBySlug(ctx, r.PathValue("site"))
 	if err != nil || s.ID != t.Site {
 		rawError(w, http.StatusNotFound, "Not found")
+		return
+	}
+	if s.ArchivedAt != nil {
+		rawError(w, http.StatusForbidden, "This site was archived. Reload the page.")
 		return
 	}
 	// Re-check the viewer's access (cached) so revoking a share takes effect.

@@ -56,6 +56,9 @@ func registerExtra(a *core.App) {
 			if s.Version == 0 {
 				return nil, core.BadRequest("This site hasn't been published yet. Publish it first, then open it again.")
 			}
+			if s.ArchivedAt != nil {
+				return nil, core.BadRequest("This site was archived. Restore it in Bunker first.")
+			}
 			base := ContentBase(r)
 			t := MakeEmbedTicket(s.ID, s.Version, u.ID)
 			a.Audit(r.Context(), "site.embed", s.ID, s.Slug, nil)
