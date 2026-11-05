@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/mail"
 	"github.com/kucukkanat/bunker/internal/sites"
 )
 
@@ -69,6 +70,13 @@ func Send(ctx context.Context, email, kind, title, body, link string, siteID int
 	id, _ := res.LastInsertId()
 	b, _ := json.Marshal(map[string]any{"type": "notification", "id": id, "kind": kind, "title": title, "body": body, "link": link})
 	app.Bus.Publish("user:"+email, b)
+	if mail.Enabled() && mail.WantsEmail(ctx, email) {
+		full := link
+		if strings.HasPrefix(link, "/") {
+			full = app.Cfg.URL + link
+		}
+		mail.Send(mail.Message{To: email, Subject: title, Text: strings.TrimSpace(body + "\n\nOpen it in Bunker."), ButtonText: "Open in Bunker", ButtonURL: full})
+	}
 }
 
 func initNotify(a *core.App) error {

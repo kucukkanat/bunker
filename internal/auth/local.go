@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"github.com/kucukkanat/bunker/internal/core"
+	"github.com/kucukkanat/bunker/internal/mail"
 )
 
 // Built-in accounts: email + password with invite links. They work out of
@@ -291,7 +292,14 @@ func registerLocal(a *core.App) {
 				return nil, err
 			}
 			a.Audit(r.Context(), "auth.invite", 0, in.Email, map[string]any{"admin": in.IsAdmin})
-			return core.Created{V: map[string]any{"link": link, "email": strings.ToLower(in.Email), "note": "Send this link to them. It works once."}}, nil
+			by := core.MustUser(r).Name
+			emailed := mail.Send(mail.Message{To: strings.ToLower(strings.TrimSpace(in.Email)), Subject: by + " invited you to Bunker",
+				Text: by + " invited you to Bunker, where your team builds and shares small apps.\n\nThe link works once and expires in 7 days.", ButtonText: "Join Bunker", ButtonURL: link})
+			note := "Send this link to them. It works once."
+			if emailed {
+				note = "We emailed them the link. You can also send it yourself; it works once."
+			}
+			return core.Created{V: map[string]any{"link": link, "email": strings.ToLower(in.Email), "emailed": emailed, "note": note}}, nil
 		}})
 	a.Handle(core.Op{Name: "invites.list", Method: "GET", Path: "/api/v1/admin/invites", Summary: "Pending invites", Access: core.AccessAdmin,
 		Fn: func(r *http.Request) (any, error) {
@@ -328,7 +336,9 @@ func registerLocal(a *core.App) {
 				return nil, err
 			}
 			a.Audit(r.Context(), "auth.reset_link", 0, email, nil)
-			return map[string]any{"link": link}, nil
+			emailed := mail.Send(mail.Message{To: email, Subject: "Choose a new Bunker password",
+				Text: "Your Bunker admin made a link for you to choose a new password.\n\nIt works once and expires in 2 days. If you didn't ask for this, you can ignore this email.", ButtonText: "Choose a new password", ButtonURL: link})
+			return map[string]any{"link": link, "emailed": emailed}, nil
 		}})
 	a.Handle(core.Op{Name: "auth.local.update", Method: "PUT", Path: "/api/v1/admin/auth/local", Summary: "Turn built-in accounts (email + password) on or off", Access: core.AccessAdmin,
 		Params: []core.Param{{Name: "enabled", In: "body", Type: "boolean", Required: true}},
