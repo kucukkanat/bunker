@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,9 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 	a := &core.App{Cfg: cfg, DB: db, Blobs: blobs, Bus: core.NewBus(), Log: log, Mux: http.NewServeMux()}
 	if err := a.Migrate(context.Background()); err != nil {
 		return nil, err
+	}
+	if cfg.URL == "" {
+		cfg.URL = a.Setting("server.url")
 	}
 	for _, m := range core.Modules() {
 		if m.Init == nil {
@@ -87,6 +91,9 @@ func Handler(a *core.App) http.Handler {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		ip := clientIP(r, a.Cfg.TrustProxy)
+		if a.Cfg.URL == "" {
+			learnURL(a, r)
+		}
 		ctx := core.WithIP(r.Context(), ip)
 		r = r.WithContext(ctx)
 
@@ -111,7 +118,7 @@ func Handler(a *core.App) http.Handler {
 			r = r.WithContext(core.WithUser(r.Context(), u))
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/oauth/") || strings.HasPrefix(r.URL.Path, "/mcp") {
-			if rateLimited(w, r, u, ip) {
+			if !(a.Cfg.Dev && u != nil) && rateLimited(w, r, u, ip) {
 				return
 			}
 		}
@@ -219,3 +226,36 @@ var serveAutoTLS = func(a *core.App, srv *http.Server) error {
 
 // SetAutoTLS lets the TLS module install its implementation.
 func SetAutoTLS(f func(a *core.App, srv *http.Server) error) { serveAutoTLS = f }
+
+var learnMu sync.Mutex
+
+// learnURL sets the public URL from the first real request when
+// BUNKER_URL wasn't given (e.g. a bare `docker run`). It's persisted and
+// can be changed later in Admin → Settings or with BUNKER_URL.
+func learnURL(a *core.App, r *http.Request) {
+	host := r.Host
+	if host == "" || strings.ContainsAny(host, "/\\ @") || r.URL.Path == "/healthz" {
+		return
+	}
+	// Health checkers and load balancers often use internal IPs; only learn
+	// real hostnames (until then, links are relative and still work).
+	h := host
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		h = hh
+	}
+	if net.ParseIP(strings.Trim(h, "[]")) != nil {
+		return
+	}
+	scheme := "http"
+	if r.TLS != nil || (a.Cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
+		scheme = "https"
+	}
+	learnMu.Lock()
+	defer learnMu.Unlock()
+	if a.Cfg.URL != "" {
+		return
+	}
+	a.Cfg.URL = scheme + "://" + host
+	a.SetSetting(context.Background(), "server.url", a.Cfg.URL)
+	a.Log.Info("learned public URL from first request; set BUNKER_URL to override", "url", a.Cfg.URL)
+}
