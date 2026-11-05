@@ -123,11 +123,15 @@ func cachePut(k string, u *core.User) {
 // InvalidateUser drops cached sessions (after role/group changes or sign-out).
 func InvalidateUser(id int64) {
 	cacheMu.Lock()
-	defer cacheMu.Unlock()
 	for k, c := range cache {
 		if c.u.ID == id {
 			delete(cache, k)
 		}
+	}
+	cacheMu.Unlock()
+	if app != nil {
+		// Other modules' user caches (e.g. content-ticket viewers).
+		app.Emit(context.Background(), "user.changed", id)
 	}
 }
 

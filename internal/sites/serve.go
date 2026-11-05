@@ -3,6 +3,8 @@ package sites
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -330,16 +332,120 @@ func simplePage(w io.Writer, title, msg, href, cta string) {
 		htmlEscape(title), htmlEscape(title), htmlEscape(msg), htmlEscape(href), htmlEscape(cta))
 }
 
-// rawCache caches transformed HTML/CSS (SDK injection + root path rewrite).
+// rawCache caches transformed HTML/CSS (SDK injection + root path rewrite)
+// per content prefix, with its compressed variants (made on first use).
+// The prefix holds the viewer's ticket, so entries are per viewer, site
+// and ticket window.
 type rawEntry struct {
 	b, br, gz []byte
 	exp       time.Time
 }
 
+func (e rawEntry) size() int { return len(e.b) + len(e.br) + len(e.gz) + 64 }
+
+// boundedCache is a two-generation cache bounded by entries and bytes per
+// generation: when the current generation fills up it becomes the old one
+// (the previous old one is dropped), and hits in the old generation move
+// back to the current one. Recently used entries survive a rollover,
+// unlike a cache that is simply cleared when full.
+type boundedCache struct {
+	mu       sync.Mutex
+	cur, old map[string]rawEntry
+	bytes    int // in cur
+	maxN     int
+	maxBytes int
+}
+
+func (c *boundedCache) get(k string) (rawEntry, bool) {
+	c.mu.Lock()
+	e, ok := c.cur[k]
+	if !ok {
+		if e, ok = c.old[k]; ok {
+			delete(c.old, k)
+			c.putLocked(k, e)
+		}
+	}
+	c.mu.Unlock()
+	if ok && time.Now().After(e.exp) {
+		return e, false
+	}
+	return e, ok
+}
+
+func (c *boundedCache) put(k string, e rawEntry) {
+	if e.size()+len(k) > c.maxBytes/4 {
+		return // one huge page shouldn't flush everything else
+	}
+	c.mu.Lock()
+	c.putLocked(k, e)
+	c.mu.Unlock()
+}
+
+func (c *boundedCache) putLocked(k string, e rawEntry) {
+	n := e.size() + len(k)
+	if old, ok := c.cur[k]; ok {
+		c.bytes -= old.size() + len(k)
+		delete(c.cur, k)
+	}
+	if c.cur == nil || len(c.cur) >= c.maxN || c.bytes+n > c.maxBytes {
+		c.old, c.cur, c.bytes = c.cur, map[string]rawEntry{}, 0
+	}
+	c.cur[k] = e
+	c.bytes += n
+}
+
+func (c *boundedCache) reset() {
+	c.mu.Lock()
+	c.cur, c.old, c.bytes = map[string]rawEntry{}, nil, 0
+	c.mu.Unlock()
+}
+
 var (
-	rawMu    sync.Mutex
-	rawCache = map[string]rawEntry{}
+	// rawCache holds final bodies per (blob, prefix); the byte budget is
+	// per generation (up to twice that in memory).
+	rawCache = &boundedCache{maxN: 5000, maxBytes: core.EnvInt("RAW_CACHE_MB", 16) << 20}
+	// rawTemplates holds transformed bodies per blob with a placeholder
+	// where the prefix goes, so a new viewer or ticket window costs a
+	// substitution (plus compression), not a blob read and the rewrite
+	// regexps.
+	rawTemplates = &boundedCache{maxN: 2000, maxBytes: 8 << 20}
 )
+
+// prefixMark stands in for the content prefix in cached templates.
+var prefixMark = []byte("\x00bunker-prefix\x00")
+
+// transformRaw returns the served HTML/CSS for blob hash under prefix.
+func transformRaw(hash, name, prefix string, isHTML bool) ([]byte, error) {
+	tk := hash + "|c"
+	if isHTML {
+		tk = hash + "|h"
+	}
+	if t, ok := rawTemplates.get(tk); ok {
+		if t.br != nil { // the blob contains the placeholder: transform directly
+			return transformDirect(t.b, name, prefix, isHTML), nil
+		}
+		return bytes.ReplaceAll(t.b, prefixMark, []byte(prefix)), nil
+	}
+	b, err := app.Blobs.Read(hash)
+	if err != nil {
+		return nil, err
+	}
+	exp := time.Now().Add(10 * time.Minute)
+	if bytes.Contains(b, prefixMark) {
+		rawTemplates.put(tk, rawEntry{b: b, br: []byte{}, exp: exp})
+		return transformDirect(b, name, prefix, isHTML), nil
+	}
+	t := transformDirect(b, name, string(prefixMark), isHTML)
+	rawTemplates.put(tk, rawEntry{b: t, exp: exp})
+	return bytes.ReplaceAll(t, prefixMark, []byte(prefix)), nil
+}
+
+func transformDirect(b []byte, name, prefix string, isHTML bool) []byte {
+	if isHTML {
+		return InjectSDK(rewriteRoot(b, prefix), name)
+	}
+	return rewriteCSS(b, prefix)
+}
 
 func serveRaw(w http.ResponseWriter, r *http.Request, rest string, embed bool) {
 	i := strings.Index(rest, "/")
@@ -434,40 +540,52 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string, embed bool) {
 			prefix = "/s/" + s.Slug + "/~e/" + tstr + "/"
 		}
 		key := f.Hash + "|" + prefix
-		rawMu.Lock()
-		e, ok := rawCache[key]
-		rawMu.Unlock()
-		if !ok || time.Now().After(e.exp) {
-			b, err := app.Blobs.Read(f.Hash)
+		ae := r.Header.Get("Accept-Encoding")
+		wantBr := strings.Contains(ae, "br")
+		wantGz := !wantBr && strings.Contains(ae, "gzip")
+		// Per prefix only the compressed variant a client asked for is kept
+		// (pages under 1 KB: the page itself). Anything else is rebuilt
+		// from the template cache, which is cheap.
+		e, ok := rawCache.get(key)
+		var body []byte
+		enc := ""
+		switch {
+		case ok && wantBr && e.br != nil:
+			body, enc = e.br, "br"
+		case ok && wantGz && e.gz != nil:
+			body, enc = e.gz, "gzip"
+		case ok && e.b != nil:
+			body = e.b
+		default:
+			b, err := transformRaw(f.Hash, name, prefix, isHTML)
 			if err != nil {
 				rawError(w, 500, "content missing")
 				return
 			}
-			if isHTML {
-				b = InjectSDK(rewriteRoot(b, prefix), name)
-			} else {
-				b = rewriteCSS(b, prefix)
+			if !ok {
+				e = rawEntry{exp: time.Now().Add(10 * time.Minute)}
 			}
-			e = rawEntry{b: b, exp: time.Now().Add(10 * time.Minute)}
-			if len(b) > 1024 {
-				e.br, e.gz = core.CompressBrotli(b), core.CompressGzip(b)
+			body, ok = b, false
+			switch {
+			case len(b) <= 1024:
+				e.b = b
+			case wantBr:
+				if e.br = core.CompressBrotli(b); e.br != nil {
+					body, enc = e.br, "br"
+				}
+			case wantGz:
+				e.gz = core.CompressGzip(b)
+				body, enc = e.gz, "gzip"
+			default:
+				ok = true // identity encoding of a large page: nothing to cache
 			}
-			rawMu.Lock()
-			if len(rawCache) > 2000 {
-				rawCache = map[string]rawEntry{}
+			if !ok {
+				rawCache.put(key, e)
 			}
-			rawCache[key] = e
-			rawMu.Unlock()
 		}
-		body := e.b
-		ae := r.Header.Get("Accept-Encoding")
 		h.Add("Vary", "Accept-Encoding")
-		if e.br != nil && strings.Contains(ae, "br") {
-			body = e.br
-			h.Set("Content-Encoding", "br")
-		} else if e.gz != nil && strings.Contains(ae, "gzip") {
-			body = e.gz
-			h.Set("Content-Encoding", "gzip")
+		if enc != "" {
+			h.Set("Content-Encoding", enc)
 		}
 		h.Set("Content-Length", strconv.Itoa(len(body)))
 		w.WriteHeader(status)
@@ -529,14 +647,69 @@ func loadTicketUser(ctx context.Context, id int64) *core.User {
 	if id == 0 {
 		return Guest // RoleOf grants guests access only to public sites
 	}
+	if u, ok := ticketUsers.get(id); ok {
+		return u
+	}
 	var email, name, gj string
 	var admin, disabled int
-	if app.DB.QueryRowContext(ctx, `SELECT email,name,is_admin,groups_json,disabled FROM users WHERE id=?`, id).Scan(&email, &name, &admin, &gj, &disabled) != nil || disabled == 1 {
+	err := app.DB.QueryRowContext(ctx, `SELECT email,name,is_admin,groups_json,disabled FROM users WHERE id=?`, id).Scan(&email, &name, &admin, &gj, &disabled)
+	if err != nil || disabled == 1 {
+		if err == nil || errors.Is(err, sql.ErrNoRows) {
+			ticketUsers.put(id, nil)
+		}
 		return nil
 	}
 	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
 	_ = jsonUnmarshal(gj, &u.Groups)
+	ticketUsers.put(id, u)
 	return u
+}
+
+// ticketUsers caches the viewers behind content tickets: every asset a
+// sandboxed page loads arrives without cookies, so without it each one
+// costs a users lookup. Entries live a few seconds and are dropped when
+// the auth module reports a change to the user ("user.changed").
+var ticketUsers = &userCache{m: map[int64]userEntry{}}
+
+type userEntry struct {
+	u   *core.User
+	exp time.Time
+}
+
+type userCache struct {
+	mu sync.Mutex
+	m  map[int64]userEntry
+}
+
+func (c *userCache) get(id int64) (*core.User, bool) {
+	c.mu.Lock()
+	e, ok := c.m[id]
+	c.mu.Unlock()
+	if !ok || time.Now().After(e.exp) {
+		return nil, false
+	}
+	return e.u, true
+}
+
+func (c *userCache) put(id int64, u *core.User) {
+	c.mu.Lock()
+	if len(c.m) >= 20000 {
+		c.m = map[int64]userEntry{}
+	}
+	c.m[id] = userEntry{u: u, exp: time.Now().Add(10 * time.Second)}
+	c.mu.Unlock()
+}
+
+func (c *userCache) drop(id int64) {
+	c.mu.Lock()
+	delete(c.m, id)
+	c.mu.Unlock()
+}
+
+func (c *userCache) reset() {
+	c.mu.Lock()
+	c.m = map[int64]userEntry{}
+	c.mu.Unlock()
 }
 
 func resolveFile(m Manifest, p string, st Settings) (string, FileRef, bool) {

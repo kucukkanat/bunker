@@ -136,9 +136,14 @@ func initSites(a *core.App) error {
 	mcMu.Lock()
 	mCache = map[string]Manifest{}
 	mcMu.Unlock()
-	rawMu.Lock()
-	rawCache = map[string]rawEntry{}
-	rawMu.Unlock()
+	rawCache.reset()
+	rawTemplates.reset()
+	ticketUsers.reset()
+	a.On("user.changed", func(_ context.Context, p any) {
+		if id, ok := p.(int64); ok {
+			ticketUsers.drop(id)
+		}
+	})
 	a.Sites = resolver{}
 	a.On("sites.changed", func(context.Context, any) { invalidateAll() })
 	registerOps(a)
