@@ -78,7 +78,7 @@ func TestBuiltInAccounts(t *testing.T) {
 		t.Errorf("friend: %v", fw)
 	}
 	// Invite links work once.
-	if res := postForm(t, k, "/auth/invite", url.Values{"token": {tok}, "password": {"another long password"}}, nil); res.StatusCode != 403 {
+	if res := postForm(t, k, "/auth/invite", url.Values{"token": {tok}, "password": {"another long password"}}, nil); res.StatusCode != http.StatusGone {
 		t.Errorf("invite reused: %d", res.StatusCode)
 	}
 	// Can't turn off built-in accounts without SSO.

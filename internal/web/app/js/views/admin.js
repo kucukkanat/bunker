@@ -63,6 +63,7 @@ async function people(el, ctx) {
   clear(el, h('div.row.wrap', { style: { marginBottom: '16px' } }, q, h('span.spacer'), transferBtn, inviteBtn), invitesEl, listEl);
   let users = [];
   const linkDialog = (title, text, link) => {
+    link = new URL(link, location.origin).href; // a full address people can open
     const m = modal({ title, body: [h('p.muted', text), h('div.copy-field', { style: { marginTop: '14px' } }, h('span', { 'data-testid': 'invite-link' }, link), copyBtn(link))], footer: [h('button.btn.primary', { onclick: () => m.close() }, 'Done')] });
   };
   function invite() {

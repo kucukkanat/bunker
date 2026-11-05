@@ -109,7 +109,7 @@ function localForm({ codeNeeded, onSaved }) {
     await busy(save, async () => {
       try {
         await post('/api/v1/setup', { provider: 'local', email: email.value.trim(), name: name.value.trim(), password: pw.value, code: code.value ? code.value() : undefined }, { quiet: true });
-        onSaved(email.value.trim());
+        onSaved(email.value.trim(), pw.value);
       } catch (ex) { showErr(err, ex); }
     });
   } },
@@ -152,11 +152,25 @@ export default async function setup(root) {
   const urlWarn = () => !st.urlKnown && h('div.notice.warn', { style: { marginBottom: '20px' } }, icon('warn', 18), h('div',
     h('b', 'Bunker doesn’t know its web address yet. '), 'Company sign-in needs the exact address people will use. Set ', h('code', 'BUNKER_URL'), ' (for example ', h('code', 'BUNKER_URL=https://bunker.yourcompany.com'), ') and restart Bunker. Until then we’ll use ', h('code', location.origin), '.'));
   const back = (to) => h('div.row', { style: { marginTop: '16px' } }, h('button.btn.ghost', { type: 'button', onclick: () => { step = to; if (to === 1) mode = ''; draw(); } }, icon('left', 16), 'Back'));
-  const done = (title, text) => {
+  const done = (title, text, signedIn) => {
     celebrate();
     clear(card, stepsBar(), h('div.big-check', icon('check', 36)), h('h1', { style: center }, title), h('p.lead', { style: center }, text),
-      h('p', { style: { ...center, marginTop: '24px' } }, h('a.btn.primary.lg', { href: '/auth/login?next=/welcome', 'data-native': '' }, 'Sign in', icon('arrow', 18))));
+      h('p', { style: { ...center, marginTop: '24px' } }, signedIn
+        ? h('a.btn.primary.lg', { href: '/welcome', 'data-native': '' }, 'Open Bunker', icon('arrow', 18))
+        : h('a.btn.primary.lg', { href: '/auth/login?next=/welcome&login_hint=' + encodeURIComponent(email), 'data-native': '' }, 'Sign in', icon('arrow', 18))));
+    card.querySelector('.btn.primary')?.focus();
   };
+  // Sign the new admin in right away, so they don't type the password twice.
+  async function signIn(e, pw) {
+    let ok = false;
+    try {
+      const r = await fetch('/auth/password', { method: 'POST', credentials: 'same-origin', redirect: 'manual', body: new URLSearchParams({ email: e, password: pw, next: '/welcome' }) });
+      ok = r.type === 'opaqueredirect' || r.redirected || r.status === 303;
+    } catch {}
+    signedIn = ok;
+    draw();
+  }
+  let signedIn = false;
   const choice = (onclick, pressed, logo, color, title, desc, badge) => h('button.provider', { type: 'button', 'aria-pressed': String(pressed), onclick },
     h('span.logo', { style: { background: color, color: '#fff' } }, logo), h('div', { style: { flex: '1' } }, h('div.row.wrap', { style: { gap: '4px 8px' } }, h('b', title), badge && h('span.badge.ok', badge)), h('span', desc)), icon('right', 18));
 
@@ -170,10 +184,10 @@ export default async function setup(root) {
     } else if (mode === 'local' && step === 2) {
       clear(card, stepsBar(),
         h('h1', 'Create your admin account'), h('p.lead', 'You’ll be Bunker’s first admin. Later you can invite others from Admin → People.'),
-        h('div', { style: { marginTop: '24px' } }, localForm({ codeNeeded, onSaved: (e) => { email = e; step = 3; draw(); } })),
+        h('div', { style: { marginTop: '24px' } }, localForm({ codeNeeded, onSaved: (e, pw) => { email = e; step = 3; signIn(e, pw); } })),
         back(1));
     } else if (mode === 'local') {
-      done('You’re ready', 'Your account is set up. Sign in with ' + email + ' and the password you just chose.');
+      done('You’re all set', signedIn ? 'Your account is ready and you’re signed in. Next: make your first site, then invite your team from Admin → People.' : 'Your account is set up. Sign in with ' + email + ' and the password you just chose.', signedIn);
     } else if (step === 2) {
       const auto = h('div');
       clear(card, stepsBar(),

@@ -416,22 +416,57 @@ func handleInvitePage(w http.ResponseWriter, r *http.Request) {
 	tok := r.URL.Query().Get("token")
 	iv, ok := lookupInvite(r.Context(), tok)
 	if !ok {
-		authError(w, r, "This link has expired", "Ask your Bunker admin for a new one.")
+		inviteGone(w, r, tok)
 		return
 	}
-	title, cta := "Join Bunker", "Create account"
+	renderInvite(w, http.StatusOK, tok, iv, iv.name, "")
+}
+
+// renderInvite shows the "create your account" (or "choose a new password")
+// form for an invite link, with an optional error above it.
+func renderInvite(w http.ResponseWriter, status int, tok string, iv *inviteRow, name, errMsg string) {
+	title, lead, cta := "Welcome to Bunker", "Choose a password to finish setting up your account for <b>%s</b>.", "Create my account"
 	if iv.kind == "reset" {
-		title, cta = "Choose a new password", "Save password"
+		title, lead, cta = "Choose a new password", "This sets a new password for <b>%s</b>. You'll be signed in right after.", "Save password"
 	}
-	pageHead(w, title)
+	pageHeadStatus(w, status, title)
 	fmt.Fprintf(w, `<form class="card" method="post" action="/auth/invite"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>%s</h1>
-<p class="muted">%s</p><input type="hidden" name="token" value="%s">`, htmlEsc(title), htmlEsc(iv.email), htmlEsc(tok))
-	if iv.kind != "reset" {
-		fmt.Fprintf(w, `<label>Your name<input name="name" value="%s" autocomplete="name" required></label>`, htmlEsc(iv.name))
+<p class="muted">`+lead+`</p>`, htmlEsc(title), htmlEsc(iv.email))
+	if errMsg != "" {
+		fmt.Fprintf(w, `<p class="err" role="alert">%s</p>`, htmlEsc(errMsg))
 	}
-	fmt.Fprintf(w, `<label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" required></label>
-<p class="hint">At least 10 characters. A short sentence works well.</p><button type="submit">%s</button></form>`, htmlEsc(cta))
+	fmt.Fprintf(w, `<input type="hidden" name="token" value="%s">`, htmlEsc(tok))
+	if iv.kind != "reset" {
+		fmt.Fprintf(w, `<label>Your name<input name="name" value="%s" autocomplete="name" required></label>`, htmlEsc(name))
+	}
+	af := ""
+	if iv.kind == "reset" || name != "" {
+		af = " autofocus"
+	}
+	fmt.Fprintf(w, `<label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" aria-describedby="pw-hint" required%s></label>
+<p class="hint" id="pw-hint">At least 10 characters. A short sentence works well, like “blue kettle on the stairs”.</p><button type="submit">%s</button></form>`, af, htmlEsc(cta))
 	pageFoot(w)
+}
+
+// inviteGone explains why an invite or reset link no longer works.
+func inviteGone(w http.ResponseWriter, r *http.Request, tok string) {
+	var email, kind string
+	var exp int64
+	var used sql.NullInt64
+	if tok == "" || app.DB.QueryRowContext(r.Context(), `SELECT email,kind,expires_at,used_at FROM invites WHERE token_hash=?`, core.HashToken(tok)).Scan(&email, &kind, &exp, &used) != nil {
+		authPage(w, http.StatusNotFound, "This link doesn't work", "Check that you copied the whole link. If it still doesn't work, ask your Bunker admin for a new one.", "/auth/login", "Go to sign in")
+		return
+	}
+	login := "/auth/login?login_hint=" + urlQuery(email)
+	if used.Valid {
+		if kind == "reset" {
+			authPage(w, http.StatusGone, "This link was already used", "Your new password is set. Sign in with it, or ask your Bunker admin for another reset link.", login, "Sign in")
+		} else {
+			authPage(w, http.StatusGone, "You already joined", "Your account for "+email+" is ready. Sign in with the password you chose.", login, "Sign in")
+		}
+		return
+	}
+	authPage(w, http.StatusGone, "This link has expired", "Links like this only work for a few days, to keep your account safe. Ask your Bunker admin to send you a new one.", "/auth/login", "Go to sign in")
 }
 
 func handleInviteAccept(w http.ResponseWriter, r *http.Request) {
@@ -442,12 +477,16 @@ func handleInviteAccept(w http.ResponseWriter, r *http.Request) {
 	tok := r.FormValue("token")
 	iv, ok := lookupInvite(r.Context(), tok)
 	if !ok {
-		authError(w, r, "This link has expired", "Ask your Bunker admin for a new one.")
+		inviteGone(w, r, tok)
 		return
 	}
 	pw := r.FormValue("password")
 	if err := validPassword(pw); err != nil {
-		authError(w, r, "Try a longer password", err.(*core.HTTPError).Message)
+		msg := "Choose a longer password."
+		if he, ok := err.(*core.HTTPError); ok {
+			msg = sentence(he.Message)
+		}
+		renderInvite(w, http.StatusUnprocessableEntity, tok, iv, r.FormValue("name"), msg)
 		return
 	}
 	ctx := r.Context()
@@ -473,7 +512,7 @@ func handleInviteAccept(w http.ResponseWriter, r *http.Request) {
 		if he, ok := err.(*core.HTTPError); ok {
 			msg = he.Message
 		}
-		authError(w, r, "Couldn't finish", msg)
+		authError(w, r, "Couldn't finish", sentence(msg))
 		return
 	}
 	app.DB.ExecContext(ctx, `UPDATE invites SET used_at=? WHERE token_hash=?`, core.Now(), core.HashToken(tok))
@@ -486,7 +525,7 @@ func handleInviteAccept(w http.ResponseWriter, r *http.Request) {
 // sign-in is configured, a "Continue with ..." button.
 func renderLogin(w http.ResponseWriter, r *http.Request, next, email, errMsg string) {
 	pageHead(w, "Sign in to Bunker")
-	fmt.Fprint(w, `<div class="card"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>Sign in</h1>`)
+	fmt.Fprint(w, `<div class="card"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>Sign in to Bunker</h1>`)
 	if errMsg != "" {
 		fmt.Fprintf(w, `<p class="err" role="alert">%s</p>`, htmlEsc(errMsg))
 	}
@@ -502,33 +541,71 @@ func renderLogin(w http.ResponseWriter, r *http.Request, next, email, errMsg str
 	}
 	if localReady() {
 		fmt.Fprintf(w, `<form method="post" action="/auth/password"><input type="hidden" name="next" value="%s">
-<label>Email<input name="email" type="email" value="%s" autocomplete="username" required autofocus></label>
-<label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-<button type="submit">Sign in</button></form><p class="hint">Forgot your password? Ask your Bunker admin for a reset link.</p>`, htmlEsc(next), htmlEsc(email))
+<label>Email<input name="email" type="email" value="%s" autocomplete="username" required%s></label>
+<label>Password<input name="password" type="password" autocomplete="current-password" required%s></label>
+<button type="submit">Sign in</button></form><p class="hint">Forgot your password? Ask your Bunker admin for a reset link.</p>`, htmlEsc(next), htmlEsc(email), af(email == ""), af(email != ""))
 	}
 	fmt.Fprint(w, `</div>`)
 	pageFoot(w)
 }
 
-func pageHead(w http.ResponseWriter, title string) {
+func pageHead(w http.ResponseWriter, title string) { pageHeadStatus(w, http.StatusOK, title) }
+
+func pageHeadStatus(w http.ResponseWriter, status int, title string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 	w.Header().Set("X-Frame-Options", "DENY")
-	fmt.Fprintf(w, `<!doctype html><html lang="en"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>%s</title><link rel=icon href="/_/icon.svg">
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `<!doctype html><html lang="en"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>%s</title><link rel=icon href="/_/icon.svg">
 <style>
-:root{--forest:#1f3a2e;--paper:#f7f4ec;--card:#fffdf8;--ink:#1c211e;--slate:#5a635d;--line:#ddd6c4;--clay:#c2683f;--btn:#1f3a2e;--btnText:#f7f4ec}
-@media(prefers-color-scheme:dark){:root{--paper:#121714;--card:#1a211d;--ink:#e8ebe6;--slate:#a4ada7;--line:#2e3832;--forest:#e8ebe6;--btn:#8fbf9f;--btnText:#121714}}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+@font-face{font-family:Fraunces;src:url(/app/fonts/fraunces.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:Inter;src:url(/app/fonts/inter.woff2) format("woff2");font-weight:100 900;font-display:swap}
+:root{--forest:#1f3a2e;--paper:#f7f4ec;--card:#fffdf8;--ink:#1c211e;--slate:#5a635d;--line:#ddd6c4;--err:#9a4423;--errBg:rgba(194,104,63,.12);--btn:#1f3a2e;--btnText:#f7f4ec;--link:#2f5543}
+@media(prefers-color-scheme:dark){:root{--paper:#121714;--card:#1a211d;--ink:#e8ebe6;--slate:#a4ada7;--line:#2e3832;--forest:#e8ebe6;--err:#f0a27c;--errBg:rgba(224,138,95,.14);--btn:#8fbf9f;--btnText:#121714;--link:#8fbf9f}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--paper);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 .card{width:100%%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px;box-shadow:0 20px 50px -30px rgba(31,58,46,.4)}
-h1{font:600 28px/1.2 Georgia,serif;color:var(--forest);margin:14px 0 18px}label{display:block;font-weight:600;font-size:14px;margin:0 0 14px}
+@media(max-width:440px){.card{padding:24px 20px}}
+h1{font:560 28px/1.2 Fraunces,Georgia,serif;letter-spacing:-.01em;color:var(--forest);margin:14px 0 12px}label{display:block;font-weight:600;font-size:14px;margin:0 0 14px}
+p{margin:0 0 16px}b{font-weight:600}
 input{display:block;width:100%%;margin-top:6px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit;font:inherit}
 input:focus{outline:2px solid var(--btn);outline-offset:1px}
-button,.sso{display:block;width:100%%;text-align:center;padding:12px;border:0;border-radius:10px;background:var(--btn);color:var(--btnText);font:600 16px system-ui,sans-serif;cursor:pointer;text-decoration:none}
+button,.sso,.cta{display:block;width:100%%;text-align:center;padding:12px;border:0;border-radius:10px;background:var(--btn);color:var(--btnText);font:600 16px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:none}
+button:focus-visible,.sso:focus-visible,.cta:focus-visible{outline:2px solid var(--btn);outline-offset:2px}
 .sso{background:transparent;color:var(--ink);border:1px solid var(--line)}.sso:hover{border-color:var(--slate)}
 .or{display:flex;align-items:center;gap:12px;color:var(--slate);font-size:13px;margin:18px 0}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
-.hint,.muted{color:var(--slate);font-size:14px}.err{background:rgba(194,104,63,.12);color:var(--clay);padding:10px 12px;border-radius:10px;font-weight:500}
+.hint,.muted{color:var(--slate);font-size:14px}label+.hint{margin:-6px 0 16px}form+.hint{margin:16px 0 0}.err{background:var(--errBg);color:var(--err);padding:10px 12px;border-radius:10px;font-weight:500}
+a{color:var(--link)}
 </style><body>`, htmlEsc(title))
+}
+
+// authPage is a small branded message page with one button.
+func authPage(w http.ResponseWriter, status int, title, detail, href, label string) {
+	pageHeadStatus(w, status, title)
+	fmt.Fprintf(w, `<main class="card"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>%s</h1><p>%s</p><a class="cta" href="%s">%s</a></main>`,
+		htmlEsc(title), htmlEsc(detail), htmlEsc(href), htmlEsc(label))
+	pageFoot(w)
+}
+
+// af returns an autofocus attribute when on is true.
+func af(on bool) string {
+	if on {
+		return " autofocus"
+	}
+	return ""
+}
+
+// sentence capitalizes a server error message and ends it with a period.
+func sentence(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	s = strings.ToUpper(s[:1]) + s[1:]
+	if !strings.HasSuffix(s, ".") && !strings.HasSuffix(s, "!") && !strings.HasSuffix(s, "?") {
+		s += "."
+	}
+	return s
 }
 
 func pageFoot(w http.ResponseWriter) { fmt.Fprint(w, `</body></html>`) }

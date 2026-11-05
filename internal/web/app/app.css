@@ -204,6 +204,7 @@ main#main { min-width: 0; }
 .describe .chips button { background: rgb(255 255 255 / .08); border-color: rgb(255 255 255 / .12); color: #dfe8e1; }
 .describe .chips button:hover { background: rgb(255 255 255 / .16); color: #fff; }
 .describe .note { font-size: .85rem; color: #c4d4c8; display: flex; gap: 8px; align-items: flex-start; }
+.describe .note a { color: #f7f4ec; font-weight: 600; }
 .describe .row { position: relative; z-index: 1; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips button, .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .84rem; font-weight: 520; cursor: pointer; transition: background .15s, color .15s, transform .12s; }
@@ -519,9 +520,9 @@ ol.howto li::before { content: counter(s); position: absolute; left: 0; top: -1p
 .list .item .n b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list .item .n span { display: block; color: var(--muted); font-size: .84rem; }
 .welcome-steps { display: grid; gap: 12px; margin: 20px 0 8px; }
-.welcome-steps div { display: flex; gap: 14px; padding: 14px; border-radius: var(--r); background: var(--surface-2); }
+.welcome-steps > div { display: flex; gap: 14px; padding: 14px; border-radius: var(--r); background: var(--surface-2); }
 .welcome-steps .n { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--accent); font: 700 1rem var(--serif); flex: none; border: 1px solid var(--line); }
-.welcome-steps b { display: block; }
+.welcome-steps b { display: block; margin: 4px 0 2px; }
 .welcome-steps span { color: var(--muted); font-size: .9rem; }
 
 /* ---------- responsive ---------- */

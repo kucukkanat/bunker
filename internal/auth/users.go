@@ -37,7 +37,7 @@ func registerUsers(a *core.App) {
 		Params: []core.Param{{Name: "q", In: "query", Desc: "Filter by name or email"}},
 		Fn: func(r *http.Request) (any, error) {
 			q := "%" + r.URL.Query().Get("q") + "%"
-			rows, err := a.DB.QueryContext(r.Context(), `SELECT id,email,name,is_admin,disabled,groups_json,created_at,last_seen_at FROM users WHERE subject NOT LIKE 'dev:%' OR ? = 1 ORDER BY last_seen_at DESC LIMIT 500`, boolInt(a.Cfg.Dev))
+			rows, err := a.DB.QueryContext(r.Context(), `SELECT id,email,name,is_admin,disabled,groups_json,created_at,last_seen_at FROM users WHERE (subject NOT LIKE 'dev:%' OR ? = 1) AND subject NOT LIKE 'system:%' ORDER BY last_seen_at DESC LIMIT 500`, boolInt(a.Cfg.Dev))
 			if err != nil {
 				return nil, err
 			}
