@@ -68,6 +68,7 @@ async function shot(page, name) {
   await page.screenshot({ path: join(SHOTS, name + '.png') });
 }
 const current = new Set();
+let expect422 = false;
 function watch(page, label) {
   current.add(page);
   page.on('close', () => current.delete(page));
@@ -76,6 +77,7 @@ function watch(page, label) {
     const t = m.text();
     // Optional APIs that aren't installed answer 404; the UI hides those features.
     if (/Failed to load resource: the server responded with a status of 404/.test(t)) return;
+    if (expect422 && /status of 422/.test(t)) return; // a refused upload, on purpose
     errors.push(`[${label}] ${t}`);
   });
   page.on('pageerror', (e) => errors.push(`[${label}] pageerror: ${e.message}`));
@@ -137,6 +139,32 @@ try {
     await page.getByRole('heading', { name: 'My sites' }).waitFor();
     await page.locator('.site-card').first().waitFor();
     await shot(page, 'home');
+  });
+
+  await check('a refused upload explains why in the drop zone', async () => {
+    await page.goto(BASE + '/');
+    expect422 = true;
+    await page.getByTestId('pick-files').setInputFiles({ name: 'index.html', mimeType: 'text/html', buffer: Buffer.from('<script>const k = "sk-ant-' + 'a'.repeat(40) + '"</script>') });
+    await page.getByTestId('dropzone').getByText('We found a password or key in your files').waitFor();
+    assert.match(await page.getByTestId('dropzone').innerText(), /index\.html \(line 1\) looks like an Anthropic API key/);
+    await shot(page, 'drop-refused');
+    expect422 = false;
+  });
+
+  await check('a Markdown drop is named after its heading; a CSV shows a proper table', async () => {
+    await page.goto(BASE + '/');
+    await page.getByTestId('pick-files').setInputFiles({ name: 'q3-notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Quarterly planning\n\nHello.\n') });
+    await page.waitForURL(/\/sites\/quarterly-planning/);
+    await page.goto(BASE + '/');
+    await page.getByTestId('pick-files').setInputFiles({ name: 'sales.csv', mimeType: 'text/csv', buffer: Buffer.from('Region,Amount\nNorth,10\nSouth,20\n') });
+    await page.waitForURL(/\/sites\/sales/);
+    const grid = page.frameLocator('.pv-frame iframe').frameLocator('#bk-frame').locator('table.grid');
+    await grid.locator('tbody tr').first().waitFor();
+    // Header above the rows (kit.css's .grid once laid them side by side).
+    const [head, row] = await Promise.all([grid.locator('thead').boundingBox(), grid.locator('tbody tr').first().boundingBox()]);
+    assert.ok(row.y >= head.y + head.height - 1 && Math.abs(row.x - head.x) < 2, `table layout: head ${JSON.stringify(head)} row ${JSON.stringify(row)}`);
+    await page.goto(BASE + '/');
+    await page.getByRole('heading', { name: 'My sites' }).waitFor();
   });
 
   await check('search filters the home page ("/" focuses it)', async () => {
