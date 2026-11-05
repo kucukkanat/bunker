@@ -46,22 +46,19 @@ func MakeTicket(site, ver, user int64) string {
 
 // ParseTicket validates a ticket string.
 func ParseTicket(s string) (Ticket, bool) {
-	i := strings.LastIndex(s, "-")
-	if i < 0 {
+	// site-ver-user-exp-mac; the MAC is base64url and may itself contain '-'.
+	parts := strings.SplitN(s, "-", 5)
+	if len(parts) != 5 {
 		return Ticket{}, false
 	}
-	body, mac := s[:i], s[i+1:]
+	body, mac := strings.Join(parts[:4], "-"), parts[4]
 	if !core.MACEqual(mac, core.MAC("t:"+body)) {
-		return Ticket{}, false
-	}
-	parts := strings.Split(body, "-")
-	if len(parts) != 4 {
 		return Ticket{}, false
 	}
 	var t Ticket
 	var err error
 	nums := []*int64{&t.Site, &t.Ver, &t.User, &t.Exp}
-	for k, p := range parts {
+	for k, p := range parts[:4] {
 		if *nums[k], err = strconv.ParseInt(p, 10, 64); err != nil {
 			return Ticket{}, false
 		}

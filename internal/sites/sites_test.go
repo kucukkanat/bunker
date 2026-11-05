@@ -211,3 +211,14 @@ func TestSlugify(t *testing.T) {
 		}
 	}
 }
+
+func TestTicketRoundTrip(t *testing.T) {
+	testkit.New(t)
+	for i := int64(0); i < 2000; i++ {
+		tk := sites.MakeTicket(i, i%7, i*3)
+		got, ok := sites.ParseTicket(tk)
+		if !ok || got.Site != i || got.Ver != i%7 || got.User != i*3 {
+			t.Fatalf("ticket %q failed: %+v %v", tk, got, ok)
+		}
+	}
+}
