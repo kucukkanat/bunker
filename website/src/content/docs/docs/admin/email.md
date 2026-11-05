@@ -25,6 +25,10 @@ BUNKER_SMTP_FROM="Bunker <bunker@corp.com>"
 | `smtp://` | 587 (default) | STARTTLS. Bunker refuses to send a password over a connection without STARTTLS unless you add `?insecure=1`. |
 | `smtps://` | 465 (default) | TLS from the start |
 
+A local relay without a password (`smtp://127.0.0.1:25`) is fine: with no password to protect, Bunker sends even if the relay offers no STARTTLS.
+
+Links in emails use your server's address (`BUNKER_URL`, or the one Bunker learned from your first visit). If Bunker doesn't know it yet, for example because you reach it by IP, invite and reset emails use the address you're using in the dashboard.
+
 URL-encode special characters in the username and password (`@` → `%40`). Click **Send me a test email** to check. Mail goes out from a background queue with three retries; failures are logged.
 
 Common servers: Microsoft 365 `smtp.office365.com:587` (needs SMTP AUTH enabled for the mailbox), Google Workspace `smtp.gmail.com:587` (app password), Amazon SES, SendGrid (`smtp://apikey:<key>@smtp.sendgrid.net:587`), Postmark, Mailgun.
