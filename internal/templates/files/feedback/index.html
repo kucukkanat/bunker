@@ -64,7 +64,18 @@ for (var i = 1; i <= 5; i++) (function (n) {
   b.onclick = function () { rating = n; paintStars(); }; $('stars').appendChild(b);
 })(i);
 paintStars();
-function paintStars() { [].forEach.call($('stars').children, function (b, i) { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', i + 1 === rating); }); }
+// Radio-group keyboard pattern: one tab stop, arrow keys move and select.
+function paintStars() { [].forEach.call($('stars').children, function (b, i) { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', i + 1 === rating); b.tabIndex = (rating ? i + 1 === rating : i === 0) ? 0 : -1; }); }
+$('stars').addEventListener('keydown', function (e) {
+  var d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+  var kids = $('stars').children;
+  if (e.key === 'Home') d = -5; else if (e.key === 'End') d = 5;
+  if (!d) return;
+  e.preventDefault();
+  rating = Math.min(5, Math.max(1, (rating || 0) + d));
+  paintStars();
+  kids[rating - 1].focus();
+});
 CONFIG.topics.forEach(function (t) {
   var b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', 'false');
   b.onclick = function () { topic = topic === t ? '' : t; [].forEach.call($('topics').children, function (x) { x.setAttribute('aria-pressed', x.textContent === topic); }); };
