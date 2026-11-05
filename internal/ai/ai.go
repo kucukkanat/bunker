@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,6 +56,7 @@ func initAI(a *core.App) error {
 	registerAdminOps(a)
 	registerChatOps(a)
 	registerBuilderOps(a)
+	registerDetect(a)
 	a.On("site.purge", func(ctx context.Context, payload any) {
 		if id, ok := payload.(int64); ok {
 			a.DB.ExecContext(ctx, `DELETE FROM builder_messages WHERE site_id=?`, id)
@@ -165,6 +167,14 @@ func loadConfig() *Config {
 	c.SiteDailyTokens = intSetting(kSiteDaily, defSiteDaily)
 	c.MaxRequestTokens = intSetting(kMaxRequest, defMaxRequest)
 	c.LogContent, _ = strconv.ParseBool(app.Setting(kLogContent))
+	if c.Provider == "" && c.APIKey == "" {
+		// Zero setup: use the key most developers already have exported.
+		if k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")); k != "" {
+			c.Provider, c.APIKey = ProviderAnthropic, k
+		} else if k := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); k != "" {
+			c.Provider, c.APIKey = ProviderOpenAI, k
+		}
+	}
 	if c.Provider == "" && c.APIKey != "" {
 		// A key alone is enough when its shape gives the provider away.
 		switch {

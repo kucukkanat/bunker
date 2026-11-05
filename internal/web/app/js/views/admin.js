@@ -291,6 +291,23 @@ async function ai(el, ctx) {
   const paintStatus = (c) => clear(status, c.configured ? h('div.notice.ok', icon('check', 18), h('div', h('b', 'AI is on. '), 'Using ' + (c.providerLabel || c.provider) + '.'))
     : h('div.notice' + (c.provider && c.provider !== 'none' ? '.warn' : ''), icon(c.provider && c.provider !== 'none' ? 'warn' : 'info', 18), h('div', h('b', c.provider && c.provider !== 'none' ? 'Not working yet. ' : 'AI is off. '), (c.provider && c.provider !== 'none' && c.problem) || 'Pick a provider and add its API key to turn on the AI builder.')));
   paintStatus(cfg);
+  // One-click options: keys already in the environment, local model servers.
+  const quick = h('div');
+  maybe('/api/v1/admin/ai/detect').then((d) => {
+    const opts = (d?.options || []).filter((o) => !(cfg.configured && o.provider === cfg.provider));
+    if (!opts.length || !ctx.alive()) return;
+    clear(quick, h('div.notice', icon('sparkle', 18), h('div', h('b', 'Found on this machine: '),
+      opts.map((o) => h('button.btn.sm', { type: 'button', style: { margin: '4px 8px 0 0' }, onclick: (ev) => busy(ev.currentTarget, async () => {
+        const body = { provider: o.provider };
+        if (o.endpoint) body.endpoint = o.endpoint;
+        if (o.models?.length) { body.builderModel = o.models[0]; body.pageModel = o.models[0]; }
+        const n = await put('/api/v1/admin/ai', body);
+        state.ai = undefined;
+        toast('AI is on: ' + o.name + '.', { type: 'ok' });
+        if (n) paintStatus(n);
+        ai(el, ctx);
+      }) }, 'Use ' + o.name + (o.models?.length ? ' (' + o.models[0] + ')' : ''))))));
+  }).catch(() => {});
   const result = h('div');
   const test = h('button.btn', { type: 'button', onclick: () => busy(test, async () => {
     try {
@@ -315,6 +332,7 @@ async function ai(el, ctx) {
   } },
     h('p.muted', 'Bunker uses this AI service for the builder and for sites that use AI. Keys stay on the server and pages never see them.'),
     status,
+    quick,
     pinned.size > 0 && h('p.small.muted', 'Some settings are fixed by the server’s environment and can’t be changed here: ' + [...pinned].join(', ') + '.'),
     fieldWrap('Provider', sel), fKey, fEndpoint, fVersion, models, limits,
     h('div.row.wrap', test, h('span.spacer'), save), result),
