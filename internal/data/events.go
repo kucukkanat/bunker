@@ -435,6 +435,13 @@ func (h *Hub) serveSSE(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case e := <-c.out:
+			// Use the viewer's current role (cached; shares invalidate it), so
+			// a demotion or removal applies to the next event, not the next reconnect.
+			if _, ro, err := h.a.Sites.Resolve(ctx, u, s.Slug); err != nil || ro == core.RoleNone {
+				return
+			} else {
+				role = ro
+			}
 			buf.Reset()
 			h.render(&buf, e, s.ID, u, role)
 			// Drain whatever else is queued, then flush once.
