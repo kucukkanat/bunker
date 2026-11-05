@@ -82,7 +82,7 @@ func registerUsers(a *core.App) {
 		Fn: func(r *http.Request) (any, error) {
 			id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 			var in struct {
-				IsAdmin  *bool `json:"isAdmin"`
+				IsAdmin    *bool  `json:"isAdmin"`
 				Disabled   *bool  `json:"disabled"`
 				TransferTo string `json:"transferTo"`
 			}

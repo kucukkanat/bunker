@@ -102,7 +102,9 @@ func registerLifecycle(a *core.App) {
 	go archiveLoop(a)
 }
 
-func restoreToken(uid int64, slug string) string { return core.MAC(fmt.Sprintf("restore:%d:%s", uid, slug)) }
+func restoreToken(uid int64, slug string) string {
+	return core.MAC(fmt.Sprintf("restore:%d:%s", uid, slug))
+}
 
 func archive(ctx context.Context, s *SiteRecord, days int64) {
 	app.DB.ExecContext(ctx, `UPDATE sites SET archived_at=?, archived_days=? WHERE id=? AND archived_at IS NULL`, core.Now(), days, s.ID)
