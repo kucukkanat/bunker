@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Project is bunker.json: which server and site a folder deploys to.
@@ -288,7 +291,7 @@ var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
 // htmlTitle extracts <title> from an HTML document.
 func htmlTitle(b []byte) string {
 	if m := titleRe.FindSubmatch(b); m != nil {
-		t := strings.Join(strings.Fields(string(m[1])), " ")
+		t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " ")
 		if t != "" && len(t) < 100 {
 			return t
 		}
@@ -301,8 +304,8 @@ func prettyName(s string) string {
 	s = strings.TrimSuffix(s, filepath.Ext(s))
 	f := strings.FieldsFunc(s, func(r rune) bool { return r == '-' || r == '_' || r == '.' || r == ' ' })
 	for i, w := range f {
-		if w != "" {
-			f[i] = strings.ToUpper(w[:1]) + w[1:]
+		if r, n := utf8.DecodeRuneInString(w); n > 0 {
+			f[i] = string(unicode.ToUpper(r)) + w[n:] // "équipe" → "Équipe", not a broken byte
 		}
 	}
 	if len(f) == 0 {

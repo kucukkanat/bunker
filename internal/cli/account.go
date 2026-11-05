@@ -195,6 +195,12 @@ func (x *App) deviceLogin(c *Client, a *Args) (string, error) {
 			return out.Token, nil
 		}
 		if ae, ok := err.(*APIError); ok {
+			if ae.Status == 429 || ae.Code == "slow_down" {
+				// Rate limited (e.g. many people signing in from one office
+				// address): poll more slowly instead of giving up.
+				interval = min(interval*2, 15*time.Second)
+				continue
+			}
 			switch ae.Code {
 			case "authorization_pending":
 				continue
