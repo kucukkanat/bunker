@@ -79,6 +79,8 @@ func contentType(p string) string {
 		return "image/png"
 	case ".woff2":
 		return "font/woff2"
+	case ".webmanifest":
+		return "application/manifest+json"
 	}
 	return "application/octet-stream"
 }
