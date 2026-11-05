@@ -165,6 +165,12 @@ const extras = [
   },
 ];
 
+const templates = [
+  ['✅', 'Requests & approvals'], ['🗂️', 'Team tracker'], ['📝', 'Sign-up sheet'], ['💬', 'Feedback'], ['📊', 'Quick poll'], ['📈', 'Dashboard'],
+  ['👋', 'Directory & who’s out'], ['🗒️', 'Meeting notes'], ['💻', 'Equipment check-out'], ['📅', 'Room & desk booking'], ['📦', 'Inventory'],
+  ['🚨', 'Incident log'], ['🧭', 'Onboarding checklist'], ['🎯', 'Goals & OKRs'], ['🙌', 'Kudos wall'], ['🥪', 'Lunch orders'],
+];
+
 const security = [
   { t: 'Opaque-origin sandbox', d: 'Every app runs in an iframe without allow-same-origin. It has no cookies, no storage and no reach into Bunker or other apps.', code: 'sandbox="allow-scripts allow-forms allow-modals allow-downloads"' },
   { t: 'Signed content tickets', d: 'App files are served under a short-lived HMAC ticket tied to the site, version and viewer. Revoke a share and the next request fails.', code: '/s/<site>/~r/<ticket>/index.html' },
@@ -457,6 +463,13 @@ const mark = (v: string) => (v === 'yes' ? '✓' : v === 'no' ? '—' : v);
               </li>
             ))}
           </ul>
+          <div class="tpl-strip">
+            <h3>Or start from one of 16 templates</h3>
+            <ul>
+              {templates.map(([e, t]) => <li><span aria-hidden="true">{e}</span>{t}</li>)}
+            </ul>
+            <p>Each one is a real app with live data and sensible access rules. Change anything with the AI builder or the code editor. <a href={u('docs/build/templates/')}>See them all →</a></p>
+          </div>
         </div>
       </section>
 

@@ -421,3 +421,10 @@ details p { color: var(--slate); padding: 0 40px 22px 0; }
 /* Soften bright product shots a touch on dark pages */
 :root[data-theme='dark'] .vid video, :root[data-theme='dark'] .shot:not(.has-dark) img { filter: brightness(0.92); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .vid video, :root:not([data-theme='light']) .shot:not(.has-dark) img { filter: brightness(0.92); } }
+
+/* templates strip */
+.tpl-strip { margin-top: 28px; padding: 24px; border: 1px dashed var(--line); border-radius: var(--r); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.tpl-strip h3 { margin: 0 0 12px; font-size: 1.15rem; }
+.tpl-strip ul { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.tpl-strip li { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: .92rem; white-space: nowrap; }
+.tpl-strip p { margin: 0; color: var(--muted, var(--slate)); font-size: .95rem; }
