@@ -544,7 +544,7 @@ ol.howto li::before { content: counter(s); position: absolute; left: 0; top: -1p
   .choices { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .side { position: fixed; z-index: 70; left: 0; top: 0; bottom: 0; width: 280px; transform: translateX(-102%); transition: transform .25s var(--ease); box-shadow: var(--shadow-lg); background: var(--bg); }
   .side.open { transform: none; }
   .side-scrim { position: fixed; inset: 0; z-index: 65; background: rgb(18 26 21 / .4); animation: fade .15s; }
@@ -581,6 +581,7 @@ ol.howto li::before { content: counter(s); position: absolute; left: 0; top: -1p
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 8px; }
   .list > .item { flex-wrap: wrap; }
+  .list > .item > .n { flex-basis: calc(100% - 60px); }
   .page-head .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -317,11 +317,12 @@ try {
   const mp = await m.newPage();
   watch(mp, 'mobile');
   await check('phone layout has no horizontal scroll', async () => {
-    for (const [n, p] of [['home', '/'], ['new', '/new'], ['workspace', '/sites/' + slug], ['settings', '/settings/tokens'], ['admin', '/admin/people'], ['connect', '/settings/connect']]) {
+    for (const [n, p] of [['home', '/'], ['new', '/new'], ['workspace', '/sites/' + slug], ['settings', '/settings/tokens'], ['admin', '/admin/people'], ['audit', '/admin/audit'], ['templates', '/templates'], ['connect', '/settings/connect']]) {
       await mp.goto(BASE + p);
       await mp.waitForLoadState('networkidle');
       await mp.waitForTimeout(300);
-      const over = await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+      // On phones the layout viewport grows to fit wide content, so compare with the device width too.
+      const over = await mp.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) - 390);
       assert.ok(over <= 1, `${p} overflows by ${over}px`);
       await shot(mp, 'm-' + n);
     }
