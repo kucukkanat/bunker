@@ -177,7 +177,9 @@ func (w *workspace) write(p string, content []byte) (string, error) {
 	w.markChanged(p, "write")
 	w.file(p, "write", len(content))
 	note := fmt.Sprintf("Saved %s (%d bytes).", p, len(content))
-	if hosts := externalHosts(content); len(hosts) > 0 {
+	if isFunctionFile(p) {
+		note += functionNote(p, content)
+	} else if hosts := externalHosts(content); len(hosts) > 0 {
 		note += " WARNING: it loads resources from " + strings.Join(hosts, ", ") + ", which Bunker pages cannot reach (no network). Use a built-in library from /_/lib/ instead, inline the code, or remove it."
 	}
 	if strings.HasSuffix(p, ".html") && bytes.Contains(content, []byte("/_/bunker.js")) {
@@ -483,8 +485,60 @@ func siteContext(ctx context.Context, s *sites.SiteRecord) string {
 
 func isTextPath(p string) bool {
 	switch strings.ToLower(path.Ext(p)) {
-	case ".html", ".htm", ".js", ".mjs", ".css", ".json", ".txt", ".md", ".svg", ".csv", ".xml", ".webmanifest":
+	case ".html", ".htm", ".js", ".mjs", ".ts", ".css", ".json", ".txt", ".md", ".svg", ".csv", ".xml", ".webmanifest":
 		return true
 	}
 	return false
 }
+
+// isFunctionFile reports whether p is server code under api/ (a server
+// function or a shared _module), which runs on the server, not in pages.
+func isFunctionFile(p string) bool {
+	if !strings.HasPrefix(p, "api/") {
+		return false
+	}
+	switch strings.ToLower(path.Ext(p)) {
+	case ".js", ".mjs", ".ts":
+		return true
+	}
+	return false
+}
+
+// functionNote checks a server function file for the mistakes that stop
+// it from running, so the builder can fix them right away.
+func functionNote(p string, b []byte) string {
+	name := strings.TrimSuffix(strings.TrimPrefix(p, "api/"), path.Ext(p))
+	shared := false
+	for _, seg := range strings.Split(name, "/") {
+		if strings.HasPrefix(seg, "_") {
+			shared = true
+		}
+	}
+	src := string(b)
+	var warn []string
+	if !shared && !strings.Contains(src, "export default") {
+		warn = append(warn, "it has no `export default` function, so it can't be called")
+	}
+	for _, bad := range []string{"document.", "window.", "localStorage"} {
+		if strings.Contains(src, bad) {
+			warn = append(warn, "it uses "+strings.TrimSuffix(bad, ".")+", which doesn't exist on the server")
+			break
+		}
+	}
+	if fnImportRe.MatchString(src) {
+		warn = append(warn, "it imports a package; only relative imports of files in api/ work (no npm)")
+	}
+	note := " This runs on the server"
+	if shared {
+		note += " as a shared module (importable by functions, not callable)."
+	} else {
+		note += fmt.Sprintf("; pages call it with bunker.fn(%q, input). It is live after publishing (the preview runs the draft).", name)
+	}
+	if len(warn) > 0 {
+		note += " WARNING: " + strings.Join(warn, "; ") + "."
+	}
+	return note
+}
+
+// fnImportRe matches imports of bare package names (npm, node:, qjs:).
+var fnImportRe = regexp.MustCompile(`(?m)^\s*import\s[^'"]*['"]([^./'"][^'"]*)['"]`)
