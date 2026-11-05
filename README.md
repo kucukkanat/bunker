@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/kucukkanat/bunker/master/install.sh
 # Just look around: example apps, people and data on your laptop
 bunker demo
 
-# Docker
+# Docker (before the first release, build it: docker build -t ghcr.io/kucukkanat/bunker https://github.com/kucukkanat/bunker.git)
 docker run -p 8080:8080 -v bunker:/data ghcr.io/kucukkanat/bunker
 
 # Fly.io
@@ -62,10 +62,13 @@ Bunker is young and moving fast. The docs mark everything that isn't finished as
 
 ```sh
 go test ./...
-go run ./cmd/bunker dev      # http://127.0.0.1:8080, signed in as a local admin
+go run ./cmd/bunker dev      # http://localhost:8080, signed in as a local admin
+go run ./cmd/bunker demo     # same, with example apps and people
+go run ./test/perf           # load and profiling harness (see research/PERF.md)
 ```
 
-- Product plan: [PLAN.md](PLAN.md) · Engineering contract: [CONTRACT.md](CONTRACT.md)
+- Product plan: [PLAN.md](PLAN.md) · Engineering contract: [CONTRACT.md](CONTRACT.md) · [CHANGELOG](CHANGELOG.md)
+- Research and reviews: [research](research/) (deep research, security audit, bug hunt, QA, performance)
 - Brand kit: [brand/](brand/) · Website and docs source: [website/](website/) (Astro + Starlight)
 - Security reports: [privately via GitHub](https://github.com/kucukkanat/bunker/security/advisories/new)
 
