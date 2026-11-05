@@ -228,6 +228,10 @@ func capitalize(s string) string {
 	if s == "" {
 		return s
 	}
+	// Leave a leading file name alone ("index.html (line 1) ...").
+	if first, _, _ := strings.Cut(s, " "); strings.ContainsAny(first, "./") {
+		return s
+	}
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 

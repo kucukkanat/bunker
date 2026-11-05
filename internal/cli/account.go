@@ -161,6 +161,10 @@ func (x *App) deviceLogin(c *Client, a *Args) (string, error) {
 	if err := c.Call(x.ctx, "POST", "/api/v1/auth/device", nil, in, &start); err != nil {
 		return "", err
 	}
+	// A server that doesn't know its public address answers with a path.
+	if strings.HasPrefix(start.URIFull, "/") {
+		start.URIFull = strings.TrimRight(c.Server, "/") + start.URIFull
+	}
 	s := x.errSt
 	if x.JSON {
 		jsonEncoder(x.Stderr).Encode(map[string]any{"userCode": start.UserCode, "verificationUri": start.URIFull})

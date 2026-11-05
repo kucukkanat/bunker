@@ -165,7 +165,7 @@ func registerAccess(a *core.App) {
 		}
 		slug := r.FormValue("site")
 		if !core.MACEqual(r.FormValue("t"), AccessToken(u.ID, slug)) {
-			http.Error(w, "expired form, go back and try again", http.StatusForbidden)
+			http.Error(w, "This form expired. Go back, refresh the page and ask again.", http.StatusForbidden)
 			return
 		}
 		requestAccess(r.Context(), u, slug, r.FormValue("message"))

@@ -245,7 +245,7 @@ func cmdDeploy(x *App, a *Args) error {
 			return err
 		}
 		res.Version, res.Draft = out.Version, out.Draft
-		res.URL = firstNonEmpty(out.URL, siteURL(c.Server, site))
+		res.URL = absURL(c.Server, firstNonEmpty(out.URL, siteURL(c.Server, site)))
 	}
 	sp.end()
 	if res.Draft {
@@ -446,7 +446,7 @@ func (x *App) postUpload(ctx context.Context, c *Client, body io.Reader, ct, sit
 		}
 	}
 	res.Version, res.Draft = out.Version, out.Draft
-	res.URL = firstNonEmpty(out.URL, siteURL(c.Server, res.Site))
+	res.URL = absURL(c.Server, firstNonEmpty(out.URL, siteURL(c.Server, res.Site)))
 	return nil
 }
 
