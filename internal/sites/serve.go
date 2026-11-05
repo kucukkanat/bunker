@@ -72,12 +72,37 @@ func ParseTicket(s string) (Ticket, bool) {
 	return t, true
 }
 
-// ContentCSP is the policy for all user content.
+// SandboxFlags are the iframe sandbox tokens for user content. No
+// allow-popups: external links go through bunker.open() so the parent can
+// open them safely (noopener, noreferrer) instead of a page leaking data
+// through window.open URLs.
+const SandboxFlags = "allow-scripts allow-forms allow-modals allow-downloads"
+
+// ContentCSP is the policy for all user content. connect-src 'self' lets
+// pages fetch their own files (./data.json); cookies aren't sent from the
+// opaque origin and other sites need their own tickets, so this can't
+// reach the API or other sites' content.
 func ContentCSP() string {
-	return "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; " +
-		"img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; worker-src blob:; " +
-		"connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'; frame-src 'self' blob: data:; " +
-		"sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+	return "sandbox " + SandboxFlags + "; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; " +
+		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; " +
+		"worker-src 'self' blob:; connect-src 'self'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'; " +
+		"frame-src 'self' blob: data:; object-src 'none'"
+}
+
+// ContentHeaders sets the isolation headers on every user-content response.
+func ContentHeaders(h http.Header) {
+	h.Set("Content-Security-Policy", ContentCSP())
+	// Chromium/Edge 152+: blocks WebRTC, navigations, prefetch and redirects
+	// to anywhere but our own origin (CSP can't stop WebRTC exfiltration).
+	h.Set("Connection-Allowlist", "(response-origin)")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	// Opaque-origin frames are cross-origin; tickets gate access.
+	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), payment=(), display-capture=(), clipboard-read=()")
+	h.Add("Vary", "Sec-Fetch-Dest")
+	h.Del("Cross-Origin-Opener-Policy")
 }
 
 func registerServing(a *core.App) {
@@ -148,10 +173,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 				rawError(w, http.StatusForbidden, "Access revoked")
 				return
 			}
-			w.Header().Set("Content-Security-Policy", ContentCSP())
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
-			w.Header().Set("Referrer-Policy", "no-referrer")
+			ContentHeaders(w.Header())
 			h(w, r, s, t, vu, tail[i+1:])
 			return
 		}
@@ -208,7 +230,7 @@ func serveSite(w http.ResponseWriter, r *http.Request) {
 	shellTmpl.Execute(w, map[string]any{
 		"Title": s.Title, "Slug": s.Slug, "Src": src, "Base": base, "Role": role.String(),
 		"Draft": draft, "Version": ver, "Live": s.Version, "Icon": s.Icon,
-		"Badge": !s.Settings.HideBadge || role >= core.RoleEditor, "User": u.Name, "SiteID": s.ID,
+		"Badge": !s.Settings.HideBadge || role >= core.RoleEditor, "User": u.Name, "SiteID": s.ID, "Sandbox": SandboxFlags,
 	})
 }
 
@@ -219,7 +241,7 @@ var shellTmpl = template.Must(template.New("shell").Parse(`<!doctype html>
 <link rel="stylesheet" href="/_/shell.css">
 </head><body>
 <iframe id="bk-frame" title="{{.Title}}" src="{{.Src}}"
- sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+ sandbox="{{.Sandbox}}"
  allow="clipboard-write; fullscreen" data-base="{{.Base}}"></iframe>
 <div id="bk-shell" data-site="{{.Slug}}" data-site-id="{{.SiteID}}" data-role="{{.Role}}" data-version="{{.Version}}" data-live="{{.Live}}" data-draft="{{.Draft}}" data-badge="{{.Badge}}" data-title="{{.Title}}" data-icon="{{.Icon}}" data-user="{{.User}}"></div>
 <script src="/_/shell.js"></script>
@@ -313,11 +335,7 @@ func serveRaw(w http.ResponseWriter, r *http.Request, rest string) {
 		}
 	}
 	h := w.Header()
-	h.Set("Content-Security-Policy", ContentCSP())
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Referrer-Policy", "no-referrer")
-	h.Set("Cross-Origin-Resource-Policy", "cross-origin") // opaque-origin frames are cross-origin; tickets gate access
-	h.Del("Cross-Origin-Opener-Policy")
+	ContentHeaders(h)
 	ct := f.Type
 	isHTML := strings.HasPrefix(ct, "text/html")
 	isCSS := strings.HasPrefix(ct, "text/css")
@@ -450,7 +468,8 @@ func compressible(ct string) bool {
 
 func rawError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	ContentHeaders(w.Header())
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `<!doctype html><meta charset=utf-8><body style="font:15px system-ui;display:grid;place-items:center;min-height:90vh;color:#5a635d">%s</body>`, htmlEscape(msg))
