@@ -149,6 +149,7 @@ func initNotify(a *core.App) error {
 
 	registerAccess(a)
 	registerStats(a)
+	registerPageNotify(a)
 	return nil
 }
 
@@ -348,4 +349,103 @@ func streamSSE(w http.ResponseWriter, r *http.Request, ch <-chan []byte) {
 			return
 		}
 	}
+}
+
+var (
+	pnMu   = make(chan struct{}, 1)
+	pnSeen = map[string][]int64{}
+)
+
+// registerPageNotify lets site pages notify people who can open the site
+// (e.g. "New expense request waiting for you"). Recipients without access
+// are skipped, and sending is rate limited per sender and site.
+func registerPageNotify(a *core.App) {
+	a.Handle(core.Op{Name: "notify.send", Method: "POST", Path: "/api/v1/sites/{site}/notify", Summary: "Notify people (or a group) who have access to this site", PageSafe: true,
+		Params: []core.Param{{Name: "site", In: "path", Required: true},
+			{Name: "to", In: "body", Type: "array", Required: true, Desc: "Emails and/or group names"},
+			{Name: "title", In: "body", Required: true}, {Name: "body", In: "body"},
+			{Name: "path", In: "body", Desc: "Page in the site to open, e.g. /requests/42"}},
+		Fn: func(r *http.Request) (any, error) {
+			u := core.MustUser(r)
+			s, _, err := sites.Full(r.Context(), u, r.PathValue("site"), core.RoleViewer)
+			if err != nil {
+				return nil, err
+			}
+			var in struct {
+				To          []string
+				Title, Body string
+				Path        string
+			}
+			if err := core.Decode(r, &in); err != nil {
+				return nil, err
+			}
+			in.Title = strings.TrimSpace(in.Title)
+			if in.Title == "" || len(in.Title) > 140 || len(in.Body) > 1000 {
+				return nil, core.BadRequest("title is required (max 140 characters), body max 1000")
+			}
+			if len(in.To) == 0 || len(in.To) > 50 {
+				return nil, core.BadRequest("send to 1–50 people or groups")
+			}
+			// Rate limit: 60 notifications per sender per site per hour.
+			key := fmt.Sprintf("%d:%d", s.ID, u.ID)
+			pnMu <- struct{}{}
+			now := core.Now()
+			var recent []int64
+			for _, t := range pnSeen[key] {
+				if now-t < 3600 {
+					recent = append(recent, t)
+				}
+			}
+			if len(recent) >= 60 {
+				<-pnMu
+				return nil, core.Quota("too many notifications from this site, try again later")
+			}
+			pnSeen[key] = append(recent, now)
+			<-pnMu
+			link := "/s/" + s.Slug + "/"
+			if p := strings.TrimLeft(in.Path, "/"); p != "" && !strings.Contains(p, "://") {
+				link += p
+			}
+			// Resolve recipients: emails directly, groups via known members.
+			emails := map[string]bool{}
+			for _, t := range in.To {
+				t = strings.TrimSpace(t)
+				if strings.Contains(t, "@") {
+					emails[strings.ToLower(t)] = true
+					continue
+				}
+				rows, err := a.DB.QueryContext(r.Context(), `SELECT DISTINCT u.email FROM users u, json_each(u.groups_json) g WHERE u.disabled=0 AND (lower(g.value->>'name')=lower(?) OR g.value->>'id'=?)`, t, t)
+				if err == nil {
+					for rows.Next() {
+						var e string
+						rows.Scan(&e)
+						emails[strings.ToLower(e)] = true
+					}
+					rows.Close()
+				}
+			}
+			sent := 0
+			for e := range emails {
+				ru := loadByEmail(r.Context(), e)
+				if ru == nil || sites.RoleOf(r.Context(), ru, s) == core.RoleNone {
+					continue
+				}
+				Send(r.Context(), e, "site", in.Title, in.Body, link, s.ID)
+				sent++
+			}
+			a.Audit(r.Context(), "notify.send", s.ID, in.Title, map[string]any{"recipients": sent})
+			return map[string]any{"sent": sent}, nil
+		}})
+}
+
+func loadByEmail(ctx context.Context, email string) *core.User {
+	var id int64
+	var name, gj string
+	var admin int
+	if app.DB.QueryRowContext(ctx, `SELECT id,name,is_admin,groups_json FROM users WHERE lower(email)=? AND disabled=0`, email).Scan(&id, &name, &admin, &gj) != nil {
+		return nil
+	}
+	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
+	json.Unmarshal([]byte(gj), &u.Groups)
+	return u
 }

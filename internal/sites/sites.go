@@ -128,6 +128,9 @@ func initSites(a *core.App) error {
 	rawMu.Unlock()
 	a.Sites = resolver{}
 	registerOps(a)
+	if extraOps != nil {
+		extraOps(a)
+	}
 	registerDeploy(a)
 	registerServing(a)
 	go purgeLoop(a)
