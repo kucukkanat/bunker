@@ -427,7 +427,13 @@ WHERE s.deleted_at IS NULL AND (s.owner_id=? OR s.org_view=1 OR (m.ptype='user' 
 	}
 	owners := map[int64]*Person{}
 	out := []*SiteRecord{}
+	var systemID int64 = -1
+	app.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE subject LIKE 'system:%' LIMIT 1`).Scan(&systemID)
 	for _, s := range list {
+		// Built-in templates live under Templates, not in everyone's site list.
+		if s.Template && s.OwnerID == systemID && filter != "templates" && filter != "everything" {
+			continue
+		}
 		role := RoleOf(ctx, u, s)
 		if filter == "trash" {
 			role = core.RoleOwner
