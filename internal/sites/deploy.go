@@ -118,6 +118,34 @@ func RegisterTransformer(t Transformer) {
 	sort.SliceStable(transformers, func(i, j int) bool { return transformers[i].Priority < transformers[j].Priority })
 }
 
+type warnKey struct{}
+
+type warnings struct {
+	mu   sync.Mutex
+	list []string
+}
+
+// WithWarnings returns a context that collects deploy warnings.
+func WithWarnings(ctx context.Context) (context.Context, func() []string) {
+	w := &warnings{}
+	return context.WithValue(ctx, warnKey{}, w), func() []string {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return append([]string(nil), w.list...)
+	}
+}
+
+// AddWarning records a human-readable deploy warning (shown after upload).
+func AddWarning(ctx context.Context, msg string) {
+	if w, ok := ctx.Value(warnKey{}).(*warnings); ok {
+		w.mu.Lock()
+		if len(w.list) < 20 {
+			w.list = append(w.list, msg)
+		}
+		w.mu.Unlock()
+	}
+}
+
 // CleanPath normalizes and validates a site file path.
 func CleanPath(p string) (string, error) {
 	p = strings.ReplaceAll(p, "\\", "/")
@@ -619,6 +647,17 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 
 // deployFiles runs the full pipeline for uploaded files.
 func deployFiles(ctx context.Context, u *core.User, s *SiteRecord, files map[string][]byte, message, source string, publish bool) (map[string]any, error) {
+	ctx, warns := WithWarnings(ctx)
+	res, err := deployFiles2(ctx, u, s, files, message, source, publish)
+	if res != nil {
+		if w := warns(); len(w) > 0 {
+			res["warnings"] = w
+		}
+	}
+	return res, err
+}
+
+func deployFiles2(ctx context.Context, u *core.User, s *SiteRecord, files map[string][]byte, message, source string, publish bool) (map[string]any, error) {
 	files, kind, err := Normalize(ctx, files)
 	if err != nil {
 		return nil, err
