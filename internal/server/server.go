@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -55,6 +56,9 @@ func New(cfg *core.Config, log *slog.Logger) (*core.App, error) {
 			return nil, fmt.Errorf("module %s: %w", m.Name, err)
 		}
 	}
+	// Startup work (migrations, asset compression, template seeding) leaves
+	// garbage behind; hand that memory back to the OS before serving.
+	debug.FreeOSMemory()
 	a.Handle(core.Op{Name: "system.health", Method: "GET", Path: "/healthz", Summary: "Health check", Access: core.AccessPublic, Hidden: true,
 		Fn: func(r *http.Request) (any, error) {
 			if err := a.DB.PingContext(r.Context()); err != nil {
