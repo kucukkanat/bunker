@@ -4,7 +4,10 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/kucukkanat/bunker/internal/core"
 	"github.com/kucukkanat/bunker/internal/server"
@@ -25,6 +28,8 @@ func main() {
 	case "dev":
 		os.Setenv("BUNKER_DEV", "1")
 		os.Exit(serve(true))
+	case "healthcheck":
+		os.Exit(healthcheck())
 	case "version", "--version", "-v":
 		fmt.Println("bunker", core.Version)
 	default:
@@ -57,6 +62,27 @@ func serve(dev bool) int {
 	}
 	if err := server.Run(a); err != nil {
 		log.Error("server error", "err", err)
+		return 1
+	}
+	return 0
+}
+
+// healthcheck probes the local server's /healthz and exits 0 when healthy.
+// Used by Docker HEALTHCHECK in images that have no shell or curl.
+func healthcheck() int {
+	_, port, err := net.SplitHostPort(core.LoadConfig().Listen)
+	if err != nil || port == "" {
+		port = "8080"
+	}
+	c := &http.Client{Timeout: 3 * time.Second}
+	res, err := c.Get("http://" + net.JoinHostPort("127.0.0.1", port) + "/healthz")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "unhealthy:", err)
+		return 1
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "unhealthy: HTTP", res.StatusCode)
 		return 1
 	}
 	return 0

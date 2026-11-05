@@ -1,0 +1,31 @@
+# Bunker with Docker Compose.
+#
+#   docker compose up -d
+#   docker compose logs bunker      # shows the setup URL and one-time code
+#
+# Then open http://localhost:8080/setup. For HTTPS on a real domain, use
+# deploy/compose-with-caddy/ instead (automatic Let's Encrypt certificates).
+
+services:
+  bunker:
+    image: ghcr.io/kucukkanat/bunker:latest
+    # build: .                       # or build from this checkout
+    container_name: bunker
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - bunker-data:/data            # database, uploads and keys: back this up
+    environment:
+      # Public URL people use to reach Bunker, e.g. https://bunker.corp.com.
+      # Set it once Bunker has a real domain (sign-in redirects use it).
+      # Run with: BUNKER_URL=https://bunker.corp.com docker compose up -d
+      BUNKER_URL: ${BUNKER_URL:-}
+      # Optional: a fixed first-run setup code (otherwise one is generated
+      # and printed in the logs).
+      # BUNKER_SETUP_CODE: change-me
+      # Optional: human-readable logs instead of JSON.
+      # BUNKER_LOG_FORMAT: text
+
+volumes:
+  bunker-data:

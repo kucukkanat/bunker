@@ -1,0 +1,33 @@
+{
+  "name": "bunker",
+  "description": "Bunker: internal apps anyone can build. IT can trust. DEMO ONLY on Heroku and Cloud Run: their filesystems are ephemeral, so data is lost on restart. Use Azure, Render, Fly.io, Railway, Docker or the Linux installer for real use.",
+  "repository": "https://github.com/kucukkanat/bunker",
+  "website": "https://kucukkanat.github.io/bunker/",
+  "logo": "https://raw.githubusercontent.com/kucukkanat/bunker/master/brand/logo-mark-512.png",
+  "keywords": ["internal-tools", "self-hosted", "entra-id", "go", "sqlite"],
+  "stack": "container",
+  "env": {
+    "BUNKER_SETUP_CODE": {
+      "description": "One-time code for the first-run setup page (/setup).",
+      "generator": "secret",
+      "required": true
+    }
+  },
+  "formation": {
+    "web": { "quantity": 1, "size": "basic" }
+  },
+  "options": {
+    "allow-unauthenticated": true,
+    "memory": "512Mi",
+    "cpu": "1",
+    "port": 8080,
+    "max-instances": 1
+  },
+  "hooks": {
+    "postcreate": {
+      "commands": [
+        "gcloud run services update $K_SERVICE --region=$GOOGLE_CLOUD_REGION --project=$GOOGLE_CLOUD_PROJECT --update-env-vars=BUNKER_URL=$SERVICE_URL --quiet"
+      ]
+    }
+  }
+}

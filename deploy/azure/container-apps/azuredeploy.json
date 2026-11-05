@@ -1,0 +1,238 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "14090446068500114573"
+    }
+  },
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "defaultValue": "bunker",
+      "minLength": 2,
+      "maxLength": 32,
+      "metadata": {
+        "description": "Name for the Container App (lowercase letters, numbers and dashes). Becomes part of the URL."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region. Defaults to the resource group's region."
+      }
+    },
+    "image": {
+      "type": "string",
+      "defaultValue": "ghcr.io/kucukkanat/bunker:latest",
+      "metadata": {
+        "description": "Bunker container image."
+      }
+    },
+    "setupCode": {
+      "type": "string",
+      "defaultValue": "[toUpper(substring(replace(newGuid(), '-', ''), 0, 10))]",
+      "minLength": 6,
+      "metadata": {
+        "description": "One-time code for the first-run setup page. Leave the generated value unless you want your own."
+      }
+    },
+    "size": {
+      "type": "string",
+      "defaultValue": "0.5 vCPU / 1 GiB",
+      "allowedValues": [
+        "0.5 vCPU / 1 GiB",
+        "1 vCPU / 2 GiB",
+        "2 vCPU / 4 GiB"
+      ],
+      "metadata": {
+        "description": "vCPU and memory for the container."
+      }
+    },
+    "publicUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional custom public URL (e.g. https://bunker.contoso.com). Leave empty to use the Container Apps URL."
+      }
+    }
+  },
+  "variables": {
+    "sizes": {
+      "0.5 vCPU / 1 GiB": {
+        "cpu": "[json('0.5')]",
+        "memory": "1Gi"
+      },
+      "1 vCPU / 2 GiB": {
+        "cpu": "[json('1.0')]",
+        "memory": "2Gi"
+      },
+      "2 vCPU / 4 GiB": {
+        "cpu": "[json('2.0')]",
+        "memory": "4Gi"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-logs', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}-env', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('appName'))), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('appName'))), '2023-09-01').primarySharedKey]"
+          }
+        },
+        "workloadProfiles": [
+          {
+            "name": "Consumption",
+            "workloadProfileType": "Consumption"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('appName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('appName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName')))]",
+        "workloadProfileName": "Consumption",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "auto",
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "setup-code",
+              "value": "[parameters('setupCode')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "bunker",
+              "image": "[parameters('image')]",
+              "resources": "[variables('sizes')[parameters('size')]]",
+              "env": [
+                {
+                  "name": "BUNKER_URL",
+                  "value": "[if(empty(parameters('publicUrl')), format('https://{0}.{1}', parameters('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName'))), '2024-03-01').defaultDomain), parameters('publicUrl'))]"
+                },
+                {
+                  "name": "BUNKER_DATA_DIR",
+                  "value": "/data"
+                },
+                {
+                  "name": "BUNKER_TRUST_PROXY",
+                  "value": "true"
+                },
+                {
+                  "name": "BUNKER_SETUP_CODE",
+                  "secretRef": "setup-code"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "data",
+                  "mountPath": "/data"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": 8080
+                  },
+                  "periodSeconds": 5,
+                  "failureThreshold": 30
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": 8080
+                  },
+                  "periodSeconds": 30,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "data",
+              "storageType": "EmptyDir"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "metadata": {
+        "description": "Bunker's public URL."
+      },
+      "value": "[if(empty(parameters('publicUrl')), format('https://{0}.{1}', parameters('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName'))), '2024-03-01').defaultDomain), parameters('publicUrl'))]"
+    },
+    "setupUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Open this page and enter the setup code to connect Microsoft Entra ID."
+      },
+      "value": "[format('{0}/setup', if(empty(parameters('publicUrl')), format('https://{0}.{1}', parameters('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName'))), '2024-03-01').defaultDomain), parameters('publicUrl')))]"
+    },
+    "setupCode": {
+      "type": "string",
+      "metadata": {
+        "description": "One-time setup code."
+      },
+      "value": "[parameters('setupCode')]"
+    },
+    "entraRedirectUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Redirect URI to register on the Entra app registration."
+      },
+      "value": "[format('{0}/auth/callback', if(empty(parameters('publicUrl')), format('https://{0}.{1}', parameters('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('appName'))), '2024-03-01').defaultDomain), parameters('publicUrl')))]"
+    }
+  }
+}
