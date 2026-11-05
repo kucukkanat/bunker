@@ -61,3 +61,53 @@ End with:
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01LZES8o2Lem8J5XywqE5Rcv
 ```
+
+## Server functions (internal/fnrt, internal/functions)
+Server code that site owners drop next to their pages. On by default; admins can turn it off globally, per person or per app. No build step, no containers: every call runs in a fresh QuickJS instance compiled to WASI (quickjs-ng v0.17.0 `qjs-wasi.wasm`, sha256 `42a732a6…e1975fd`, vendored in `internal/fnrt/qjs-wasi.wasm`) inside wazero (pure Go). The page SDK's permission model is unchanged: by default a function acts with the viewer's own rights.
+
+**Files.** `api/<name>.(js|mjs|ts)` with an `export default` is a function named `<name>` (nested folders allowed: `api/orders/refund.ts` → `orders/refund`). Files or folders starting with `_` under `api/` are shared modules (importable, not callable). Imports are bundled at publish with the embedded esbuild (ESM, target es2023, TypeScript stripped, `qjs:*`/`std`/`os` imports rejected; no npm). Function files and `_` modules are never served to browsers (404). Static `api/*.json` etc. keep working.
+
+```js
+// api/orders.js
+export const config = { elevated: false, schedule: "", onWrite: [], timeoutMs: 0 }; // all optional
+export default async function (input, ctx) {
+  // ctx = { user:{id,email,name,groups[]}, site:{slug,title,version,draft}, trigger:{type:"call"|"schedule"|"write"|"webhook", ...}, elevated }
+  const o = await bunker.db.collection("orders").add(input);
+  return { id: o._id };            // any JSON value, ≤ 1 MB
+}
+```
+- `config.elevated: true` runs the function as the **site owner** (still PageSafe ops only). Otherwise it runs as the caller.
+- `config.schedule`: 5-field cron (UTC, minimum every minute) → runs as the owner, `trigger:{type:"schedule", at}`.
+- `config.onWrite: ["orders"]` → runs after a committed add/set/update/delete in those collections, async, `trigger:{type:"write", collection, op:"add"|"set"|"update"|"delete", doc, id}`, as the writer (or owner if elevated). Writes made inside a write trigger don't fire triggers again (depth 1).
+- Webhooks (`internal/hooks`) may target a function instead of a collection: `POST /api/v1/sites/{site}/hooks {name, function}`; the JSON body becomes `input`, runs as the hook creator, `trigger:{type:"webhook", hook}`; the function's return value is the HTTP response body.
+- Schedules and triggers use the **live** version only. Page calls from `?draft=1` previews (editors) run the draft code.
+
+**Server SDK** (global `bunker` inside functions, same method shapes as the page SDK where it applies): `bunker.db`, `bunker.storage` (the run-as user's kv), `bunker.files` (list/get/read/delete; `upload(name, string|Uint8Array, {type, folder})`), `bunker.ai.chat/json`, `bunker.m365.*`, `bunker.connections.fetch`, `bunker.rooms(name).send`, `bunker.notify`, `bunker.me()`; server-only `bunker.secrets.get(NAME)` → string|null, `bunker.site`, global `fetch(url, init)` (subject to the admin outbound policy) returning `{ok,status,headers:{get},text(),json(),arrayBuffer()}`, `console.log/info/warn/error` (→ run logs), `setTimeout/clearTimeout`. No `window`, `document`, live subscriptions or streaming.
+
+**Engine (`internal/fnrt`, no Bunker imports).**
+```go
+e := fnrt.New(fnrt.Config{MaxConcurrent: n, CacheDir: dir}) // compiles qjs once, lazily
+res, err := e.Run(ctx, fnrt.Job{Code: bundledESM, Input: json.RawMessage, Context: json.RawMessage,
+    Limits: fnrt.Limits{MemoryBytes, Timeout, MaxOutput, MaxLogBytes, MaxHostCalls},
+    Host: func(ctx context.Context, msg json.RawMessage) json.RawMessage, Log: func(level, line string)})
+// res: {Output json.RawMessage, Duration, HostCalls}; err: *fnrt.Error{Code, Message, Stack}
+// Codes: "busy" "timeout" "memory" "script" "output_too_large" "too_many_calls" "bad_code"
+cfg, err := e.Inspect(ctx, bundledESM) // evaluates the module (1 s, no host) and returns its `config` export as JSON
+```
+Host protocol (JSON, one line each way over stdin/stdout; stderr = logs): request `{t:"api", method, path, body}` (path relative to `/api/v1/sites/<slug>`, or exactly `/me`), `{t:"secret", name}`, `{t:"fetch", url, method, headers, body, bodyB64}`; reply `{ok:true, status, data}` or `{ok:false, status, error:{code,message}}` (fetch data: `{status, headers, body | bodyB64}`). `api` requests are dispatched in-process to `a.Mux` as the run-as user with `X-Bunker-Page: 1`, so only PageSafe ops work.
+
+**Default limits** (admin-tunable): memory 64 MB, call timeout 30 s, trigger/schedule timeout 120 s, input/output 1 MB, logs 64 KB/run, 1,000 host calls/run, 4 concurrent runs per app, `max(4, 2×CPU)` overall. Over capacity → `429 busy`.
+
+**Ops** (CLI/MCP are generated from these):
+- `fn.list` `GET /api/v1/sites/{site}/functions` (editor) → `{enabled, blocked:{scope:"global"|"user"|"site", reason}|null, functions:[{name, path, elevated, schedule, onWrite[], timeoutMs, error?}], limits}`.
+- `fn.call` `POST /api/v1/sites/{site}/functions/{name...}` (viewer, **PageSafe**) `{input, draft?}` → `{output, durationMs}`. Errors: `functions_off` (403, message includes the reason), `not_found`, `busy` (429), `timeout` (504), `function_error` (500, `{message, stack}` for editors only).
+- `fn.runs` `GET /api/v1/sites/{site}/functions/_runs?name=&limit=` (editor) → `{items:[{id, name, trigger, user, status:"ok"|"error", durationMs, error, logs, at}]}` (last 200 per app kept).
+- Live logs: events channel `logs` on `GET /api/v1/sites/{site}/events?ch=logs` (editor only), payload `{run, name, level, line, at}`.
+- `secrets.list` `GET /api/v1/sites/{site}/secrets` (editor) → `{items:[{name, updatedAt, updatedBy}]}`; `secrets.set` `PUT /api/v1/sites/{site}/secrets/{name}` `{value}`; `secrets.delete` `DELETE …/secrets/{name}`. Names `^[A-Z][A-Z0-9_]{0,63}$`, values ≤ 16 KB, AES-GCM at rest, never readable back. Not PageSafe.
+- `functions.status` `GET /api/v1/functions/status` (any signed-in user) → `{enabled, user:{blocked, reason, by, at}|null, sites:{"<slug>":{scope:"user"|"site", reason}}}` for the caller's own apps that are blocked. Drives the dashboard banner and project badges.
+- `admin.functions.get|update` `GET|PUT /api/v1/admin/functions` → `{enabled, memoryMb, timeoutMs, triggerTimeoutMs, siteConcurrency, globalConcurrency, outbound:"internet"|"allowlist"|"off", allowlist:[host…]}`. Outbound default `internet`: public hosts only (same SSRF guard as connections, private ranges always refused); `allowlist`: listed hosts/`*.suffix`; `off`: only `bunker.connections`.
+- `admin.functions.blocks` `GET /api/v1/admin/functions/blocks` → `{items:[{kind:"user"|"site", id, label, reason, by, at}]}`; `admin.functions.block` `PUT /api/v1/admin/functions/blocks/{kind}/{id}` `{reason}` (user id, or site slug); `admin.functions.unblock` `DELETE` same. A blocked user blocks every app they own. Blocked apps still load; only function calls/triggers stop.
+
+**Audit:** `functions.deployed` (publish changed the function set; meta lists names + elevated/schedule/onWrite), `functions.secret.set|delete`, `functions.settings`, `functions.block|unblock`, `functions.outbound.refused`.
+
+**Go API for other modules:** `functions.Invoke(ctx, site *sites.SiteRecord, name string, input json.RawMessage, as *core.User, trigger map[string]any) (json.RawMessage, error)`. Data emits `a.Emit(ctx, "db.written", map[string]any{"siteId", "collection", "op", "id", "doc", "user"})` after commits.
