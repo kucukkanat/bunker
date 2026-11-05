@@ -54,3 +54,24 @@ func TestOnlyOwnerOffersTemplate(t *testing.T) {
 	ada.Must("PATCH", "/api/v1/sites/"+slug, map[string]any{"isTemplate": true})
 	carol.Must("POST", "/api/v1/sites", map[string]any{"title": "copy", "template": slug})
 }
+
+// Trashing a site renames it to trash-<id>-<slug>. If anyone could take
+// that address first, the owner's delete silently did nothing.
+func TestTrashAddressesAreReserved(t *testing.T) {
+	k := testkit.New(t)
+	ada := k.As("ada@corp.com", "")
+	mal := k.As("mal@corp.com", "")
+	res := ada.Must("POST", "/api/v1/sites", map[string]any{"title": "Payroll", "slug": "payroll"})
+	id := int(res["id"].(float64))
+	if r := mal.Do("POST", "/api/v1/sites", map[string]any{"title": "x", "slug": "trash-" + itoa(id) + "-payroll"}); r.Status < 400 {
+		t.Fatalf("took a trash address: %d", r.Status)
+	}
+	if r := mal.Do("POST", "/api/v1/sites", map[string]any{"title": "trash " + itoa(id) + " payroll"}); r.Status != 201 || strings.HasPrefix(r.JSON()["slug"].(string), "trash-") {
+		t.Fatalf("title-derived trash address: %d %s", r.Status, r.Body)
+	}
+	ada.Must("DELETE", "/api/v1/sites/payroll", nil)
+	if r := ada.Do("GET", "/api/v1/sites/payroll", nil); r.Status != 404 {
+		t.Fatalf("site still there after delete: %d", r.Status)
+	}
+}
+

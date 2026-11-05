@@ -206,13 +206,19 @@ func ValidSlug(s string) error {
 	if !slugRe.MatchString(s) {
 		return core.BadRequest("addresses use 3–48 lowercase letters, numbers and dashes")
 	}
-	if reservedSlugs[s] {
+	if reservedSlugs[s] || strings.HasPrefix(s, "trash-") { // trashed sites are renamed trash-<id>-<slug>
 		return core.BadRequest("that address is reserved")
 	}
 	return nil
 }
 
 func uniqueSlug(ctx context.Context, base string) string {
+	if strings.HasPrefix(base, "trash-") {
+		base = "site-" + base
+		if len(base) > 48 {
+			base = strings.Trim(base[:48], "-")
+		}
+	}
 	s := base
 	for i := 2; i < 1000; i++ {
 		var n int

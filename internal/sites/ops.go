@@ -191,7 +191,9 @@ func registerOps(a *core.App) {
 			if len(trashed) > 120 {
 				trashed = trashed[:120]
 			}
-			a.DB.ExecContext(r.Context(), `UPDATE sites SET deleted_at=?, slug=? WHERE id=?`, core.Now(), trashed, s.ID)
+			if _, err := a.DB.ExecContext(r.Context(), `UPDATE sites SET deleted_at=?, slug=? WHERE id=?`, core.Now(), trashed, s.ID); err != nil {
+				return nil, err
+			}
 			Invalidate(s.Slug)
 			a.Audit(r.Context(), "site.delete", s.ID, s.Slug, nil)
 			a.Emit(r.Context(), "site.deleted", s.ID)
