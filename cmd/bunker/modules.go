@@ -4,6 +4,8 @@ package main
 import (
 	_ "github.com/kucukkanat/bunker/internal/ai"
 	_ "github.com/kucukkanat/bunker/internal/auth"
+	_ "github.com/kucukkanat/bunker/internal/data"
+	_ "github.com/kucukkanat/bunker/internal/files"
 	_ "github.com/kucukkanat/bunker/internal/mcp"
 	_ "github.com/kucukkanat/bunker/internal/notify"
 	_ "github.com/kucukkanat/bunker/internal/sites"
