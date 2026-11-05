@@ -22,11 +22,12 @@ function passwordCard() {
   const cur = h('input.input', { type: 'password', required: true, autocomplete: 'current-password' });
   const nw = h('input.input', { type: 'password', required: true, minlength: 10, autocomplete: 'new-password' });
   const nw2 = h('input.input', { type: 'password', required: true, minlength: 10, autocomplete: 'new-password' });
+  nw2.addEventListener('input', () => nw2.removeAttribute('aria-invalid'));
   const btn = h('button.btn.primary', { type: 'submit' }, 'Change password');
   const f = (l, i, hint) => h('label.field', h('span.label', l), i, hint && h('span.hint', hint));
   return h('form.card.pad.stack', { style: { marginTop: '16px' }, onsubmit: async (e) => {
     e.preventDefault();
-    if (nw.value !== nw2.value) return toast('The new passwords don’t match.', { type: 'error' });
+    if (nw.value !== nw2.value) { nw2.setAttribute('aria-invalid', 'true'); nw2.focus(); return toast('The new passwords don’t match.', { type: 'error' }); }
     await busy(btn, async () => {
       await post('/api/v1/me/password', { current: cur.value, new: nw.value });
       cur.value = nw.value = nw2.value = '';

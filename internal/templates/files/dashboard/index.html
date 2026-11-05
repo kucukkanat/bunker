@@ -16,12 +16,13 @@ svg .bar{fill:var(--moss)}svg .bar:hover{fill:var(--clay)}svg .grid{stroke:var(-
 svg .area{fill:var(--soft)}svg .pt{fill:var(--card);stroke:var(--moss);stroke-width:2}
 .tbl{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px}
 .tbl th{position:sticky;top:0;background:var(--card2);cursor:pointer}
+.tbl th button{all:unset;cursor:pointer;display:block;width:100%}.tbl th button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .tbl td.n{text-align:right;font-variant-numeric:tabular-nums}
 .src{font-size:.85rem}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" role="main">
   <div class="hero">
     <div><h1 id="title">Dashboard</h1><p class="src" id="src">Loading data…</p></div>
     <div class="row">
@@ -36,7 +37,7 @@ svg .area{fill:var(--soft)}svg .pt{fill:var(--card);stroke:var(--moss);stroke-wi
     <section class="card"><h2 id="t-bar">By category</h2><div id="bar"></div></section>
     <section class="card"><h2 id="t-line">Over time</h2><div id="line"></div></section>
   </div>
-  <section class="card" style="margin-top:14px"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Rows</h2><span class="spacer"></span><input type="search" id="q" placeholder="Search…" aria-label="Search rows" style="max-width:260px"></div><div class="tbl"><table id="tbl"></table></div></section>
+  <section class="card" style="margin-top:14px"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Rows</h2><span class="spacer"></span><input type="search" id="q" placeholder="Search…" aria-label="Search rows" style="max-width:260px"></div><div class="tbl" tabindex="0" role="region" aria-label="Rows"><table id="tbl"></table></div></section>
 </div>
 <script>
 /*BK:JS*/
@@ -128,10 +129,10 @@ function lineSVG(pts) {
 function table(data) {
   var list = data.slice();
   if (sortBy) list.sort(function (a, b) { var x = types[sortBy] === 'num' ? num(a[sortBy]) : a[sortBy], y = types[sortBy] === 'num' ? num(b[sortBy]) : b[sortBy]; return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
-  $('tbl').innerHTML = '<thead><tr>' + cols.map(function (c) { return '<th data-c="' + BK.esc(c) + '" aria-sort="' + (sortBy === c ? (sortDir > 0 ? 'ascending' : 'descending') : 'none') + '">' + BK.esc(c) + (sortBy === c ? (sortDir > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr></thead><tbody>' +
+  $('tbl').innerHTML = '<thead><tr>' + cols.map(function (c) { return '<th data-c="' + BK.esc(c) + '" aria-sort="' + (sortBy === c ? (sortDir > 0 ? 'ascending' : 'descending') : 'none') + '"><button type="button">' + BK.esc(c) + (sortBy === c ? '<span aria-hidden="true">' + (sortDir > 0 ? ' ▲' : ' ▼') + '</span>' : '') + '</button></th>'; }).join('') + '</tr></thead><tbody>' +
     list.slice(0, 500).map(function (r) { return '<tr>' + cols.map(function (c) { return '<td' + (types[c] === 'num' ? ' class="n"' : '') + '>' + BK.esc(r[c]) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody>';
 }
-$('tbl').addEventListener('click', function (e) { var th = e.target.closest('th'); if (!th) return; var c = th.dataset.c; if (sortBy === c) sortDir = -sortDir; else { sortBy = c; sortDir = 1; } render(); });
+$('tbl').addEventListener('click', function (e) { var th = e.target.closest('th'); if (!th) return; var c = th.dataset.c; if (sortBy === c) sortDir = -sortDir; else { sortBy = c; sortDir = 1; } render(); [].forEach.call($('tbl').querySelectorAll('th'), function (x) { if (x.dataset.c === c) x.querySelector('button').focus(); }); });
 ['dim', 'met'].forEach(function (id) { $(id).onchange = render; }); $('q').oninput = render;
 $('file').onchange = function () { var f = this.files[0]; if (!f) return; var rd = new FileReader(); rd.onload = function () { setData(parseCSV(rd.result), f.name); }; rd.readAsText(f); };
 function load() {

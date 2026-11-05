@@ -65,7 +65,7 @@ export default async function data(panel, ws) {
     const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => !SYS.includes(k));
     const cell = (r, k) => {
       const v = r[k];
-      const td = h('td.edit', { tabindex: '0', title: 'Click to edit' }, fmt(v));
+      const td = h('td.edit', { tabindex: '0', title: 'Click or press Enter to edit' }, fmt(v));
       const edit = () => {
         if (td.querySelector('input')) return;
         const raw = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -85,7 +85,7 @@ export default async function data(panel, ws) {
           try { await patch(sp(ws.slug, '/db/' + enc(cur) + '/' + enc(r._id)), { [k]: nv }); }
           catch { r[k] = prev; clear(td, fmt(prev)); }
         };
-        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(true); else if (e.key === 'Escape') { commit(false); td.focus(); } });
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commit(true); td.focus(); } else if (e.key === 'Escape') { commit(false); td.focus(); } });
         inp.addEventListener('blur', () => commit(true));
         clear(td, inp);
         inp.focus();

@@ -472,10 +472,12 @@ func renderInvite(w http.ResponseWriter, status int, tok string, iv *inviteRow, 
 		title, lead, cta = "Choose a new password", "This sets a new password for <b>%s</b>. You'll be signed in right after.", "Save password"
 	}
 	pageHeadStatus(w, status, title)
-	fmt.Fprintf(w, `<form class="card" method="post" action="/auth/invite"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>%s</h1>
+	fmt.Fprintf(w, `<main class="card"><form method="post" action="/auth/invite"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>%s</h1>
 <p class="muted">`+lead+`</p>`, htmlEsc(title), htmlEsc(iv.email))
+	desc, invalid := "pw-hint", ""
 	if errMsg != "" {
-		fmt.Fprintf(w, `<p class="err" role="alert">%s</p>`, htmlEsc(errMsg))
+		fmt.Fprintf(w, `<p class="err" id="form-err" role="alert">%s</p>`, htmlEsc(errMsg))
+		desc, invalid = "form-err pw-hint", ` aria-invalid="true"`
 	}
 	fmt.Fprintf(w, `<input type="hidden" name="token" value="%s">`, htmlEsc(tok))
 	if iv.kind != "reset" {
@@ -485,8 +487,11 @@ func renderInvite(w http.ResponseWriter, status int, tok string, iv *inviteRow, 
 	if iv.kind == "reset" || name != "" {
 		af = " autofocus"
 	}
-	fmt.Fprintf(w, `<label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" aria-describedby="pw-hint" required%s></label>
-<p class="hint" id="pw-hint">At least 10 characters. A short sentence works well, like “blue kettle on the stairs”.</p><button type="submit">%s</button></form>`, af, htmlEsc(cta))
+	if errMsg != "" {
+		af = " autofocus"
+	}
+	fmt.Fprintf(w, `<label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" aria-describedby="%s" required%s%s></label>
+<p class="hint" id="pw-hint">At least 10 characters. A short sentence works well, like “blue kettle on the stairs”.</p><button type="submit">%s</button></form></main>`, desc, invalid, af, htmlEsc(cta))
 	pageFoot(w)
 }
 
@@ -567,9 +572,11 @@ func handleInviteAccept(w http.ResponseWriter, r *http.Request) {
 // sign-in is configured, a "Continue with ..." button.
 func renderLogin(w http.ResponseWriter, r *http.Request, next, email, errMsg string) {
 	pageHead(w, "Sign in to Bunker")
-	fmt.Fprint(w, `<div class="card"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>Sign in to Bunker</h1>`)
+	fmt.Fprint(w, `<main class="card"><img src="/_/icon.svg" width=44 height=44 alt=""><h1>Sign in to Bunker</h1>`)
+	errAttr := ""
 	if errMsg != "" {
-		fmt.Fprintf(w, `<p class="err" role="alert">%s</p>`, htmlEsc(errMsg))
+		fmt.Fprintf(w, `<p class="err" id="form-err" role="alert">%s</p>`, htmlEsc(errMsg))
+		errAttr = ` aria-describedby="form-err" aria-invalid="true"`
 	}
 	if SSOConfigured() {
 		label := map[string]string{"entra": "Continue with Microsoft", "google": "Continue with Google"}[Provider().Kind]
@@ -584,10 +591,10 @@ func renderLogin(w http.ResponseWriter, r *http.Request, next, email, errMsg str
 	if localReady() {
 		fmt.Fprintf(w, `<form method="post" action="/auth/password"><input type="hidden" name="next" value="%s">
 <label>Email<input name="email" type="email" value="%s" autocomplete="username" required%s></label>
-<label>Password<input name="password" type="password" autocomplete="current-password" required%s></label>
-<button type="submit">Sign in</button></form><p class="hint">Forgot your password? Ask your Bunker admin for a reset link.</p>`, htmlEsc(next), htmlEsc(email), af(email == ""), af(email != ""))
+<label>Password<input name="password" type="password" autocomplete="current-password" required%s%s></label>
+<button type="submit">Sign in</button></form><p class="hint">Forgot your password? Ask your Bunker admin for a reset link.</p>`, htmlEsc(next), htmlEsc(email), af(email == ""), af(email != ""), errAttr)
 	}
-	fmt.Fprint(w, `</div>`)
+	fmt.Fprint(w, `</main>`)
 	pageFoot(w)
 }
 
@@ -611,7 +618,7 @@ func pageHeadStatus(w http.ResponseWriter, status int, title string) {
 h1{font:560 28px/1.2 Fraunces,Georgia,serif;letter-spacing:-.01em;color:var(--forest);margin:14px 0 12px}label{display:block;font-weight:600;font-size:14px;margin:0 0 14px}
 p{margin:0 0 16px}b{font-weight:600}
 input{display:block;width:100%%;margin-top:6px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit;font:inherit}
-input:focus{outline:2px solid var(--btn);outline-offset:1px}
+input:focus{outline:2px solid var(--btn);outline-offset:1px}input[aria-invalid=true]{border-color:var(--err)}
 button,.sso,.cta{display:block;width:100%%;text-align:center;padding:12px;border:0;border-radius:10px;background:var(--btn);color:var(--btnText);font:600 16px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:none}
 button:focus-visible,.sso:focus-visible,.cta:focus-visible{outline:2px solid var(--btn);outline-offset:2px}
 .sso{background:transparent;color:var(--ink);border:1px solid var(--line)}.sso:hover{border-color:var(--slate)}

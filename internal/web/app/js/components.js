@@ -27,16 +27,17 @@ export function siteCard(s, i = 0, onStar) {
   const owner = s.ownerId === me?.id ? 'you' : s.owner?.name || s.owner?.email || 'someone';
   const when = s.extra?.visitedAt ? 'Opened ' + relTime(s.extra.visitedAt) : 'Updated ' + relTime(s.updatedAt);
   const href = siteHref(s);
-  return h('a.site-card', { href, style: { animationDelay: Math.min(i, 12) * 30 + 'ms' }, 'data-native': href.startsWith('/s/') ? '' : null, 'aria-label': s.title + ', ' + role + ', ' + when.toLowerCase() },
-    h('div.star', starButton(s, onStar)),
+  // The star sits beside the link, not inside it (no button nested in a link);
+  // the link's name is its visible text.
+  return h('div.site-cell', { style: { animationDelay: Math.min(i, 12) * 30 + 'ms' } }, h('a.site-card', { href, 'data-native': href.startsWith('/s/') ? '' : null },
     h('div.top', siteIcon(s), h('div.t', h('h3', s.title), h('div.addr', '/s/' + s.slug))),
     s.description && h('p.desc', s.description),
     h('div.meta',
       role && h('span.badge' + (role === 'Owner' ? '.ok' : ''), role),
       !s.version && h('span.badge.draft', 'Not published'),
       s.public && h('span.badge.draft', { title: 'Anyone with the link can view it' }, icon('globe', 12), 'Public'),
-      h('span.by', when + (owner !== 'you' ? ' · ' + owner : ''))),
-  );
+      h('span.by', when + (owner !== 'you' ? ' · ' + owner : '')))),
+    h('div.star', starButton(s, onStar)));
 }
 
 // ---------- AI create ----------

@@ -69,7 +69,7 @@ setRenderer((layout, path) => {
   document.querySelectorAll('.backdrop').forEach((b) => b.remove());
   if (layout === 'app') {
     if (!shell) buildShell();
-    if (shell.parentNode !== app) clear(app, h('a.skip', { href: '#main' }, 'Skip to content'), shell);
+    if (shell.parentNode !== app) clear(app, skipLink(), shell);
     navEl.querySelectorAll('a').forEach((a) => {
       const hr = a.getAttribute('href');
       const on = hr === '/' ? path === '/' : path === hr || (path.startsWith(hr + '/') && !(hr === '/settings' && path.startsWith('/settings/connect')));
@@ -79,10 +79,17 @@ setRenderer((layout, path) => {
     window.scrollTo(0, 0);
     return main;
   }
-  const root = h('div', { id: layout === 'workspace' ? 'main' : null });
-  clear(app, root);
+  const root = h('main#main', { tabindex: '-1' });
+  clear(app, layout === 'workspace' && skipLink(), root);
   return root;
 });
+// The router would treat "#main" as a navigation; move focus instead.
+function skipLink() {
+  return h('a.skip', { href: '#main', onclick: (e) => {
+    e.preventDefault();
+    document.getElementById('main')?.focus();
+  } }, 'Skip to content');
+}
 
 // ---------- notifications ----------
 const notes = { list: [], unread: 0, ok: false, subs: new Set() };

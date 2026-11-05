@@ -160,7 +160,7 @@ export function bytes(n) {
 export function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many || one + 's'); }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const TONES = ['#2f5543', '#4f7a63', '#b5653f', '#7a6a3e', '#3e6a74', '#6b5a7a', '#8a4f4f', '#4f6b8a'];
+const TONES = ['#2f5543', '#4f7a63', '#a65a37', '#7a6a3e', '#3e6a74', '#6b5a7a', '#8a4f4f', '#4f6b8a'];
 function hash(s) { let x = 0; for (const c of String(s)) x = (x * 31 + c.codePointAt(0)) | 0; return Math.abs(x); }
 export function tone(s) { return TONES[hash(s) % TONES.length]; }
 export function initials(s) {

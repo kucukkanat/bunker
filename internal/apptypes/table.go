@@ -75,7 +75,7 @@ func renderTable(files map[string][]byte, paths []string) (string, error) {
 	if len(sheets) > 1 {
 		b.WriteString(`<div class="tabs" role="tablist" id="tabs"></div>`)
 	}
-	b.WriteString(`<div class="tbl-wrap"><div class="stats" id="stats"></div><div class="chart-card" id="chart" hidden></div>
+	b.WriteString(`<div class="tbl-wrap" role="main"><div class="stats" id="stats"></div><div class="chart-card" id="chart" hidden></div>
 <div class="toolbar"><input class="input grow" id="q" type="search" placeholder="Search all columns…" aria-label="Search"><span class="muted" id="count" aria-live="polite"></span>
 <button class="btn" id="tog-filters" type="button" aria-pressed="false">Filters</button><button class="btn" id="tog-chart" type="button" aria-pressed="false">Chart</button><button class="btn" id="reset" type="button">Reset</button></div>
 <div class="grid-scroll"><table class="grid" id="grid"><thead></thead><tbody></tbody></table></div><div class="more" id="more"></div></div>`)

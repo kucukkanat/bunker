@@ -30,13 +30,14 @@ export default async function home(root, ctx) {
 
   // ---- drop zone ----
   const bar = h('div.progress', h('i'));
-  const status = h('p', 'An HTML file, a whole folder, or a .zip. It’s private until you share it.');
-  const title = h('h2', 'Drop a file or folder to make it a site');
+  const status = h('p', { 'aria-live': 'polite' }, 'An HTML file, a whole folder, or a .zip. It’s private until you share it.');
+  const title = h('h2#drop-title', 'Drop a file or folder to make it a site');
   const pk = pickers((items) => dropCreate(items, ui));
   const btnRow = h('div.row.wrap', { style: { justifyContent: 'center' } }, pk.fileBtn('btn'), pk.folderBtn('btn'));
-  const drop = h('div.drop', { role: 'button', tabindex: '0', 'aria-label': 'Upload files to make a new site. Press Enter to choose files.', 'data-testid': 'dropzone',
-    onclick: () => !drop.classList.contains('busy') && pk.inputs[0].click(),
-    onkeydown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === drop) { e.preventDefault(); pk.inputs[0].click(); } },
+  // A labelled region; its "Choose files" / "Choose folder" buttons are the
+  // keyboard way in (a click anywhere else on it is a mouse shortcut).
+  const drop = h('section.drop', { 'aria-labelledby': 'drop-title', 'data-testid': 'dropzone',
+    onclick: (e) => !drop.classList.contains('busy') && !e.target.closest('button,input,a') && pk.inputs[0].click(),
     ondragover: (e) => { e.preventDefault(); drop.classList.add('over'); },
     ondragleave: (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over'); },
   }, archArt(92), title, status, btnRow, pk.inputs);

@@ -58,9 +58,32 @@ export async function render() {
     return;
   }
   if (my !== seq) return;
+  document.title = 'Bunker';
   const c = await mod.default(root, ctx);
   if (my !== seq) { if (typeof c === 'function') c(); return; }
   cleanup = typeof c === 'function' ? c : null;
+  afterRender(root, path, my);
+}
+
+// Each screen gets its own title (views may set a better one), and after an
+// in-app navigation focus moves to the new content instead of being lost.
+let rendered = 0;
+function afterRender(root, path, my) {
+  const first = !rendered++;
+  const name = () => {
+    if (my !== seq || document.title !== 'Bunker') return;
+    const h1 = root.querySelector('h1');
+    if (path === '/') document.title = 'Home · Bunker';
+    else if (h1 && h1.textContent.trim()) document.title = h1.textContent.trim() + ' · Bunker';
+  };
+  name();
+  setTimeout(name, 600); // views that load data render their heading a little later
+  if (first) return;
+  const a = document.activeElement;
+  if (!a || a === document.body || !a.isConnected) {
+    const m = document.getElementById('main');
+    if (m) { if (!m.hasAttribute('tabindex')) m.setAttribute('tabindex', '-1'); m.focus({ preventScroll: true }); }
+  }
 }
 
 export function start() {
