@@ -27,7 +27,7 @@ bunker open
 
 `deploy` details:
 
-- The first deploy creates the app and writes `bunker.json` `{server, site}`. Later deploys update that app and **upload only files that changed** (content hashes).
+- The first deploy of a folder creates the app and writes `bunker.json` `{server, site}`. Later deploys update that app and **upload only files that changed** (content hashes). A single file or stdin doesn't write `bunker.json`: pass `--site` to update the same app again (otherwise each deploy creates a new one).
 - If `package.json` has a `build` script, Bunker builds first (npm, pnpm, yarn or bun) and uploads `dist/`, `build/` or `out/`. `--build` / `--no-build` force it either way; `--dir dist` picks a folder.
 - Files matched by `.gitignore` or `.bunkerignore` are skipped.
 - Flags: `--site/-s slug`, `--message/-m text`, `--title/-t name` (new app), `--draft`, `--open/-o`, `--filename` (for stdin, default `index.html`).
@@ -47,7 +47,7 @@ bunker deploy --draft
 | `bunker share [site] <email\|group>...` | Share with people (anything with an `@`) or groups (a name or ID). `--role viewer` (default) or `editor` |
 | `bunker unshare [site] <email\|group>...` | Stop sharing |
 | `bunker versions [site]` | List versions. Alias `history` |
-| `bunker rollback [site] [version]` | Make an earlier version live again (default: the previous one). Alias `restore` |
+| `bunker rollback [site] [version]` | Make an earlier version live again (default: the previous one). `bunker restore [site] [version]` does the same |
 | `bunker pull <site> [dir]` | Download an app's working files into a folder. `--version n`, `--force` |
 
 `[site]` can be left out inside a folder that has a `bunker.json`.
@@ -72,6 +72,8 @@ bunker deploy --draft
 | `bunker doctor` | Check config, connection, sign-in, versions and clock |
 | `bunker update` | Update to the latest release, checksum verified. `--check`, `--force`. Alias `upgrade` |
 | `bunker completion bash\|zsh\|fish` | Print a shell completion script |
+| `bunker backup [file]` | Download a full backup (database, files, `secret.key`) from the server you're signed in to (admins). `--no-key` leaves the key out. See [Backups](/bunker/docs/admin/backups/) |
+| `bunker restore <backup.tar.gz>` | Unpack a backup into `BUNKER_DATA_DIR` (stop the server first; the old database is kept as `bunker.db.pre-restore-<time>`) |
 
 ### Server
 
@@ -79,6 +81,7 @@ bunker deploy --draft
 |---|---|
 | `bunker serve` (or no command) | Run the server, configured with [environment variables](/bunker/docs/admin/configuration/) |
 | `bunker dev` | A local single-user server on `127.0.0.1:8080` with no sign-in (you are a local admin) |
+| `bunker demo` | Like `dev`, pre-filled with example apps, people and data |
 | `bunker healthcheck` | Exit 0 when the local server answers `/healthz` (for Docker `HEALTHCHECK`) |
 | `bunker version` | Print the version |
 

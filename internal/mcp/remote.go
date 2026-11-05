@@ -40,6 +40,7 @@ func initRemote(a *core.App) error {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	registerOAuth(a)
+	go sweepOAuthLoop()
 	registerDocs(a)
 	return nil
 }

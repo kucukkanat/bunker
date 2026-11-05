@@ -131,6 +131,8 @@ export default async function files(panel, ws) {
     if (!name) return;
     name = name.replace(/^\/+/, '');
     if (list.some((f) => f.path === name)) return open(name);
+    // Creating opens the new file: don't throw away unsaved edits silently.
+    if (dirty && !(await confirmDialog({ title: 'Leave without saving?', message: 'You have unsaved changes in ' + current + '.', confirm: 'Discard my changes', danger: true }))) return;
     const starter = /\.html?$/.test(name) ? '<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>New page</title>\n</head>\n<body>\n  <h1>Hello</h1>\n</body>\n</html>\n' : '';
     await put(sp(ws.slug, '/files/' + filePath(name)), starter, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     ws.draftChanged();

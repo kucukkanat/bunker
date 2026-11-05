@@ -182,7 +182,7 @@ func intSetting(k string, def int) int {
 
 func loadPolicy() policy {
 	return policy{
-		OrgWideSharing:  app.Setting(kOrgWide) != "false" && core.EnvBool("ORG_WIDE_SHARING", true),
+		OrgWideSharing:  app.OrgWideSharing(),
 		EditorsCanShare: app.Setting(kEditors) != "false",
 		MaxSitesPerUser: intSetting(kMaxSites, 500),
 		SiteMaxMB:       intSetting(kSiteMB, 100),
@@ -241,14 +241,28 @@ func registerPolicy(a *core.App) {
 				}
 				return a.SetSetting(ctx, k, v)
 			}
-			num := func(k string, v *int, lo, hi int, label string) error {
-				if v == nil {
-					return nil
+			nums := []struct {
+				k      string
+				v      *int
+				lo, hi int
+				label  string
+			}{
+				{kMaxSites, in.MaxSitesPerUser, 0, 100000, "maxSitesPerUser"},
+				{kSiteMB, in.SiteMaxMB, 1, 10240, "siteMaxMB"},
+				{kUploadMB, in.UploadMaxMB, 1, 10240, "uploadMaxMB"},
+			}
+			// Check every value before saving any, so a bad number doesn't
+			// leave the rest of the change half-applied.
+			for _, n := range nums {
+				if n.v != nil && (*n.v < n.lo || *n.v > n.hi) {
+					return nil, core.BadRequest(n.label + " must be between " + strconv.Itoa(n.lo) + " and " + strconv.Itoa(n.hi))
 				}
-				if *v < lo || *v > hi {
-					return core.BadRequest(label + " must be between " + strconv.Itoa(lo) + " and " + strconv.Itoa(hi))
+			}
+			for k, changed := range map[string]bool{kOrgWide: in.OrgWideSharing != nil, kPublic: in.PublicLinks != nil, kEditors: in.EditorsCanShare != nil,
+				kMaxSites: in.MaxSitesPerUser != nil, kSiteMB: in.SiteMaxMB != nil, kUploadMB: in.UploadMaxMB != nil, kGroups: in.AllowedGroups != nil} {
+				if changed && a.SettingFromEnv(k) {
+					return nil, core.Conflict(k + " is set by the server environment; change it there")
 				}
-				return set(k, strconv.Itoa(*v))
 			}
 			if in.OrgWideSharing != nil {
 				if err := set(kOrgWide, strconv.FormatBool(*in.OrgWideSharing)); err != nil {
@@ -270,13 +284,11 @@ func registerPolicy(a *core.App) {
 					return nil, err
 				}
 			}
-			for _, e := range []error{
-				num(kMaxSites, in.MaxSitesPerUser, 0, 100000, "maxSitesPerUser"),
-				num(kSiteMB, in.SiteMaxMB, 1, 10240, "siteMaxMB"),
-				num(kUploadMB, in.UploadMaxMB, 1, 10240, "uploadMaxMB"),
-			} {
-				if e != nil {
-					return nil, e
+			for _, n := range nums {
+				if n.v != nil {
+					if err := set(n.k, strconv.Itoa(*n.v)); err != nil {
+						return nil, err
+					}
 				}
 			}
 			if in.AllowedGroups != nil {

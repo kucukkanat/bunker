@@ -275,11 +275,19 @@ func sweep(a *core.App) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for range t.C {
-		now := core.Now()
-		a.DB.Exec(`DELETE FROM sessions WHERE expires_at < ?`, now)
-		a.DB.Exec(`DELETE FROM device_codes WHERE expires_at < ?`, now-3600)
-		a.DB.Exec(`DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at < ?`, now)
+		SweepExpired(context.Background())
 	}
+}
+
+// SweepExpired deletes expired sessions, device codes and tokens. OAuth
+// access tokens (client "mcp:...") are left to the mcp module: their row
+// must outlive expiry while the refresh token is valid, because a missing
+// row is how a refresh learns the person revoked access in Settings.
+func SweepExpired(ctx context.Context) {
+	now := core.Now()
+	app.DB.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, now)
+	app.DB.ExecContext(ctx, `DELETE FROM device_codes WHERE expires_at < ?`, now-3600)
+	app.DB.ExecContext(ctx, `DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at < ? AND client NOT LIKE 'mcp:%'`, now)
 }
 
 // devUser signs everyone in as a local admin in dev mode. The identity can

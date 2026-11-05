@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/kucukkanat/bunker/internal/core"
 )
@@ -75,6 +76,8 @@ func registerOps(a *core.App) {
 			}
 			if in.Template != "" {
 				if err := copyTemplate(r.Context(), core.MustUser(r), in.Template, s); err != nil {
+					// Don't leave an empty site behind (a retry would make "-2").
+					discardNewSite(r.Context(), s)
 					return nil, err
 				}
 				s, _ = GetByID(r.Context(), s.ID, false)
@@ -130,12 +133,31 @@ func registerOps(a *core.App) {
 			if role < core.RoleOwner && (in.OrgView != nil || in.IsTemplate != nil || in.Public != nil || (in.Slug != nil && *in.Slug != s.Slug)) {
 				return nil, core.Forbidden("only the owner can change who can view, the address, or offer the site as a template")
 			}
+			// Validate everything before writing anything: a rejected field
+			// must not leave the earlier ones half-applied.
 			if in.Title != nil {
-				t := strings.TrimSpace(*in.Title)
-				if t == "" || len(t) > 120 {
+				if t := strings.TrimSpace(*in.Title); t == "" || len(t) > 120 {
 					return nil, core.BadRequest("title must be 1–120 characters")
 				}
-				a.DB.ExecContext(ctx, `UPDATE sites SET title=? WHERE id=?`, t, s.ID)
+			}
+			if in.OrgView != nil && *in.OrgView && !a.OrgWideSharing() {
+				return nil, core.Forbidden("your admin has turned off organization-wide sharing")
+			}
+			if in.Public != nil && *in.Public && !PublicLinksAllowed() {
+				return nil, core.Forbidden("public links are off. An admin can allow them in Admin → Sharing")
+			}
+			if in.Slug != nil && *in.Slug != s.Slug {
+				if err := ValidSlug(*in.Slug); err != nil {
+					return nil, err
+				}
+				var taken int
+				a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE slug=?`, *in.Slug).Scan(&taken)
+				if taken > 0 {
+					return nil, core.Conflict("that address is taken")
+				}
+			}
+			if in.Title != nil {
+				a.DB.ExecContext(ctx, `UPDATE sites SET title=? WHERE id=?`, strings.TrimSpace(*in.Title), s.ID)
 			}
 			if in.Description != nil {
 				a.DB.ExecContext(ctx, `UPDATE sites SET description=? WHERE id=?`, trunc(*in.Description, 500), s.ID)
@@ -151,7 +173,7 @@ func registerOps(a *core.App) {
 				if role < core.RoleOwner {
 					return nil, core.Forbidden("only the owner can change who can view")
 				}
-				if *in.OrgView && a.Setting("sharing.org_wide") == "false" {
+				if *in.OrgView && !a.OrgWideSharing() {
 					return nil, core.Forbidden("your admin has turned off organization-wide sharing")
 				}
 				a.DB.ExecContext(ctx, `UPDATE sites SET org_view=? WHERE id=?`, b2i(*in.OrgView), s.ID)
@@ -176,6 +198,7 @@ func registerOps(a *core.App) {
 					return nil, err
 				}
 				if _, err := a.DB.ExecContext(ctx, `UPDATE sites SET slug=? WHERE id=?`, *in.Slug, s.ID); err != nil {
+					Invalidate(s.Slug)
 					return nil, core.Conflict("that address is taken")
 				}
 				newSlug = *in.Slug
@@ -583,6 +606,13 @@ func CreateSite(ctx context.Context, u *core.User, title, slug, desc, icon strin
 	return GetByID(ctx, id, false)
 }
 
+// discardNewSite removes a site that was just created when the rest of the
+// request (copying a template or another site's files) failed.
+func discardNewSite(ctx context.Context, s *SiteRecord) {
+	app.DB.ExecContext(context.WithoutCancel(ctx), `DELETE FROM sites WHERE id=?`, s.ID)
+	Invalidate(s.Slug)
+}
+
 func copyTemplate(ctx context.Context, u *core.User, tplSlug string, dst *SiteRecord) error {
 	tpl, err := GetBySlug(ctx, tplSlug)
 	if err != nil {
@@ -613,10 +643,14 @@ func b2i(b bool) int {
 	return 0
 }
 
+// trunc trims s to at most n bytes without cutting a character in half.
 func trunc(s string, n int) string {
 	s = strings.TrimSpace(s)
-	if len(s) > n {
-		return s[:n]
+	if len(s) <= n {
+		return s
 	}
-	return s
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

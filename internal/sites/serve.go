@@ -3,8 +3,6 @@ package sites
 import (
 	"bytes"
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -17,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kucukkanat/bunker/internal/auth"
 	"github.com/kucukkanat/bunker/internal/core"
 )
 
@@ -650,18 +649,13 @@ func loadTicketUser(ctx context.Context, id int64) *core.User {
 	if u, ok := ticketUsers.get(id); ok {
 		return u
 	}
-	var email, name, gj string
-	var admin, disabled int
-	err := app.DB.QueryRowContext(ctx, `SELECT email,name,is_admin,groups_json,disabled FROM users WHERE id=?`, id).Scan(&email, &name, &admin, &gj, &disabled)
-	if err != nil || disabled == 1 {
-		if err == nil || errors.Is(err, sql.ErrNoRows) {
-			ticketUsers.put(id, nil)
-		}
+	// auth.LoadUser also applies the configured admins (the "admins"
+	// setting / BUNKER_ADMINS), like the session the ticket was made for.
+	u, err := auth.LoadUser(ctx, id)
+	if err != nil {
 		return nil
 	}
-	u := &core.User{ID: id, Email: email, Name: name, IsAdmin: admin == 1}
-	_ = jsonUnmarshal(gj, &u.Groups)
-	ticketUsers.put(id, u)
+	ticketUsers.put(id, u) // nil: disabled or gone
 	return u
 }
 

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,9 @@ var app *core.App
 const tokenPrefix = "bkh_"
 
 var siteParam = core.Param{Name: "site", In: "path", Required: true}
+
+// collRe matches bunker.db collection names (internal/data).
+var collRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 
 func initHooks(a *core.App) error {
 	app = a
@@ -94,6 +98,10 @@ func initHooks(a *core.App) error {
 			in.Name, in.Collection = strings.TrimSpace(in.Name), strings.TrimSpace(in.Collection)
 			if in.Name == "" || len(in.Name) > 100 || in.Collection == "" || len(in.Collection) > 64 {
 				return nil, core.BadRequest("name (up to 100 characters) and collection are required")
+			}
+			// Same rule as bunker.db: otherwise every call to the hook fails.
+			if !collRe.MatchString(in.Collection) {
+				return nil, core.BadRequest("collection names use up to 64 letters, numbers, dots, dashes and underscores, and can't start with a symbol")
 			}
 			var n int
 			a.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM hooks WHERE site_id=?`, s.ID).Scan(&n)

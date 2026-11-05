@@ -34,10 +34,10 @@ curl -X POST https://bunker.example.com/api/v1/admin/invites \
 
 ```json
 { "link": "https://bunker.example.com/auth/invite?token=…", "email": "sam@example.com",
-  "note": "Send this link to them. It works once." }
+  "emailed": false, "note": "Send this link to them. It works once." }
 ```
 
-- Send the link however you like: chat, email, a note on their desk. Bunker doesn't send email.
+- Send the link however you like: chat, email, a note on their desk. When [email](/bunker/docs/admin/email/) is set up, Bunker also emails it to them (`"emailed": true`).
 - The link works **once** and expires after `days` (default 7, at most 30). Creating a new invite for the same email replaces the old one.
 - `groups` puts the person in named groups, so you can [share by group](/bunker/docs/build/sharing/) without SSO.
 - `isAdmin: true` makes them an admin.
@@ -53,7 +53,7 @@ An admin makes a **reset link** (`users.reset_password`, `POST /api/v1/admin/use
 |---|---|
 | Hashing | **argon2id**, 19 MiB memory, 2 iterations, 1 lane, 16-byte random salt (OWASP parameters) |
 | Length | 10 to 200 characters. A short sentence works well |
-| Guessing | 10 attempts per 15 minutes per IP address and per email, then a pause |
+| Guessing | 10 failed attempts per 15 minutes per IP address and per email, then a pause (successful sign-ins don't count, so an office behind one address isn't locked out) |
 | Unknown emails | Checked against a dummy hash, so a wrong email takes as long as a wrong password |
 | Login CSRF | Sign-in and invite forms only accept same-origin posts |
 | Invite and reset tokens | Random, stored only as a hash, single use |

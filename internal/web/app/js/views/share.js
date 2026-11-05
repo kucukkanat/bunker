@@ -104,6 +104,7 @@ export function openShare(ws, onChange) {
   }
 
   function drawOrg() {
+    const orgOff = state.me?.policy?.orgWideSharing === false;
     const pub = !!ws.site.public;
     const pubRow = (state.me?.policy?.publicLinks || pub) && h('div.org-row' + (pub ? '.public' : ''), { style: { marginTop: '10px' } },
       h('span.ic', icon(pub ? 'globe' : 'lock', 18)),
@@ -117,8 +118,8 @@ export function openShare(ws, onChange) {
     clear(orgSlot, h('div.org-row',
       h('span.ic', icon(orgView ? 'globe' : 'lock', 18)),
       h('div', { style: { flex: '1' } }, h('b', 'Everyone in the organization can view'),
-        h('div.small.muted', owner ? (orgView ? 'Anyone who signs in to Bunker can open it.' : 'Turn on for things like a team directory or handbook.') : 'Only the owner can change this.')),
-      toggle({ checked: orgView, disabled: !owner, label: 'Everyone in the organization can view', onchange: async (v, el) => {
+        h('div.small.muted', owner ? (orgView ? 'Anyone who signs in to Bunker can open it.' : orgOff ? 'Your admin has turned off organization-wide sharing.' : 'Turn on for things like a team directory or handbook.') : 'Only the owner can change this.')),
+      toggle({ checked: orgView, disabled: !owner || (!orgView && orgOff), label: 'Everyone in the organization can view', onchange: async (v, el) => {
         try { await patch(sp(ws.slug), { orgView: v }); orgView = v; ws.site.orgView = v; drawOrg(); toast(v ? 'Everyone in your organization can view it now.' : 'Only people you’ve added can open it now.', { type: 'ok' }); }
         catch { el.checked = !v; }
       } })), pubRow);

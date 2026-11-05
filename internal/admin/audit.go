@@ -405,8 +405,15 @@ func sinkLoop() {
 		}
 		b := batch
 		batch = nil
+		failed := false
+		defer func() {
+			if !failed {
+				setSinkErr("") // delivered again: don't keep showing an old error
+			}
+		}()
 		if wh := app.SecretSetting("audit.webhook"); wh != "" {
 			if err := postWebhook(wh, b); err != nil {
+				failed = true
 				setSinkErr("webhook: " + err.Error())
 			} else {
 				sinkSent.Add(int64(len(b)))
@@ -414,6 +421,7 @@ func sinkLoop() {
 		}
 		if sl := app.Setting("audit.syslog"); sl != "" {
 			if err := sendSyslog(sl, b); err != nil {
+				failed = true
 				setSinkErr("syslog: " + err.Error())
 			}
 		}

@@ -148,5 +148,12 @@ func (a *App) SetSetting(ctx context.Context, key, value string) error {
 	return err
 }
 
+// OrgWideSharing reports whether owners may make a site viewable by
+// everyone (setting sharing.org_wide, pinned by BUNKER_SHARING_ORG_WIDE or
+// its older alias BUNKER_ORG_WIDE_SHARING).
+func (a *App) OrgWideSharing() bool {
+	return a.Setting("sharing.org_wide") != "false" && EnvBool("ORG_WIDE_SHARING", true)
+}
+
 // Now is the unix time in seconds (overridable in tests).
 var Now = func() int64 { return time.Now().Unix() }

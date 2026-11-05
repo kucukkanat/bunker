@@ -154,6 +154,7 @@ func (w *workspace) write(p string, content []byte) (string, error) {
 		}
 		return "", errors.New("blocked: " + msg + " Never put keys, passwords or tokens in files.")
 	}
+	defer sites.LockDraft(w.s.ID)()
 	m, err := w.manifest()
 	if err != nil {
 		return "", err
@@ -343,6 +344,8 @@ func (w *workspace) run(call ToolCall) (string, error) {
 			return "", err
 		}
 		w.status("Removing " + p)
+		unlock := sites.LockDraft(w.s.ID)
+		defer unlock()
 		m, err := w.manifest()
 		if err != nil {
 			return "", err
