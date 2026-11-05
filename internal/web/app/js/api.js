@@ -28,7 +28,11 @@ async function toError(res) {
   const ct = res.headers.get('content-type') || '';
   try { data = ct.includes('json') ? await res.json() : await res.text(); } catch {}
   const e = data && data.error;
-  if (e && typeof e === 'object') return new ApiError(res.status, e.code || 'error', friendly(e.message));
+  if (e && typeof e === 'object') {
+    const err = new ApiError(res.status, e.code || 'error', friendly(e.message));
+    err.detail = e; // the whole error object (e.g. a server function's stack)
+    return err;
+  }
   if (res.status === 404) return new ApiError(404, 'missing', 'This part of Bunker isn’t available yet.');
   if (res.status === 413) return new ApiError(413, 'too_large', 'That’s too big to upload. Try fewer or smaller files.');
   if (res.status >= 500) return new ApiError(res.status, 'server', 'Bunker had a problem. Please try again in a moment.');

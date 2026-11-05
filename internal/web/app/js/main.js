@@ -3,6 +3,7 @@ import { route, start, setRenderer, navigate } from './router.js';
 import { h, icon, avatar, clear, $, modal, toast, store, siteIcon, relTime } from './ui.js';
 import { get, post, maybe } from './api.js';
 import { state, loadSites } from './state.js';
+import { fnStatus } from './functions.js';
 
 const app = document.getElementById('app');
 const V = (n) => () => import('./views/' + n + '.js');
@@ -190,6 +191,7 @@ const ACTIONS = [
   ['Admin', 'shield', '/admin', 'G A', true],
   ['Audit log', 'history', '/admin/audit', '', true],
   ['People', 'users', '/admin/people', '', true],
+  ['Server functions', 'code', '/admin/functions', '', true],
   ['Keyboard shortcuts', 'keyboard', () => showShortcuts(), '?'],
   ['Sign out', 'logout', () => signOut()],
 ];
@@ -293,6 +295,7 @@ document.addEventListener('keydown', (e) => {
       clear(app, h('div.bare', h('div.bare-card.sm', h('h1', 'Bunker isn’t answering'), h('p.lead', e.message), h('p', { style: { marginTop: '20px' } }, h('a.btn.primary', { href: location.href, 'data-native': '' }, 'Try again')))));
       return;
     }
+    fnStatus(); // once per load: drives the blocked banner and badges
     if (await loadNotes()) liveNotes();
   }
   start();

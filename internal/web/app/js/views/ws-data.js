@@ -48,7 +48,7 @@ export default async function data(panel, ws, keep) {
   }
   if (!ws.alive()) return;
   colls = colls.map((c) => (typeof c === 'string' ? { name: c } : c));
-  const hookColls = ((await hookList.catch(() => null)) || []).map((x) => x.collection);
+  const hookColls = ((await hookList.catch(() => null)) || []).map((x) => x.collection).filter(Boolean);
   let cur = colls.some((c) => c.name === keep) ? keep : colls[0]?.name;
   live(panel, wrap, ws, [...colls.map((c) => c.name), ...hookColls], () => data(panel, ws, cur));
   if (!colls.length) {
@@ -157,9 +157,9 @@ async function hooks(el, ws, reload = () => hooks(el, ws)) {
   const items = d.hooks || [];
   const add = h('button.btn.sm', { onclick: () => create(ws, reload) }, icon('plus', 14), 'New webhook');
   clear(el, h('div.row', h('h2.h3', 'Webhooks'), h('span.spacer'), add),
-    h('p.small.muted', 'Send data in from Power Automate, Zapier or a script. Each webhook adds what it receives to a collection.'),
+    h('p.small.muted', 'Send data in from Power Automate, Zapier or a script. Each webhook adds what it receives to a collection, or runs one of your server functions with it.'),
     items.length > 0 && h('div.list', items.map((x) => h('div.item', h('span.avatar', { style: { background: 'var(--sand)', color: 'var(--muted)' } }, icon('plug', 16)),
-      h('div.n', h('b', x.name), h('span', 'Into “' + x.collection + '” · ' + (x.calls ? plural(x.calls, 'call') + ', last ' + relTime(x.lastUsedAt) : 'not used yet') + ' · ' + x.prefix + '…')),
+      h('div.n', h('b', x.name), h('span', (x.function ? 'Runs the function “' + x.function + '”' : 'Into “' + x.collection + '”') + ' · ' + (x.calls ? plural(x.calls, 'call') + ', last ' + relTime(x.lastUsedAt) : 'not used yet') + ' · ' + x.prefix + '…')),
       h('button.btn.sm.ghost.danger', { 'aria-label': 'Delete webhook ' + x.name, onclick: async () => {
         if (!(await confirmDialog({ title: 'Delete “' + x.name + '”?', message: 'Its URL stops working right away. Data it already sent stays.', confirm: 'Delete webhook', danger: true }))) return;
         await del(sp(ws.slug, '/hooks/' + x.id));
@@ -169,19 +169,35 @@ async function hooks(el, ws, reload = () => hooks(el, ws)) {
   return items;
 }
 
-function create(ws, done) {
+async function create(ws, done) {
+  const fd = await maybe(sp(ws.slug, '/functions')).catch(() => null);
+  const fns = (fd?.functions || []).filter((f) => !f.error);
+  let target = 'collection';
   const name = h('input.input', { required: true, maxlength: 100, placeholder: 'Power Automate: new hires', autofocus: true });
   const coll = h('input.input', { required: true, maxlength: 64, value: 'entries', pattern: '[A-Za-z0-9_\\-]+', title: 'Letters, numbers, - and _' });
+  const fnSel = h('select.input', { 'aria-label': 'Function' }, fns.map((f) => h('option', { value: f.name }, f.name)));
+  const collField = h('label.field', h('span.label', 'Collection'), coll, h('span.hint', 'Where the data goes. It’s created if it doesn’t exist yet.'));
+  const fnField = h('label.field.hidden', h('span.label', 'Function'), fnSel, h('span.hint', 'It gets the JSON as input and runs as you. What it returns is sent back to the caller.'));
+  const seg = fns.length > 0 && h('div.field', h('span.label', 'What it does'), h('div.seg', { role: 'group', 'aria-label': 'What it does' },
+    h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => pickTarget('collection') }, 'Save to a collection'),
+    h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => pickTarget('function') }, 'Run a function')));
+  const pickTarget = (t) => {
+    target = t;
+    seg.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === (t === 'collection'))));
+    collField.classList.toggle('hidden', t !== 'collection');
+    fnField.classList.toggle('hidden', t !== 'function');
+    coll.required = t === 'collection';
+  };
   const go = h('button.btn.primary', { type: 'submit' }, 'Create webhook');
   const m = modal({ title: 'New webhook', body: h('form.stack', { onsubmit: async (e) => {
     e.preventDefault();
     await busy(go, async () => {
-      const r = await post(sp(ws.slug, '/hooks'), { name: name.value.trim(), collection: coll.value.trim() });
+      const r = await post(sp(ws.slug, '/hooks'), target === 'function' ? { name: name.value.trim(), function: fnSel.value } : { name: name.value.trim(), collection: coll.value.trim() });
       m.close();
       const url = new URL(r.url, location.origin).href;
       const ex = (r.example || '').replace(r.url, url);
       const m2 = modal({ title: 'Copy your webhook URL', body: [
-        h('div.notice.warn', icon('warn', 18), h('div', h('b', 'You’ll only see it once. '), 'Anyone who has it can add data, so keep it secret.')),
+        h('div.notice.warn', icon('warn', 18), h('div', h('b', 'You’ll only see it once. '), 'Anyone who has it can send data, so keep it secret.')),
         h('div.copy-field', { style: { marginTop: '14px' } }, h('span', { 'data-testid': 'hook-url' }, url), copyBtn(url)),
         h('p.small.muted', { style: { margin: '14px 0 6px' } }, 'Send JSON to it with a POST. For example:'),
         codeBlock(ex)],
@@ -190,6 +206,6 @@ function create(ws, done) {
     });
   } },
     h('label.field', h('span.label', 'Name'), name, h('span.hint', 'What sends to it, so you recognise it later.')),
-    h('label.field', h('span.label', 'Collection'), coll, h('span.hint', 'Where the data goes. It’s created if it doesn’t exist yet.')),
+    seg, collField, fnField,
     h('div.row', h('span.spacer'), go)) });
 }

@@ -4,6 +4,7 @@ import { post, stream, upload, ApiError } from './api.js';
 import { state, setStar, hub } from './state.js';
 import { navigate } from './router.js';
 import { toForm, totalSize, describe } from './drop.js';
+import { fnOffBadge, siteBlock } from './functions.js';
 
 export function siteHref(s) { return canEdit(s) ? '/sites/' + s.slug : '/s/' + s.slug + '/'; }
 
@@ -36,6 +37,7 @@ export function siteCard(s, i = 0, onStar) {
       role && h('span.badge' + (role === 'Owner' ? '.ok' : ''), role),
       !s.version && h('span.badge.draft', 'Not published'),
       s.public && h('span.badge.draft', { title: 'Anyone with the link can view it' }, icon('globe', 12), 'Public'),
+      fnOffBadge(siteBlock(s.slug)),
       h('span.by', when + (owner !== 'you' ? ' · ' + owner : '')))),
     h('div.star', starButton(s, onStar)));
 }

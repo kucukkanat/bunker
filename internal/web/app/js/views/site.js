@@ -6,11 +6,13 @@ import { navigate, setQuery } from '../router.js';
 import { fromDataTransfer, onWindowDrag, toForm, describe, pickers } from '../drop.js';
 import { bell } from '../main.js';
 import { warnToast } from '../components.js';
+import { fnStatus, siteBlock, fnOffBadge } from '../functions.js';
 
 const TABS = [
   ['build', 'Build', 'chat'],
   ['files', 'Files', 'code'],
   ['data', 'Data', 'db'],
+  ['functions', 'Functions', 'terminal'],
   ['versions', 'Versions', 'history'],
   ['settings', 'Settings', 'sliders'],
 ];
@@ -18,6 +20,7 @@ const LOAD = {
   build: () => import('./ws-build.js'),
   files: () => import('./ws-files.js'),
   data: () => import('./ws-data.js'),
+  functions: () => import('./ws-functions.js'),
   versions: () => import('./ws-versions.js'),
   settings: () => import('./ws-settings.js'),
 };
@@ -72,6 +75,7 @@ export default async function workspace(root, ctx) {
   const addrEl = h('div.addr');
   const iconSlot = h('span');
   const statusEl = h('span.badge');
+  const fnEl = h('span.fn-top');
   const publicEl = h('span.badge.draft.hidden', { title: 'Anyone with the link can view it, without signing in' }, icon('globe', 12), 'Public');
   const publishBtn = h('button.btn.primary.publish', { 'aria-label': 'Publish', onclick: () => publish() }, icon('upload', 16), h('span.label', 'Publish'));
   const discardBtn = h('button.btn.ghost', { onclick: () => discard() }, h('span.label', 'Discard'), h('span.sr-only', ' changes'));
@@ -90,7 +94,7 @@ export default async function workspace(root, ctx) {
   const top = h('header.ws-top',
     h('a.btn.ghost.icon', { href: '/', 'aria-label': 'Back to Home' }, icon('left', 20)),
     h('div.title', iconSlot, h('div', titleEl, addrEl)),
-    statusEl, publicEl,
+    statusEl, publicEl, fnEl,
     h('div.acts', viewSwitch, bell(), discardBtn, moreBtn, shareBtn, publishBtn));
 
   // ---------- left: tabs ----------
@@ -166,6 +170,8 @@ export default async function workspace(root, ctx) {
     },
     draftChanged() { ws.hasDraft = true; paintTop(); updatePreview(true); sig = ''; },
     filesSubs: new Set(),
+    // Server functions turned off by an admin ({scope, reason} or null).
+    setFnBlock(b) { clear(fnEl, b && b.scope !== 'global' ? fnOffBadge(b) : null); },
     upload: () => pk.inputs[1].click(),
     showTab: (t) => showTab(t),
     async trash() {
@@ -229,7 +235,7 @@ export default async function workspace(root, ctx) {
     setQuery({ tab: id === 'build' ? null : id, share: null });
     tabBtns.forEach((b, i) => { const on = TABS[i][0] === id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
     panel.setAttribute('aria-labelledby', 'tab-' + id);
-    body.classList.toggle('wide', id === 'files' || id === 'data');
+    body.classList.toggle('wide', id === 'files' || id === 'data' || id === 'functions');
     if (tabCleanup) { try { tabCleanup(); } catch {} tabCleanup = null; }
     const my = ++tabSeq;
     clear(panel, h('div', { style: { padding: '20px' } }, h('div.skel.line', { style: { width: '60%' } }), h('div.skel.line', { style: { width: '40%', marginTop: '12px' } })));
@@ -333,6 +339,7 @@ export default async function workspace(root, ctx) {
 
   paintTop();
   updatePreview();
+  fnStatus().then(() => { if (ctx.alive() && siteBlock(s.slug)) ws.setFnBlock(siteBlock(s.slug)); });
   showTab(tab);
   if (ctx.query.get('share') === '1') openShare();
 
