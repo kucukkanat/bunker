@@ -62,7 +62,7 @@ Bunker ships sixteen starter templates. Each is created once, and everyone signe
 
 Each is a single `index.html` written to the [SDK](/bunker/docs/sdk/overview/) and the sandbox rules, so they are good examples to learn from. Opened outside Bunker, they run in a demo mode with in-memory data.
 
-The **Uses** column names each template's collections and, where it isn't the default `own`, the [data rule](/bunker/docs/sdk/db/#access-rules) it starts with (`read`: only editors change it, `open`: anyone with access can change anything, `private`: people see only their own). A copy starts with the same rules, so it works for your team straight away; editors can change them in the app's settings. In templates with a `read` collection (rooms, equipment, the checklist, the menu), the people who can edit the app manage that list and everyone else uses it.
+The **Uses** column names each template's collections and, where it isn't the default `own`, the [data rule](/bunker/docs/sdk/db/#access-rules) it starts with (`read`: only editors change it, `open`: anyone with access can change anything, `private`: people see only their own). A copy starts with the same rules, so it works for your team straight away; editors can change them in the app's **Data** tab (**Access**). In templates with a `read` collection (rooms, equipment, the checklist, the menu), the people who can edit the app manage that list and everyone else uses it.
 
 The incident log alerts a group called `On-call` (change `ONCALL_GROUP` at the top of the page). Share the app with that group so its members get the alert.
 
