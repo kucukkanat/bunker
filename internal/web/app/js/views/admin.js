@@ -394,6 +394,7 @@ async function sharing(el, ctx) {
     h('p.muted', { style: { marginBottom: '8px' } }, 'Sites are private until their owner shares them, and can never be shared outside this Bunker.'),
     sw('orgWideSharing', 'Allow sharing with everyone', 'Owners can let everyone who signs in to Bunker view a site.'),
     sw('editorsCanShare', 'Editors can share', 'When off, only a site’s owner can add people.'),
+    'publicLinks' in p && sw('publicLinks', 'Allow public links', 'Owners can let anyone with the link view a site, without signing in. Turning this off closes every public link at once.'),
     num('siteMaxMB', 'Largest site', 'The most a single site can hold, files included.', 'MB'),
     num('uploadMaxMB', 'Largest upload', 'The most someone can upload at once.', 'MB'),
     num('maxSitesPerUser', 'Sites per person', 'How many sites each person can own.', 'sites')));

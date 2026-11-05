@@ -625,7 +625,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			}
 			total += int64(f.UncompressedSize64)
 			if total > max || len(zr.File) > 20000 {
-				return core.TooLarge("the zip unpacks to more than the site size limit (" + humanSize(max) + ")")
+				return core.TooLarge("this zip expands beyond the site size limit (" + humanSize(max) + "). Leave out big files you don't need and try again")
 			}
 			rc, err := f.Open()
 			if err != nil {
@@ -639,7 +639,7 @@ func addUploaded(files map[string][]byte, name string, data []byte) error {
 			}
 			read += int64(len(b))
 			if read > max {
-				return core.TooLarge("the zip expands beyond the site size limit")
+				return core.TooLarge("this zip expands beyond the site size limit (" + humanSize(max) + "). Leave out big files you don't need and try again")
 			}
 			p := f.Name
 			if dir != "." && dir != "" {
