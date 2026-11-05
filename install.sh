@@ -175,7 +175,8 @@ build_from_source() {
 	[ "$VERSION" != latest ] && ref="refs/tags/$VERSION"
 	step "Fetching Bunker source ($ref)"
 	fetch "https://codeload.github.com/$REPO/tar.gz/$ref" "$TMP/src.tgz" || die "could not download the source"
-	mkdir -p "$TMP/src" && tar -xzf "$TMP/src.tgz" -C "$TMP/src" --strip-components=1 || die "could not unpack the source"
+	mkdir -p "$TMP/src"
+	tar -xzf "$TMP/src.tgz" -C "$TMP/src" --strip-components=1 || die "could not unpack the source"
 	gover=$(sed -n 's/^go \([0-9.]*\).*/\1/p' "$TMP/src/go.mod" | head -n 1)
 	[ -n "$gover" ] || die "could not read the Go version from go.mod"
 	gotgz="go$gover.$OS-$ARCH.tar.gz"
