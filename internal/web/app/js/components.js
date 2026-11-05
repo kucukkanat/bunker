@@ -102,6 +102,16 @@ export async function htmlCreate(html, title) {
   navigate('/sites/' + res.slug);
 }
 
+export async function githubCreate(url) {
+  toast('Importing from GitHub…', { timeout: 4000 });
+  const res = await post('/api/v1/import/github', { url });
+  state.sites = null;
+  celebrate();
+  toast('“' + (res.title || res.slug) + '” is live, straight from GitHub.', { type: 'ok' });
+  if (res.warnings?.length) toast(res.warnings[0], { timeout: 8000 });
+  navigate('/sites/' + res.slug);
+}
+
 export const IDEAS = [
   ['📝', 'Leave requests', 'A form where people request time off, and a list for managers to approve them.'],
   ['💸', 'Expense tracker', 'Log expenses with category, amount and receipt note, with monthly totals.'],

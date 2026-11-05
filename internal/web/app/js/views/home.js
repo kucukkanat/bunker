@@ -1,7 +1,7 @@
 import { h, icon, clear, archArt, skeletons, empty, toast, debounce, store, add } from '../ui.js';
 import { get } from '../api.js';
 import { state, aiStatus, aiReady } from '../state.js';
-import { siteCard, startAI, dropCreate, htmlCreate, IDEAS } from '../components.js';
+import { siteCard, startAI, dropCreate, htmlCreate, githubCreate, IDEAS } from '../components.js';
 import { fromDataTransfer, pickers, onWindowDrag } from '../drop.js';
 import { showWelcome } from './welcome.js';
 
@@ -30,7 +30,7 @@ export default async function home(root, ctx) {
 
   // ---- drop zone ----
   const bar = h('div.progress', h('i'));
-  const status = h('p', { 'aria-live': 'polite' }, 'An HTML file, a whole folder, or a .zip. It’s private until you share it.');
+  const status = h('p', { 'aria-live': 'polite' }, 'An HTML file, a folder, a .zip, a spreadsheet, Markdown… or paste a GitHub link. It’s private until you share it.');
   const title = h('h2#drop-title', 'Drop a file or folder to make it a site');
   const pk = pickers((items) => dropCreate(items, ui));
   const btnRow = h('div.row.wrap', { style: { justifyContent: 'center' } }, pk.fileBtn('btn'), pk.folderBtn('btn'));
@@ -65,6 +65,12 @@ export default async function home(root, ctx) {
     const t = e.target;
     if (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
     const html = e.clipboardData?.getData('text/plain') || '';
+    const gh = html.trim().match(/^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+(\/tree\/[^\s]+)?\/?$/);
+    if (gh) {
+      e.preventDefault();
+      toast('Make a site from this GitHub repository?', { action: { label: 'Import', run: () => githubCreate(html.trim()).catch(() => {}) }, timeout: 10000 });
+      return;
+    }
     if (!/<(html|body|div|head|!doctype|section|main|table|style|script|h1|p)[\s>]/i.test(html)) return;
     e.preventDefault();
     toast('Make a new site from the HTML you pasted?', { action: { label: 'Create site', run: () => htmlCreate(html).catch(() => {}) }, timeout: 10000 });
