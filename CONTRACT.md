@@ -13,6 +13,9 @@ Bunker = one Go binary (`cmd/bunker`) + SQLite + content-addressed blob store. M
 8. Settings: `a.Setting(key)` / `a.SetSetting(ctx,key,val)`; secrets: `a.SecretSetting` / `a.SetSecretSetting` (AES-GCM). Env `BUNKER_<KEY_UPPER>` (dots→underscores) overrides.
 9. Tests: `go test ./internal/<pkg>/` with an in-process app. Helper pattern: create `core.App` via `server.New(cfg, log)` with `Cfg.Dev=true` and a temp `DataDir`, then call `server.Handler(a)` with httptest. Dev mode signs every request in as admin `you@localhost` unless a session cookie exists; `/auth/dev?as=email&name=..&groups=A,B` creates a session for another user (dev only).
 
+## Sign-in (internal/auth)
+Company SSO is **optional**. Built-in accounts (email + password, argon2id) work out of the box: the setup wizard creates the first admin (`POST /api/v1/setup {provider:"local", email, name, password}`; no setup code from localhost), admins invite people (`POST /api/v1/admin/invites` → one-time link), reset links (`POST /api/v1/admin/users/{id}/reset-password`). SSO (Entra/Google/OIDC) can be enabled later; then `PUT /api/v1/admin/auth/local {enabled:false}` turns built-in accounts off. `GET /api/v1/auth/methods` → {local, localReady, sso, ssoProvider}. Server-rendered sign-in page at `/auth/login`. Microsoft 365 features (`auth.AccessToken`) only work with Entra.
+
 ## Core API (internal/core)
 - `core.UserFrom(ctx) *core.User` {ID, Email, Name, IsAdmin, Groups[]{ID,Name}, ViaToken, Scopes}; `u.InGroup(nameOrID)`.
 - Roles: `core.RoleNone < RoleViewer < RoleEditor < RoleOwner < RoleAdmin`.

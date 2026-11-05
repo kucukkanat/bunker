@@ -16,7 +16,7 @@ Internal, self-hosted app platform. Like eze.page, but built for non-technical p
 ## Decisions
 - **Stack:** Go single binary + SQLite (WAL, Litestream backups), embedded web UI. Docker image.
 - **Scale target:** 500–5,000 users on one VM.
-- **Identity:** Microsoft Entra ID (OIDC), single tenant only; refuse to start if multi-tenant/personal accounts are allowed.
+- **Identity:** built-in accounts (email + password, invites) out of the box for personal use and small teams; company SSO (Microsoft Entra ID single-tenant, Google Workspace, any OIDC) is optional and admin-enabled. Multi-tenant Entra and public email domains are refused.
 - **External sharing:** never.
 - **URLs:** `bunker.corp.com/s/<site>`, one hostname, one TLS cert.
 
