@@ -90,8 +90,7 @@ func get(name, file string) *asset {
 	}
 	b, err := files.ReadFile("files/" + key)
 	if err != nil {
-		cache[key] = nil
-		return nil
+		return nil // misses aren't remembered: anyone can ask for made-up names
 	}
 	sum := sha256.Sum256(b)
 	ct := "text/javascript; charset=utf-8"
